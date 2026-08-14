@@ -14,7 +14,14 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<SQ
   GRANT CONNECT ON DATABASE ${POSTGRES_DB} TO licita_app;
   GRANT USAGE ON SCHEMA public TO licita_app;
   GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO licita_app;
-  -- Tables created later by migrations (run as ${POSTGRES_USER}) inherit DML grants.
+  -- Sequences: serial/identity columns (e.g. request_logs.id, payments.id)
+  -- call nextval() on INSERT — the app role needs USAGE (SELECT lets it read
+  -- last_value/currval without extra rights).
+  GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO licita_app;
+  -- Tables/sequences created later by migrations (run as ${POSTGRES_USER})
+  -- inherit DML/USAGE grants.
   ALTER DEFAULT PRIVILEGES FOR ROLE ${POSTGRES_USER} IN SCHEMA public
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO licita_app;
+  ALTER DEFAULT PRIVILEGES FOR ROLE ${POSTGRES_USER} IN SCHEMA public
+    GRANT USAGE, SELECT ON SEQUENCES TO licita_app;
 SQL
