@@ -1,15 +1,15 @@
 // paymentPreHandler(endpointKey) — Fastify preHandler enforcing x402-shaped
 // payment on priced /v1 endpoints (SPEC §6). Runs BEFORE zod validation.
 //
-// Wiring note: src/api/server.ts (W2) calls paymentPreHandler(key) without
-// config/db, so this module keeps a runtime singleton. Production wiring calls
-// initPayments(config, db) from mountMcp (src/mcp/server.ts) before listen;
-// as a fallback the singleton is lazily built from env on first paid request.
+// Wiring note: buildServer (src/api/server.ts) owns payment initialization —
+// it calls initPayments(config, db) before registering routes, so REST
+// payments never depend on mountMcp. There is NO lazy fallback: using the
+// middleware before initPayments throws a clear error.
 
 import type { FastifyReply, FastifyRequest, preHandlerHookHandler } from 'fastify';
 import { ENDPOINT_PRICES, type PaymentProvider } from '../domain/types.js';
-import { loadConfig, type AppConfig } from '../config.js';
-import { createDb, type Db } from '../db/client.js';
+import type { AppConfig } from '../config.js';
+import type { Db } from '../db/client.js';
 import { createLogger, type Logger } from '../obs/log.js';
 import { createPaymentProvider } from './provider.js';
 import type { RequestPayment } from '../api/routes/common.js';
@@ -30,7 +30,7 @@ let runtime: PaymentRuntime | null = null;
 
 /**
  * Initialize the payment runtime with the shared config + db pool. Called by
- * mountMcp during app wiring; idempotent (last call wins).
+ * buildServer during app wiring; idempotent (last call wins).
  */
 export function initPayments(
   config: AppConfig,
@@ -52,19 +52,16 @@ export function resetPayments(): void {
 
 function getRuntime(): PaymentRuntime {
   if (!runtime) {
-    // Fallback for contexts where initPayments was never called (e.g. a bare
-    // buildServer without mountMcp). Pool is lazy — no connection until query.
-    const config = loadConfig();
-    initPayments(config, createDb(config));
+    throw new Error(
+      'Payment runtime is not initialized: buildServer must call initPayments(config, db) before routes handle requests.',
+    );
   }
-  return runtime as PaymentRuntime;
+  return runtime;
 }
 
-/** Provider usable without a db (for building 402 bodies). */
-function getProvider(): PaymentProvider {
-  if (runtime) return runtime.provider;
-  const config = loadConfig();
-  return createPaymentProvider(config);
+/** The initialized provider (e.g. for mountMcp). Throws if initPayments was not called. */
+export function getPaymentProvider(): PaymentProvider {
+  return getRuntime().provider;
 }
 
 function paymentRequiredBody(provider: PaymentProvider, endpointKey: string, message: string) {
@@ -97,7 +94,7 @@ export function paymentPreHandler(endpointKey: string): preHandlerHookHandler {
 
     const proof = req.headers['x-payment'];
     if (typeof proof !== 'string' || proof.length === 0) {
-      const provider = getProvider();
+      const provider = getPaymentProvider();
       req.errorCode = 'payment_required';
       await reply
         .code(402)

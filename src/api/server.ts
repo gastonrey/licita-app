@@ -8,7 +8,7 @@ import type { Db } from '../db/client.js';
 import { createLogger } from '../obs/log.js';
 import { createMetrics } from '../obs/metrics.js';
 import { logRequest } from '../obs/requestlog.js';
-import { paymentPreHandler } from '../pay/middleware.js';
+import { paymentPreHandler, initPayments } from '../pay/middleware.js';
 import { createRateLimiter } from './ratelimit.js';
 import { buildOpenApi } from './openapi.js';
 import { errorEnvelope, HttpError, type RouteCtx } from './routes/common.js';
@@ -42,6 +42,10 @@ function strField(v: unknown): string | null {
 }
 
 export async function buildServer(config: AppConfig, db: Db): Promise<FastifyInstance> {
+  // Own payment initialization: REST payment enforcement must not depend on
+  // mountMcp. mountMcp reuses this initialized runtime via getPaymentProvider().
+  initPayments(config, db);
+
   const log = createLogger(config.logLevel);
   const metrics = createMetrics();
   const limiter = createRateLimiter({ capacity: 60, refillPerMinute: 60, maxKeys: config.rateLimitMaxKeys });
@@ -50,7 +54,7 @@ export async function buildServer(config: AppConfig, db: Db): Promise<FastifyIns
   const app = Fastify({
     logger: false, // structured JSON logs go through src/obs/log.ts
     genReqId: () => randomUUID(),
-    trustProxy: true,
+    trustProxy: config.trustProxy,
   });
 
   // --- rate limiting (per client key, 60 req/min token bucket) ----------------

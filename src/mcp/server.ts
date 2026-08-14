@@ -12,7 +12,7 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import type { AppConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import type { PaymentProvider } from '../domain/types.js';
-import { initPayments } from '../pay/middleware.js';
+import { getPaymentProvider } from '../pay/middleware.js';
 import { dateStr, num, provenanceFor, tedUrl } from '../api/routes/common.js';
 import {
   awardsQuerySchema,
@@ -520,8 +520,8 @@ export function buildMcpServer(provider: PaymentProvider, db: Db, config: AppCon
 
 /**
  * Mount a streamable-HTTP MCP endpoint at /mcp (the transport itself is free —
- * payment is per tool call). Also initializes the payment runtime used by the
- * REST payment middleware (initPayments).
+ * payment is per tool call). Uses the payment runtime initialized by
+ * buildServer (initPayments); mountMcp never owns initialization.
  *
  * Stateless mode: the SDK requires a fresh transport per request
  * ("Stateless transport cannot be reused across requests"), so each HTTP
@@ -529,7 +529,7 @@ export function buildMcpServer(provider: PaymentProvider, db: Db, config: AppCon
  * ends. This matches the SDK's simpleStatelessStreamableHttp pattern.
  */
 export function mountMcp(app: FastifyInstance, config: AppConfig, db: Db): void {
-  const provider = initPayments(config, db);
+  const provider = getPaymentProvider();
 
   app.route({
     method: ['GET', 'POST', 'DELETE'],

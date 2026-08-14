@@ -5,6 +5,15 @@
 import type { FastifyReply, FastifyRequest, preHandlerHookHandler } from 'fastify';
 import { ENDPOINT_PRICES } from '../../src/domain/types.js';
 
+/** No-op stand-in: buildServer calls this; the stub keeps no runtime. */
+export function initPayments(): undefined {
+  return undefined;
+}
+
+export function resetPayments(): void {
+  // no runtime to clear
+}
+
 export function paymentPreHandler(endpointKey: string): preHandlerHookHandler {
   const price = ENDPOINT_PRICES[endpointKey] ?? '0.00';
   return async (req: FastifyRequest, reply: FastifyReply) => {

@@ -11,6 +11,7 @@ import type { Db } from '../../src/db/client.js';
 import type { AppConfig } from '../../src/config.js';
 import { buildMcpServer, mountMcp } from '../../src/mcp/server.js';
 import { DevPaymentProvider } from '../../src/pay/devProvider.js';
+import { initPayments, resetPayments } from '../../src/pay/middleware.js';
 import { ENDPOINT_PRICES } from '../../src/domain/types.js';
 import { makeTestConfig } from './testconfig.js';
 
@@ -204,12 +205,14 @@ describe('mountMcp HTTP transport', () => {
   beforeEach(async () => {
     const { db, payments } = makeDb();
     await payments.query(PAYMENTS_DDL);
+    initPayments(config, db); // mountMcp consumes the runtime owned by buildServer
     app = Fastify({ logger: false });
     mountMcp(app, config, db);
   });
 
   afterEach(async () => {
     await app.close();
+    resetPayments();
   });
 
   it('answers an initialize handshake at POST /mcp (SSE-framed)', async () => {

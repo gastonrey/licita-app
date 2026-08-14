@@ -8,7 +8,7 @@ import { newDb } from 'pg-mem';
 import type { Db } from '../../src/db/client.js';
 import type { AppConfig } from '../../src/config.js';
 import type { PaymentProvider, PaymentVerification } from '../../src/domain/types.js';
-import { initPayments, paymentPreHandler, resetPayments } from '../../src/pay/middleware.js';
+import { initPayments, getPaymentProvider, paymentPreHandler, resetPayments } from '../../src/pay/middleware.js';
 import { DevPaymentProvider, registerDevFaucet } from '../../src/pay/devProvider.js';
 import { X402PaymentProvider } from '../../src/pay/provider.js';
 import { makeTestConfig } from './testconfig.js';
@@ -178,6 +178,29 @@ describe('paymentPreHandler with a stub provider', () => {
     const good = await app.inject({ method: 'GET', url: '/v1/search', headers: { 'x-payment': 'good' } });
     expect(good.statusCode).toBe(200);
     expect(good.json().payment).toEqual({ paid: true, priceUsd: '9.99', clientKey: 'stub-client' });
+    await app.close();
+  });
+});
+
+describe('payment runtime initialization', () => {
+  afterEach(() => resetPayments());
+
+  it('getPaymentProvider throws a clear error before initPayments', () => {
+    resetPayments();
+    expect(() => getPaymentProvider()).toThrow(/not initialized/);
+  });
+
+  it('a paid request before initPayments fails loudly instead of building a shadow pool', async () => {
+    resetPayments();
+    const app = buildApp();
+    app.setErrorHandler((err, _req, reply) => void reply.code(500).send({ error: String(err) }));
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/search',
+      headers: { 'x-payment': 'any-proof' },
+    });
+    expect(res.statusCode).toBe(500);
+    expect(res.body).toContain('not initialized');
     await app.close();
   });
 });
