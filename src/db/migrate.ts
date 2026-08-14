@@ -40,7 +40,9 @@ export async function runMigrations(db: Db): Promise<string[]> {
 // CLI entry: tsx src/db/migrate.ts  (or compiled: node dist/db/migrate.js)
 if (process.argv[1] && /migrate\.(ts|js)$/.test(process.argv[1])) {
   const config = loadConfig();
-  const db = createDb(config);
+  // Migrations are DDL: always run on the admin connection, never the
+  // low-privilege APP_DATABASE_URL role.
+  const db = createDb(config, { admin: true });
   runMigrations(db)
     .then((done) => {
       console.log(JSON.stringify({ level: 'info', msg: 'migrations applied', files: done }));

@@ -10,10 +10,14 @@ import { startScheduler } from './ingest/scheduler.js';
 async function main(): Promise<void> {
   const config = loadConfig();
   validateConfig(config);
-  const db = createDb(config);
 
   // Idempotent migrations on boot (safe in dev; compose CMD also runs them).
-  await runMigrations(db);
+  // DDL runs on the admin connection; the app pool may use APP_DATABASE_URL.
+  const adminDb = createDb(config, { admin: true });
+  await runMigrations(adminDb);
+  await adminDb.end();
+
+  const db = createDb(config);
 
   const app = await buildServer(config, db);
   registerWeb(app, config);

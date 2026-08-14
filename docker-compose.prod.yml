@@ -1,0 +1,71 @@
+# PRODUCTION compose profile: docker compose -f docker-compose.prod.yml up -d
+#
+# Enforced by src/config.validate.ts at boot (the app refuses to start
+# otherwise): NODE_ENV=production, PAYMENTS_MODE=x402, a valid X402_PAY_TO
+# address, an https X402_FACILITATOR_URL, and non-placeholder secrets.
+# The dev faucet route does not exist in this profile.
+#
+# Deployment note: the app binds to 127.0.0.1 — a reverse proxy (nginx,
+# Caddy, ...) must terminate TLS in front of it. TRUST_PROXY=true lets
+# Fastify read the client IP from X-Forwarded-For set by that proxy.
+#
+# Required environment (no defaults — compose aborts if unset):
+#   POSTGRES_PASSWORD     admin DB password (used by migrations)
+#   LICITA_APP_PASSWORD   password for the low-privilege licita_app role
+#   OPERATOR_KEY          x-operator-key header for GET /v1/stats
+#   X402_FACILITATOR_URL  https facilitator endpoint
+#   X402_PAY_TO           0x + 40 hex chars (USDC recipient)
+#   X402_NETWORK          e.g. base
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: licita
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      POSTGRES_DB: licita
+      LICITA_APP_PASSWORD: ${LICITA_APP_PASSWORD:?set LICITA_APP_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./docker/db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U licita"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  app:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      TRUST_PROXY: ${TRUST_PROXY:-true}
+      RATE_LIMIT_MAX_KEYS: ${RATE_LIMIT_MAX_KEYS:-10000}
+      PAYMENTS_MODE: x402
+      X402_FACILITATOR_URL: ${X402_FACILITATOR_URL:?set X402_FACILITATOR_URL}
+      X402_PAY_TO: ${X402_PAY_TO:?set X402_PAY_TO}
+      X402_NETWORK: ${X402_NETWORK:?set X402_NETWORK}
+      OPERATOR_KEY: ${OPERATOR_KEY:?set OPERATOR_KEY}
+      # Admin connection: migrations only (node dist/db/migrate.js on boot).
+      DATABASE_URL: postgres://licita:${POSTGRES_PASSWORD}@db:5432/licita
+      # App traffic: low-privilege role (SELECT/INSERT/UPDATE/DELETE, no DDL).
+      APP_DATABASE_URL: postgres://licita_app:${LICITA_APP_PASSWORD}@db:5432/licita
+      INGEST_MONTHS: ${INGEST_MONTHS:-24}
+      INGEST_ON_BOOT: ${INGEST_ON_BOOT:-false}
+      INGEST_CRON_HOUR: ${INGEST_CRON_HOUR:-4}
+    ports:
+      - "127.0.0.1:3000:3000"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3000/health || exit 1"]
+      interval: 30s
+      timeout: 3s
+      start_period: 10s
+      retries: 3
+    restart: unless-stopped
+
+volumes:
+  pgdata:

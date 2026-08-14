@@ -3,5 +3,7 @@ dist
 .env
 .git
 test
+scripts
+docker
 *.log
 .epg-data

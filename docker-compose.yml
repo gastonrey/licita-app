@@ -1,3 +1,6 @@
+# DEVELOPMENT compose stack. Not for production: dev payment faucet enabled,
+# placeholder dev secrets, app DB user is the superuser. See
+# docker-compose.prod.yml for the production profile.
 services:
   db:
     image: postgres:16-alpine
@@ -5,8 +8,13 @@ services:
       POSTGRES_USER: licita
       POSTGRES_PASSWORD: licita
       POSTGRES_DB: licita
+      # Password for the low-privilege licita_app role created at first init
+      # (docker/db/init/01_roles.sh). Dev-only value; the role exists here so
+      # APP_DATABASE_URL can be exercised locally.
+      LICITA_APP_PASSWORD: licita_app_dev
     volumes:
       - pgdata:/var/lib/postgresql/data
+      - ./docker/db/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U licita"]
       interval: 5s
@@ -24,11 +32,17 @@ services:
       PGUSER: licita
       PGPASSWORD: licita
       PGDATABASE: licita
+      # Uncomment to run app traffic as the low-privilege role (migrations
+      # still run as the admin PGUSER):
+      # APP_DATABASE_URL: postgres://licita_app:licita_app_dev@db:5432/licita
       PORT: "3000"
       LOG_LEVEL: ${LOG_LEVEL:-info}
-      PAYMENTS_MODE: ${PAYMENTS_MODE:-dev}
-      PAY_HMAC_SECRET: ${PAY_HMAC_SECRET:-change-me-in-prod}
-      OPERATOR_KEY: ${OPERATOR_KEY:-change-me}
+      NODE_ENV: development
+      TRUST_PROXY: ${TRUST_PROXY:-false}
+      PAYMENTS_MODE: dev
+      # Dev-only placeholder secrets (explicitly not for any shared deployment).
+      PAY_HMAC_SECRET: ${PAY_HMAC_SECRET:-dev-only-secret}
+      OPERATOR_KEY: ${OPERATOR_KEY:-dev-operator-key}
       INGEST_MONTHS: ${INGEST_MONTHS:-24}
       INGEST_ON_BOOT: ${INGEST_ON_BOOT:-false}
       INGEST_CRON_HOUR: ${INGEST_CRON_HOUR:-4}
