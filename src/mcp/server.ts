@@ -22,7 +22,12 @@ import {
 } from '../api/validate.js';
 import { buildSearchQuery, mapSearchRow } from '../api/routes/search.js';
 import { TENDER_SQL, TENDER_AWARDS_SQL, mapAwardRow } from '../api/routes/tenders.js';
-import { buildRenewalsQuery, mapRenewalRow } from '../api/routes/renewals.js';
+import {
+  CONFIDENCE_SCALE,
+  RENEWALS_METHODOLOGY,
+  buildRenewalsQuery,
+  mapRenewalRow,
+} from '../api/routes/renewals.js';
 import {
   COMPANY_AWARDS_SQL,
   FRAMEWORK_CAVEAT,
@@ -341,7 +346,13 @@ const TOOLS: Record<string, ToolDef> = {
       const { text, values } = buildRenewalsQuery(q);
       const res = await db.query(text, values);
       const total = res.rows.length > 0 ? Number(res.rows[0].total_count) : 0;
-      return { renewals: res.rows.map(mapRenewalRow), page: q.page, total };
+      return {
+        renewals: res.rows.map(mapRenewalRow),
+        page: q.page,
+        total,
+        methodology: RENEWALS_METHODOLOGY,
+        confidence_scale: [...CONFIDENCE_SCALE],
+      };
     },
   },
 

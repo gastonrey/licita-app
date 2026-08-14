@@ -6,6 +6,19 @@ import { dateStr, envelope, limitOffset, num, Params, validate, type RouteCtx } 
 
 export const renewalsValidation = validate(renewalsQuerySchema, 'query');
 
+/**
+ * Short machine+human-readable framing for renewals: deterministic heuristic,
+ * NOT a calibrated probability. Every signal exposes its evidence in `basis`.
+ */
+export const RENEWALS_METHODOLOGY =
+  'Deterministic heuristic over historical awards and contract dates ' +
+  '(explicit end dates, contract durations, the LCSP 48-month framework cap, ' +
+  'and award recurrence medians); NOT a calibrated probability. ' +
+  "Each signal's evidence and confidence rule are exposed in its basis.";
+
+/** The only confidence labels the API emits. */
+export const CONFIDENCE_SCALE = ['low', 'medium', 'high'] as const;
+
 // --- pure SQL builder -------------------------------------------------------------
 
 export function buildRenewalsQuery(q: RenewalsQuery): { text: string; values: unknown[] } {
@@ -77,11 +90,11 @@ export function renewalsHandler(ctx: RouteCtx) {
     const res = await ctx.db.query(text, values);
     const total = res.rows.length > 0 ? Number(res.rows[0].total_count) : 0;
     return reply.send(
-      envelope(
-        req,
-        res.rows.map(mapRenewalRow),
-        { page: q.page, total },
-      ),
+      envelope(req, res.rows.map(mapRenewalRow), {
+        page: q.page,
+        total,
+        meta: { methodology: RENEWALS_METHODOLOGY, confidence_scale: [...CONFIDENCE_SCALE] },
+      }),
     );
   };
 }

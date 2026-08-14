@@ -27,6 +27,16 @@ const meta = {
     total: { type: 'integer' },
     caveats: { type: 'array', items: { type: 'string' } },
     score_explanation: { type: 'string' },
+    methodology: {
+      type: 'string',
+      description:
+        'Declares that the returned signals are a deterministic heuristic over historical awards/contract dates, NOT a calibrated probability.',
+    },
+    confidence_scale: {
+      type: 'array',
+      items: { type: 'string', enum: ['low', 'medium', 'high'] },
+      description: 'The only confidence labels the API emits.',
+    },
   },
 } as const;
 
@@ -421,7 +431,9 @@ function paths(): Record<string, unknown> {
         summary: 'Forecast renewal/re-tender signals',
         description: desc(
           'GET /v1/renewals',
-          'Forecast signals (framework_expiry | duration_expiry | recurrence) joined with contract, buyer and incumbent.',
+          'Forecast signals (framework_expiry | duration_expiry | recurrence) joined with contract, buyer and incumbent. ' +
+            'Signals are a deterministic heuristic over historical awards and contract dates — NOT calibrated probabilities; ' +
+            'meta.methodology and each signal\'s basis expose the evidence and confidence rule behind every row.',
         ),
         parameters: [
           cpvParam,

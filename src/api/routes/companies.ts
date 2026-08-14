@@ -193,7 +193,7 @@ export function companyAwardsHandler(ctx: RouteCtx) {
  * Ties broken by publication_date DESC NULLS LAST, then id ASC.
  */
 export const SCORE_EXPLANATION =
-  'score = 2*(same buyer as a past win) + 1*(same CPV division, first 2 digits of cpv_main, as a past win); ties: publication_date desc, id asc. Candidates: tenders published in the last 90 days or with a future deadline that share cpv_main or buyer with the company\'s award history.';
+  'score = 2*(same buyer as a past win) + 1*(same CPV division, first 2 digits of cpv_main, as a past win); ties: publication_date desc, id asc. Candidates: tenders published in the last 90 days or with a future deadline that share cpv_main or buyer with the company\'s award history. Deterministic heuristic over the company\'s award history; NOT a probability estimate.';
 
 export const OPPORTUNITIES_SQL = `
 WITH hist AS (

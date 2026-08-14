@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { buildSearchQuery, mapSearchRow } from '../../src/api/routes/search.js';
-import { buildRenewalsQuery, mapRenewalRow } from '../../src/api/routes/renewals.js';
+import {
+  CONFIDENCE_SCALE,
+  RENEWALS_METHODOLOGY,
+  buildRenewalsQuery,
+  mapRenewalRow,
+  renewalsHandler,
+} from '../../src/api/routes/renewals.js';
 import { searchQuerySchema, renewalsQuerySchema } from '../../src/api/validate.js';
 
 describe('buildSearchQuery', () => {
@@ -129,5 +135,50 @@ describe('buildRenewalsQuery', () => {
       incumbent: { id: 9, name: 'ACME' },
       contract: { id: 2, value: 5000, currency: 'EUR', end_date: '2026-06-01' },
     });
+  });
+
+  it('honesty framing: methodology is a heuristic (no probability claims) and the confidence scale is fixed', () => {
+    expect(CONFIDENCE_SCALE).toEqual(['low', 'medium', 'high']);
+    expect(RENEWALS_METHODOLOGY).toContain('NOT a calibrated probability');
+    expect(RENEWALS_METHODOLOGY.toLowerCase()).not.toContain('probability that');
+  });
+
+  it('GET /v1/renewals response meta exposes methodology and confidence_scale', async () => {
+    const db = {
+      query: async () => ({
+        rows: [
+          {
+            id: 1,
+            signal_type: 'recurrence',
+            cpv: '72',
+            window_start: '2026-01-01',
+            window_end: '2026-03-01',
+            confidence: 'high',
+            basis: { evidence_count: 3 },
+            computed_at: '2026-01-01T00:00:00Z',
+            buyer_id: null,
+            buyer_name: null,
+            incumbent_id: null,
+            incumbent_name: null,
+            contract_id: null,
+            contract_title: null,
+            contract_value: null,
+            contract_currency: null,
+            contract_start: null,
+            contract_end: null,
+            total_count: 1,
+          },
+        ],
+      }),
+    };
+    const reply = { send: (body: unknown) => body };
+    const body = (await renewalsHandler({ db } as never)(
+      { id: 'req-1', query: {}, payment: { paid: false, priceUsd: '0.25' } } as never,
+      reply as never,
+    )) as { data: unknown[]; meta: Record<string, unknown> };
+    expect(body.data).toHaveLength(1);
+    expect(body.meta.methodology).toBe(RENEWALS_METHODOLOGY);
+    expect(body.meta.confidence_scale).toEqual(['low', 'medium', 'high']);
+    expect((body.data[0] as Record<string, unknown>).basis).toEqual({ evidence_count: 3 });
   });
 });

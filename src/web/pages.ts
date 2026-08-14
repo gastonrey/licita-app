@@ -71,7 +71,8 @@ plus PLACSP (licitaciones + contratos menores) when PLACSP ingestion is enabled.
 <li>Who bought what, who won, for how much, under which CPV codes.</li>
 <li>Company track record: wins, total awarded value, top CPVs and buyers.</li>
 <li>Buyer history: award history, supplier concentration, re-tender recurrence.</li>
-<li>Upcoming renewals: contracts and frameworks likely to be re-tendered soon.</li>
+<li>Upcoming renewals: contracts and frameworks likely to be re-tendered soon
+(deterministic heuristic with per-signal evidence — not a probability model).</li>
 </ul>
 
 <h2>How to consume it</h2>
@@ -154,6 +155,9 @@ with <code>payment_token</code> set.</p>
 <li>Errors: <code>{"error": {"code", "message", "hint"}}</code> — the hint is agent-actionable.</li>
 <li>Nulls are never fabricated: unknown values stay <code>null</code>.</li>
 <li>Framework agreement values are ceiling amounts, not actual spend.</li>
+<li>Renewal signals (<code>GET /v1/renewals</code>) are deterministic heuristics over historical awards
+and contract dates with confidence <code>low</code>/<code>medium</code>/<code>high</code> — not calibrated
+probabilities. Each signal exposes its full evidence in <code>basis</code>.</li>
 </ul>`,
   );
 }
@@ -215,6 +219,9 @@ ${lines}
 
 ## Caveats
 - Framework agreement values are ceiling amounts, not actual spend.
+- Renewal signals (GET /v1/renewals) are deterministic heuristics over historical awards and contract dates,
+  with confidence low/medium/high — NOT calibrated probabilities. Every signal carries its evidence in basis,
+  and meta.methodology states this framing.
 - Rate limit: 60 req/min per client; 429 with retry-after.
 `;
 }
