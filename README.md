@@ -149,7 +149,18 @@ deterministic forecast signals (`duration_expiry`, `framework_expiry`,
 Discovery order: `/llms.txt` → `/openapi.json` → `/v1/pricing` → paid calls
 (or MCP at `/mcp`).
 
-### REST: the 402 → faucet → retry flow (dev mode)
+### REST: the 402 → pay → retry flow
+
+Two payment modes exist. **x402 v2 (production contract)**: a paid endpoint
+answered without payment returns HTTP 402 with a base64 `PAYMENT-REQUIRED`
+response header — the exact USDC requirement. Sign an EIP-3009
+`transferWithAuthorization` with an x402 client (or viem) and retry with that
+payload in the `PAYMENT-SIGNATURE` header; the server verifies **and settles**
+the payment through its facilitator before serving content. Proofs are
+single-use (replay → 402).
+
+**dev (local only)**: mint a single-use HMAC token at the faucet and retry with
+the legacy `X-PAYMENT` header:
 
 ```bash
 BASE=http://localhost:3000
@@ -160,7 +171,7 @@ curl -i "$BASE/v1/search?cpv=72&type=award"
 #   "amount":"0.02","payTo":"dev-faucet","resource":"GET /v1/search"}],
 #  "hint":"POST /v1/dev-faucet ...","error":{"code":"payment_required",...}}
 
-# 2. Mint a single-use dev token
+# 2. Mint a single-use dev token (dev mode only; the faucet 404s in production)
 TOKEN=$(curl -s -X POST "$BASE/v1/dev-faucet" \
   -H 'content-type: application/json' \
   -d '{"endpoint":"GET /v1/search"}' | jq -r .token)
@@ -180,6 +191,41 @@ The full autonomous flow is executable as the acceptance test:
 BASE_URL=http://localhost:3000 npm run smoke   # 11 steps; exits 0 only if all pass
 ```
 
+### Run the agent smoke test with real x402 payments
+
+The smoke agent can run the *actual* x402 v2 flow — hitting the 402, signing
+EIP-3009 with the official x402 client and viem, and settling real testnet
+payments through the server's facilitator — instead of the dev faucet:
+
+```bash
+SMOKE_PAY_MODE=x402 \
+SMOKE_WALLET_PRIVATE_KEY=0x<64 hex testnet throwaway> \
+BASE_URL=http://localhost:3000 npm run smoke
+```
+
+Requirements:
+
+1. **Server in x402 mode.** Set `PAYMENTS_MODE=x402`, `X402_PAY_TO` (the
+   facilitator's recipient), `X402_FACILITATOR_URL`, `X402_NETWORK`
+   (`eip155:84532` for Base Sepolia) and `X402_HMAC_SECRET` in `.env`.
+2. **A Base Sepolia wallet.** Generate a throwaway key (e.g. `openssl rand
+   -hex 32`). **Never use a production key** — every paid step spends real
+   testnet USDC and the key lives in a local `.env` only.
+3. **Fund it** (Base Sepolia): send a little ETH for gas plus USDC for the
+   payments (~$0.44 per full run: search + tender + company + awards + buyer +
+   renewals). Useful tools: the official Base faucet (`faucet.base.org`),
+   a USDC faucet (e.g. Circle's testnet faucet, which can airdrop USDC to
+   Base Sepolia), and the SEP-24/USDC bridge helper of your choice. Verify with
+   `SMOKE_RPC_URL=https://sepolia.base.org` (the smoke agent runs a best-effort
+   pre-flight balance check and prints the wallet's USDC before the first paid
+   step).
+4. **Run.** Missing `SMOKE_WALLET_PRIVATE_KEY` exits with code 2 and a manual
+   config message. A wallet with no USDC fails the first paid step with a clear
+   `insufficient_funds` message instead of a cryptic 402.
+
+If the facilitator rejects with `insufficient_funds`, fund the wallet and
+re-run — every step mints a fresh proof, so there is no state to clean up.
+
 ### MCP
 
 Streamable-HTTP MCP endpoint at `POST /mcp` (stateless per request). Tools:
@@ -187,8 +233,10 @@ Streamable-HTTP MCP endpoint at `POST /mcp` (stateless per request). Tools:
 `get_company_opportunities`, `get_buyer_history`, `get_renewals`,
 `get_pricing`. Every tool accepts an optional `payment_token` argument; unpaid
 paid-tools return `{"payment_required": true, "price_usd": ..., "how_to_pay": ...}`
-as normal content (`isError=false`) — parse it, mint a token at the faucet,
-retry with `payment_token`.
+as normal content (`isError=false`) — parse it, produce the payment payload
+from the `PAYMENT-REQUIRED` requirement (or mint a dev faucet token locally),
+retry with `payment_token`. `payment_token` is the same base64 payload a REST
+client sends as `PAYMENT-SIGNATURE`.
 
 Client config snippet:
 
@@ -326,7 +374,10 @@ tool list. **It skips gracefully if `api.ted.europa.eu` is unreachable.**
   the default source.
 - **No LLM anywhere** — search is Postgres FTS (`spanish` config), forecast
   signals are deterministic SQL/date math.
-- **x402 real-facilitator settlement is not wired** (see Payments).
+- **x402 settlement is tested against a mock facilitator, not the live one**
+  — the server-side verify+settle flow (and the client-side smoke agent) are
+  covered by tests, but a run against the public facilitator requires a funded
+  Base Sepolia wallet (see "Run the agent smoke test with real x402 payments").
 - Framework agreement values are **ceiling amounts**, not actual spend.
 - Unit tests use `pg-mem`, which lacks window functions and has
   `count(*) FILTER` / `ON CONFLICT...RETURNING` quirks — full-app SQL is
