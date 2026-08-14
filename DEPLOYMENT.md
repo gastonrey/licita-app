@@ -331,3 +331,7 @@ passed.
       mainnet USDC, `X402_NETWORK` is `eip155:8453`.
 - [ ] Watch `docker compose logs -f app` for 24h for `facilitator_unavailable`
       or ingest failures before trusting it fully.
+
+### PLACSP WAF / rate throttling
+
+El portal de PLACSP (contrataciondelsectorpublico.gob.es) está detrás de un WAF que puede responder HTTP 200 con una página HTML "Request Rejected" cuando una IP hace ráfagas de peticiones. El harvester detecta esa página y reintenta con backoff largo (30 s, 3 intentos); si persiste, la fuente se aborta y se cuenta en el summary como `waf_blocks > 0` (no en silencio). La ingestión diaria educada (≥500 ms entre peticiones) no debería disparar el bloqueo. Si `waf_blocks > 0` de forma repetida, sube `PLACSP_DELAY_MS` (por ejemplo a 2000).
