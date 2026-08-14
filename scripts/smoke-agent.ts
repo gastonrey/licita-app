@@ -2,22 +2,61 @@
 //
 // Simulates an external AI agent pointed only at a BASE_URL. It must be able
 // to autonomously: discover the service (/llms.txt, /openapi.json), read the
-// price ladder (/v1/pricing), hit a 402, mint a dev payment token via the
-// faucet, retry with X-PAYMENT, drill from search results into tender/company/
-// buyer detail, pull the renewals forecast, verify replay protection, and use
-// the MCP endpoint (tools/list + get_pricing).
+// price ladder (/v1/pricing), hit a 402, pay, retry, drill from search results
+// into tender/company/buyer detail, pull the renewals forecast, verify replay
+// protection, and use the MCP endpoint (tools/list + get_pricing).
 //
-// Dependency-free (global fetch only). Exit code 0 iff ALL steps pass.
+// Payment modes (SMOKE_PAY_MODE):
+//   dev  (default): mint HMAC tokens via POST /v1/dev-faucet and retry with
+//        the X-PAYMENT header — the local-development flow. Needs no wallet.
+//   x402: REAL x402 v2 payments. Reads the base64 PAYMENT-REQUIRED header from
+//        the 402, signs an EIP-3009 transferWithAuthorization of USDC via the
+//        official @x402 client (+ viem), and retries with PAYMENT-SIGNATURE.
+//        Requires SMOKE_WALLET_PRIVATE_KEY (testnet throwaway wallet funded
+//        with USDC on Base Sepolia); each paid step settles real testnet
+//        payment through the server's facilitator.
 //
 // Usage:
 //   npx tsx scripts/smoke-agent.ts [BASE_URL]
-//   BASE_URL=http://127.0.0.1:3000 npx tsx scripts/smoke-agent.ts
+//   BASE_URL=http://127.0.0.1:3000 npm run smoke
+//   SMOKE_PAY_MODE=x402 SMOKE_WALLET_PRIVATE_KEY=0x... BASE_URL=... npm run smoke
+//
+// Exit codes: 0 = all steps passed, 1 = a step failed, 2 = missing required
+// x402 configuration (SMOKE_WALLET_PRIVATE_KEY).
+
+import { x402Client } from '@x402/core/client';
+import { registerExactEvmScheme } from '@x402/evm/exact/client';
+import { decodePaymentRequiredHeader, encodePaymentSignatureHeader } from '@x402/core/http';
+import { isPaymentPayloadV2, isPaymentRequired, type PaymentRequired } from '@x402/core/schemas';
+import { getDefaultAsset } from '@x402/evm';
+import { privateKeyToAccount } from 'viem/accounts';
+import { createPublicClient, http as viemHttp, parseAbi } from 'viem';
+import { base, baseSepolia, type Chain } from 'viem/chains';
 
 const BASE_URL = (
   process.argv[2] ??
   process.env.BASE_URL ??
   'http://127.0.0.1:3000'
 ).replace(/\/+$/, '');
+
+const PAY_MODE = process.env.SMOKE_PAY_MODE === 'x402' ? 'x402' : 'dev';
+const RAW_WALLET_KEY = (process.env.SMOKE_WALLET_PRIVATE_KEY ?? '').trim();
+const WALLET_KEY: `0x${string}` | null = RAW_WALLET_KEY
+  ? RAW_WALLET_KEY.startsWith('0x')
+    ? (RAW_WALLET_KEY as `0x${string}`)
+    : (`0x${RAW_WALLET_KEY}` as `0x${string}`)
+  : null;
+
+/** Public RPCs used only for the pre-flight USDC balance check (best-effort). */
+const RPC_BY_NETWORK: Record<string, string> = {
+  'eip155:84532': 'https://sepolia.base.org',
+  'eip155:8453': 'https://mainnet.base.org',
+};
+const CHAIN_BY_NETWORK: Record<string, Chain> = {
+  'eip155:84532': baseSepolia,
+  'eip155:8453': base,
+};
+const USDC_BALANCE_ABI = parseAbi(['function balanceOf(address account) external view returns (uint256)']);
 
 // --- tiny framework ------------------------------------------------------------
 
@@ -68,7 +107,7 @@ async function postJson(path: string, payload: unknown, headers: Record<string, 
   return { status: res.status, body };
 }
 
-/** Mint a dev payment token for an endpoint key via the faucet. */
+/** Mint a dev payment token for an endpoint key via the faucet (dev mode only). */
 async function faucet(endpoint: string): Promise<string> {
   const { status, body } = await postJson('/v1/dev-faucet', { endpoint });
   assert(status === 200, `faucet for "${endpoint}" returned HTTP ${status}: ${JSON.stringify(body)}`);
@@ -77,10 +116,117 @@ async function faucet(endpoint: string): Promise<string> {
   return token;
 }
 
-/** Pay-then-call: mint a fresh token for endpointKey, GET path with X-PAYMENT. */
+// --- x402 v2 client helpers ------------------------------------------------------
+
+interface X402PayClient {
+  account: ReturnType<typeof privateKeyToAccount>;
+  client: x402Client;
+}
+
+/** The x402 v2 payment client; initialized at startup in x402 mode only. */
+let payClient: X402PayClient | null = null;
+
+/**
+ * Validate an x402 v2 402 response: reads the base64 PAYMENT-REQUIRED header,
+ * decodes it and confirms it is a valid x402 requirement.
+ */
+function assert402(res: Response, what: string): PaymentRequired {
+  assert(res.status === 402, `${what}: expected HTTP 402 to get payment requirements, got ${res.status}`);
+  const raw = res.headers.get('payment-required');
+  assert(raw && raw.length > 0, `${what}: 402 missing the PAYMENT-REQUIRED header (x402 v2)`);
+  let decoded: unknown;
+  try {
+    decoded = decodePaymentRequiredHeader(raw);
+  } catch (err) {
+    throw new Error(
+      `${what}: PAYMENT-REQUIRED header did not decode: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+  assert(isPaymentRequired(decoded), `${what}: PAYMENT-REQUIRED header is not a valid x402 requirement`);
+  return decoded;
+}
+
+/**
+ * Pay-then-call in x402 mode: hit the endpoint unpaid → 402 → read the
+ * PAYMENT-REQUIRED requirement → sign the EIP-3009 transferWithAuthorization
+ * via the official x402 client → retry with PAYMENT-SIGNATURE. Each call pays
+ * and settles a fresh (testnet) payment through the server's facilitator.
+ */
+async function x402PaidGet(
+  endpointKey: string,
+  path: string,
+): Promise<{ status: number; body: Json | null; proof: string }> {
+  assert(payClient, 'x402 payment client is not initialized');
+  const first = await fetch(`${BASE_URL}${path}`);
+  const paymentRequired = assert402(first, `pay ${endpointKey}`);
+  const payload = await payClient.client.createPaymentPayload(paymentRequired);
+  assert(isPaymentPayloadV2(payload), `${endpointKey}: built payment payload failed x402 v2 shape validation`);
+  const proof = encodePaymentSignatureHeader(payload);
+  const retry = await fetch(`${BASE_URL}${path}`, { headers: { 'PAYMENT-SIGNATURE': proof } });
+  const body = (await retry.json().catch(() => null)) as Json | null;
+  if (retry.status === 402) {
+    const msg = String((body?.error as Json | undefined)?.message ?? '');
+    if (/insufficient/i.test(msg)) {
+      throw new Error(
+        `${endpointKey}: the facilitator rejected the payment with insufficient_funds. ` +
+          `Wallet ${payClient.account.address} has insufficient USDC on ` +
+          `${paymentRequired.accepts[0].network} for "${endpointKey}". Fund it on the testnet ` +
+          `(see README "Run the agent smoke test") and re-run.`,
+      );
+    }
+  }
+  return { status: retry.status, body, proof };
+}
+
+/** Pay-then-call wrapper: dev → faucet token + X-PAYMENT; x402 → real flow. */
 async function paidGet(endpointKey: string, path: string) {
+  if (PAY_MODE === 'x402') return x402PaidGet(endpointKey, path);
   const token = await faucet(endpointKey);
-  return getJson(path, { 'X-PAYMENT': token });
+  const res = await getJson(path, { 'X-PAYMENT': token });
+  return { status: res.status, body: res.body, proof: token };
+}
+
+/**
+ * Best-effort pre-flight balance check (warns only, never fails the run): if a
+ * public RPC is known for the network, read the USDC balance of the payer
+ * wallet. A zero balance is a warning — the run still attempts and will surface
+ * the facilitator's insufficient_funds rejection as a clear failure.
+ */
+async function checkUsdcBalance(network: string, asset: string, address: `0x${string}`): Promise<void> {
+  const rpcUrl = process.env.SMOKE_RPC_URL?.trim() || RPC_BY_NETWORK[network];
+  if (!rpcUrl) {
+    console.log(`     (no public RPC mapped for ${network}; set SMOKE_RPC_URL to enable the pre-flight balance check)`);
+    return;
+  }
+  const chain = CHAIN_BY_NETWORK[network] ?? baseSepolia;
+  let decimals = 6;
+  try {
+    decimals = getDefaultAsset(network).decimals;
+  } catch {
+    // custom network: assume USDC 6 decimals
+  }
+  try {
+    const publicClient = createPublicClient({ chain, transport: viemHttp(rpcUrl) });
+    const bal = (await publicClient.readContract({
+      address: asset as `0x${string}`,
+      abi: USDC_BALANCE_ABI,
+      functionName: 'balanceOf',
+      args: [address],
+    })) as bigint;
+    const usdc = Number(bal) / 10 ** decimals;
+    if (bal === 0n) {
+      console.log(
+        `     WARNING: wallet ${address} holds 0 USDC on ${network} — the first paid step will be ` +
+          `rejected with insufficient_funds. Fund it and re-run.`,
+      );
+    } else {
+      console.log(`     pre-flight: wallet holds ${usdc.toFixed(decimals)} USDC on ${network}`);
+    }
+  } catch (err) {
+    console.log(
+      `     (pre-flight balance check failed — continuing: ${err instanceof Error ? err.message : String(err)})`,
+    );
+  }
 }
 
 function assertEnvelope(body: Json | null, what: string): { data: unknown; meta: Json } {
@@ -119,15 +265,32 @@ async function mcpRpc(id: number, method: string, params: unknown): Promise<Json
 // --- the agent ------------------------------------------------------------------
 
 async function main(): Promise<number> {
-  console.log(`smoke-agent: BASE_URL=${BASE_URL}`);
+  console.log(`smoke-agent: BASE_URL=${BASE_URL} SMOKE_PAY_MODE=${PAY_MODE}`);
   console.log('---');
+
+  // x402 mode needs a funded testnet wallet; refuse to run without one.
+  if (PAY_MODE === 'x402' && !WALLET_KEY) {
+    console.error('smoke-agent: SMOKE_PAY_MODE=x402 requires SMOKE_WALLET_PRIVATE_KEY.');
+    console.error('A real x402 smoke signs and settles testnet USDC payments, so the private key of a');
+    console.error('funded Base Sepolia wallet is required (testnet throwaway only — never a production key).');
+    console.error('Put it in your local .env only, e.g. SMOKE_WALLET_PRIVATE_KEY=0x<64 hex>. See README.');
+    return 2;
+  }
+
+  if (PAY_MODE === 'x402' && WALLET_KEY) {
+    const account = privateKeyToAccount(WALLET_KEY);
+    const client = new x402Client();
+    registerExactEvmScheme(client, { signer: account });
+    payClient = { account, client };
+    console.log(`     x402 payer wallet: ${account.address}`);
+  }
 
   // State shared across steps.
   let searchResults: Array<Json> = [];
   let tenderId: number | null = null;
   let companyId: number | null = null;
   let buyerId: number | null = null;
-  let consumedSearchToken = '';
+  let consumedProof = '';
 
   // 1. Discovery: llms.txt ------------------------------------------------------
   await step('1. GET /llms.txt — discover service + payment instructions', async () => {
@@ -138,6 +301,8 @@ async function main(): Promise<number> {
       'licita',
       'GET /v1/search',
       '/v1/renewals',
+      'PAYMENT-REQUIRED',
+      'PAYMENT-SIGNATURE',
       'dev-faucet',
       'X-PAYMENT',
       '/mcp',
@@ -165,6 +330,11 @@ async function main(): Promise<number> {
     ]) {
       assert(paths.includes(p), `openapi paths missing "${p}" (have: ${paths.join(', ')})`);
     }
+    const schemes = (body?.components as Json | undefined)?.securitySchemes as Json | undefined;
+    assert(
+      schemes && (schemes.paymentSignature as { name?: string } | undefined)?.name === 'PAYMENT-SIGNATURE',
+      'openapi missing the PAYMENT-SIGNATURE security scheme',
+    );
     console.log(`     openapi lists ${paths.length} paths`);
   });
 
@@ -184,33 +354,56 @@ async function main(): Promise<number> {
     assert(prices.get('GET /v1/search') === '0.02', 'search price != 0.02');
     assert(prices.get('GET /v1/renewals') === '0.25', 'renewals price != 0.25');
     assert(prices.get('GET /v1/pricing') === '0.00', 'pricing should be free');
-    assert(d.payment_flow && typeof d.payment_flow === 'object', 'missing payment_flow');
+    const flow = d.payment_flow as Json | undefined;
+    assert(flow && typeof flow === 'object', 'missing payment_flow');
+    assert((flow.required_header as string) === 'PAYMENT-REQUIRED', 'payment_flow.required_header != PAYMENT-REQUIRED');
+    assert((flow.signature_header as string) === 'PAYMENT-SIGNATURE', 'payment_flow.signature_header != PAYMENT-SIGNATURE');
+    assert(
+      (flow.steps as string[]).join(' ').includes('PAYMENT-SIGNATURE') &&
+        (flow.steps as string[]).join(' ').includes('PAYMENT-REQUIRED'),
+      'payment_flow.steps do not describe the v2 headers',
+    );
     console.log(`     ladder: ${[...prices.entries()].map(([k, v]) => `${k}=$${v}`).join(' ')}`);
   });
 
   // 4. Unpaid search → 402 --------------------------------------------------------
   await step('4. GET /v1/search without payment → HTTP 402 (x402 body)', async () => {
-    const { status, body } = await getJson('/v1/search?cpv=72&region=ES&type=award');
-    assert(status === 402, `expected 402, got HTTP ${status}`);
-    assert(body?.x402Version === 1, '402 body missing x402Version=1');
-    const accepts = body?.accepts as Array<Json> | undefined;
-    assert(Array.isArray(accepts) && accepts.length > 0, '402 body missing accepts[]');
-    const a0 = accepts[0];
-    assert(a0.amount === '0.02', `accepts[0].amount=${a0.amount}, expected 0.02`);
-    assert(a0.resource === 'GET /v1/search', `accepts[0].resource=${a0.resource}`);
-    assert(typeof body?.hint === 'string' && (body.hint as string).includes('dev-faucet'), 'hint missing faucet instruction');
-    const err = body?.error as Json | undefined;
-    assert(err?.code === 'payment_required', `error.code=${err?.code}`);
-    console.log(`     402: pay $${a0.amount} to ${a0.payTo} for "${a0.resource}"`);
+    const res = await fetch(`${BASE_URL}/v1/search?cpv=72&region=ES&type=award`);
+    assert(res.status === 402, `expected 402, got HTTP ${res.status}`);
+    if (PAY_MODE === 'x402') {
+      assert(payClient, 'x402 mode but payment client is not initialized');
+      const pr = assert402(res, 'unpaid search');
+      assert(pr.x402Version === 2, `402 x402Version=${pr.x402Version}, expected 2`);
+      const a0 = pr.accepts[0];
+      assert(a0.scheme === 'exact', `accepts[0].scheme=${a0.scheme}`);
+      assert(/^eip155:/.test(a0.network), `accepts[0].network=${a0.network}, expected CAIP-2 eip155:*`);
+      assert(/^0x[a-fA-F0-9]{40}$/.test(a0.asset), 'accepts[0].asset not a token contract address');
+      assert(/^0x[a-fA-F0-9]{40}$/.test(a0.payTo), 'accepts[0].payTo not an address');
+      assert(Number(a0.amount) > 0, `accepts[0].amount=${a0.amount}, expected base units > 0`);
+      const body = (await res.json().catch(() => null)) as Json | null;
+      const err = body?.error as Json | undefined;
+      assert(err?.code === 'payment_required', `error.code=${err?.code}`);
+      await checkUsdcBalance(a0.network, a0.asset, payClient.account.address);
+      console.log(`     402 v2: pay ${a0.amount} base units of USDC on ${a0.network} to ${a0.payTo} for "${a0.resource?.url}"`);
+    } else {
+      const body = (await res.json().catch(() => null)) as Json | null;
+      assert(body?.x402Version === 1, '402 body missing x402Version=1');
+      const accepts = body?.accepts as Array<Json> | undefined;
+      assert(Array.isArray(accepts) && accepts.length > 0, '402 body missing accepts[]');
+      const a0 = accepts[0];
+      assert(a0.amount === '0.02', `accepts[0].amount=${a0.amount}, expected 0.02`);
+      assert(a0.resource === 'GET /v1/search', `accepts[0].resource=${a0.resource}`);
+      assert(typeof body?.hint === 'string' && (body.hint as string).includes('dev-faucet'), 'hint missing faucet instruction');
+      const err = body?.error as Json | undefined;
+      assert(err?.code === 'payment_required', `error.code=${err?.code}`);
+      console.log(`     402: pay $${a0.amount} to ${a0.payTo} for "${a0.resource}"`);
+    }
   });
 
-  // 5+6. Faucet → paid search ------------------------------------------------------
-  await step('5-6. POST /v1/dev-faucet → retry search with X-PAYMENT → 200 envelope', async () => {
-    const token = await faucet('GET /v1/search');
-    consumedSearchToken = token;
-    const { status, body } = await getJson('/v1/search?cpv=72&region=ES&type=award', {
-      'X-PAYMENT': token,
-    });
+  // 5+6. Pay → paid search --------------------------------------------------------
+  await step('5-6. pay search (faucet|x402) → retry → 200 envelope', async () => {
+    const { status, body, proof } = await paidGet('GET /v1/search', '/v1/search?cpv=72&region=ES&type=award');
+    consumedProof = proof;
     assert(status === 200, `paid search returned HTTP ${status}: ${JSON.stringify(body)?.slice(0, 300)}`);
     const { data, meta } = assertEnvelope(body, 'paid search');
     assert(meta.paid === true, 'meta.paid !== true');
@@ -234,13 +427,11 @@ async function main(): Promise<number> {
   // 7. Tender drill-down ------------------------------------------------------------
   await step('7. GET /v1/tenders/:id (paid) — full tender + provenance', async () => {
     assert(searchResults.length > 0, 'no search results to drill into');
-    // tender drill-down: for award rows the tender id is not exposed; use the
-    // tender-type search to get a tender id directly.
-    const tRes = await paidGet('GET /v1/search', '/v1/search?cpv=72&type=tender&size=5');
-    assert(tRes.status === 200, `tender search HTTP ${tRes.status}`);
-    const tenders = tRes.body?.data as Array<Json>;
-    assert(Array.isArray(tenders) && tenders.length > 0, 'no tender rows found');
-    tenderId = Number(tenders[0].id);
+    // Award rows expose their tender via tender_id (added in P0.5) — no second
+    // tender-type search needed.
+    const award = searchResults.find((r) => r.tender_id != null);
+    assert(award, 'no search result exposes a tender_id (award rows must carry it)');
+    tenderId = Number(award.tender_id);
     const { status, body } = await paidGet('GET /v1/tenders/:id', `/v1/tenders/${tenderId}`);
     assert(status === 200, `tender detail HTTP ${status}: ${JSON.stringify(body)?.slice(0, 300)}`);
     const { data, meta } = assertEnvelope(body, 'tender detail');
@@ -297,6 +488,15 @@ async function main(): Promise<number> {
     assert(Array.isArray(data), 'renewals data not an array');
     const rows = data as Array<Json>;
     assert(rows.length > 0, 'no forecast signals — recompute should have produced some');
+    // P0.5 honesty framing: meta.methodology + confidence_scale.
+    assert(
+      typeof meta.methodology === 'string' && /deterministic heuristic/i.test(String(meta.methodology)),
+      'renewals meta.methodology missing the honest "deterministic heuristic" framing',
+    );
+    assert(
+      JSON.stringify(meta.confidence_scale) === JSON.stringify(['low', 'medium', 'high']),
+      `renewals meta.confidence_scale=${JSON.stringify(meta.confidence_scale)}, expected [low,medium,high]`,
+    );
     for (const r of rows.slice(0, 3)) {
       assert(
         ['duration_expiry', 'framework_expiry', 'recurrence'].includes(String(r.signal_type)),
@@ -312,10 +512,23 @@ async function main(): Promise<number> {
   });
 
   // 10. Replay protection ----------------------------------------------------------------
-  await step('10. Replay same X-PAYMENT token → 402 reason "replay"', async () => {
-    assert(consumedSearchToken, 'no consumed token from step 6');
+  await step('10. Replay same payment proof → 402 rejected', async () => {
+    assert(consumedProof, 'no consumed proof from step 6');
+    if (PAY_MODE === 'x402') {
+      // The server's unique payload-hash replay check (or the on-chain nonce)
+      // rejects the reused proof regardless of which layer fires first.
+      const res = await fetch(`${BASE_URL}/v1/search?cpv=72&type=award`, {
+        headers: { 'PAYMENT-SIGNATURE': consumedProof },
+      });
+      assert(res.status === 402, `replay returned HTTP ${res.status}, expected 402`);
+      const body = (await res.json().catch(() => null)) as Json | null;
+      const err = body?.error as Json | undefined;
+      assert(err?.code === 'payment_required', `expected payment_required, got: ${JSON.stringify(err)}`);
+      console.log(`     replay rejected (reason: ${String(err?.message ?? '').slice(0, 80)})`);
+      return;
+    }
     const { status, body } = await getJson('/v1/search?cpv=72&type=award', {
-      'X-PAYMENT': consumedSearchToken,
+      'X-PAYMENT': consumedProof,
     });
     assert(status === 402, `replay returned HTTP ${status}, expected 402`);
     const msg = String((body?.error as Json | undefined)?.message ?? '');
