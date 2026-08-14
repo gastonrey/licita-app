@@ -221,12 +221,19 @@ describe('registerDevFaucet', () => {
     await app.close();
   });
 
-  it('returns 410 when PAYMENTS_MODE is not dev', async () => {
+  it('registers no route (404) when PAYMENTS_MODE is not dev', async () => {
     const app = Fastify({ logger: false });
     registerDevFaucet(app, { ...config, paymentsMode: 'x402' });
     const res = await app.inject({ method: 'POST', url: '/v1/dev-faucet', payload: { endpoint: 'GET /v1/search' } });
-    expect(res.statusCode).toBe(410);
-    expect(res.json().error.message).toContain('disabled');
+    expect(res.statusCode).toBe(404);
+    await app.close();
+  });
+
+  it('registers no route (404) in production even when PAYMENTS_MODE is dev', async () => {
+    const app = Fastify({ logger: false });
+    registerDevFaucet(app, { ...config, nodeEnv: 'production' });
+    const res = await app.inject({ method: 'POST', url: '/v1/dev-faucet', payload: { endpoint: 'GET /v1/search' } });
+    expect(res.statusCode).toBe(404);
     await app.close();
   });
 });

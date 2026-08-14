@@ -173,23 +173,14 @@ const faucetBodySchema = z.object({
 
 /**
  * POST /v1/dev-faucet {"endpoint": "<METHOD PATH>"} → { token, proof, expires_at }.
- * Dev mode only: when PAYMENTS_MODE != 'dev' a 410 handler is registered instead.
+ * Dev mode only: when PAYMENTS_MODE != 'dev' OR NODE_ENV === 'production' NO
+ * route is registered at all (the path 404s like any unknown route), so the
+ * faucet's existence is undiscoverable on non-dev deployments.
  * No auth — this endpoint exists so autonomous agents can complete the dev x402
  * flow without a human operator.
  */
 export function registerDevFaucet(app: FastifyInstance, config: AppConfig): void {
-  if (config.paymentsMode !== 'dev') {
-    app.post('/v1/dev-faucet', async (_req, reply) => {
-      return reply
-        .code(410)
-        .send(
-          errorEnvelope(
-            'not_found',
-            'The dev faucet is disabled because PAYMENTS_MODE is not "dev".',
-            'This deployment expects real x402 payments via the configured facilitator.',
-          ),
-        );
-    });
+  if (config.paymentsMode !== 'dev' || config.nodeEnv === 'production') {
     return;
   }
 
