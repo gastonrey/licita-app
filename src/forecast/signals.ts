@@ -13,6 +13,9 @@
 //
 // Recompute strategy per SPEC: delete all forecast_signals, then rebuild.
 // Date arithmetic is done in JS (keeps this correct on Postgres and pg-mem).
+// Every signal's `basis` jsonb carries the full evidence trail (basis_version: 1)
+// so consumers can audit exactly why a signal exists and why its confidence
+// is low/medium/high — heuristic evidence, never a calibrated probability.
 
 import type { Db } from '../db/client.js';
 import {
@@ -74,29 +77,43 @@ export function daysBetween(aIso: string, bIso: string): number {
 }
 
 /** Median interval (days) between consecutive sorted award dates. */
-export function medianIntervalDays(sortedDates: string[]): number | null {
-  if (sortedDates.length < 2) return null;
+export function intervalDays(sortedDates: string[]): number[] {
   const gaps: number[] = [];
   for (let i = 1; i < sortedDates.length; i += 1) {
     gaps.push(daysBetween(sortedDates[i - 1], sortedDates[i]));
   }
-  return median(gaps);
+  return gaps;
 }
+
+export function medianIntervalDays(sortedDates: string[]): number | null {
+  if (sortedDates.length < 2) return null;
+  return median(intervalDays(sortedDates));
+}
+
+/** Rule string recorded in recurrence basis so the window is auditable. */
+export const RECURRENCE_WINDOW_RULE = 'last_award + median_interval ± 25%';
 
 /** last award + median interval, ±25%. */
 export function recurrenceWindow(
   lastAwardIso: string,
   medianDays: number,
-): { windowStart: string; windowEnd: string } {
+): { windowStart: string; windowEnd: string; predictedDate: string } {
   const predicted = Date.parse(`${lastAwardIso}T00:00:00Z`) + medianDays * 86_400_000;
   const start = new Date(predicted - medianDays * 0.25 * 86_400_000).toISOString().slice(0, 10);
   const end = new Date(predicted + medianDays * 0.25 * 86_400_000).toISOString().slice(0, 10);
-  return { windowStart: start, windowEnd: end };
+  return {
+    windowStart: start,
+    windowEnd: end,
+    predictedDate: new Date(predicted).toISOString().slice(0, 10),
+  };
 }
 
 // ---------------------------------------------------------------------------
 // Signal derivation from contract/award rows (pure)
 // ---------------------------------------------------------------------------
+
+/** Version of the basis jsonb contract; bump on any shape change. */
+export const BASIS_VERSION = 1;
 
 export interface ContractSignalRow {
   contract_id: number;
@@ -107,8 +124,43 @@ export interface ContractSignalRow {
   end_date: string | null; // derived end on contracts
   award_date: string | null;
   explicit_end_date: string | null; // awards.end_date (from the notice)
-  source_ref: string;
+  start_date: string | null; // contracts.start_date
+  duration_months: number | null; // contracts.duration_months
+  source_ref: string; // award notice ref
+  tender_source_ref: string | null; // tender publication ref
 }
+
+function contractBasis(
+  row: ContractSignalRow,
+  rule: string,
+  endDate: string,
+  confidenceRule: string,
+): Record<string, unknown> {
+  return {
+    basis_version: BASIS_VERSION,
+    rule,
+    confidence_rule: confidenceRule,
+    end_date: endDate,
+    award_date: row.award_date,
+    start_date: row.start_date,
+    duration_months: row.duration_months,
+    framework: row.framework,
+    buyer_id: row.buyer_id,
+    cpv: row.cpv,
+    incumbent_company_id: row.company_id,
+    source_ref: row.source_ref,
+    tender_source_ref: row.tender_source_ref,
+  };
+}
+
+const CONFIDENCE_RULES = {
+  explicit_end_date: 'medium: the award notice carried an explicit end date',
+  derived_from_duration:
+    'low: end date derived from contract duration; the notice had no explicit end date',
+  lcsp_cap:
+    `low: LCSP ${FRAMEWORK_MAX_MONTHS}-month framework cap from award date; ` +
+    'the notice had no explicit end date',
+} as const;
 
 export function contractSignals(row: ContractSignalRow): SignalInsert[] {
   const out: SignalInsert[] = [];
@@ -120,18 +172,19 @@ export function contractSignals(row: ContractSignalRow): SignalInsert[] {
   };
   if (row.framework) {
     if (row.end_date) {
+      const explicit = row.explicit_end_date !== null;
       out.push({
         ...base,
         signal_type: 'framework_expiry',
         window_start: addDaysIso(row.end_date, -RENEWAL_WINDOW_DAYS),
         window_end: addDaysIso(row.end_date, RENEWAL_WINDOW_DAYS),
-        confidence: row.explicit_end_date ? 'medium' : 'low',
-        basis: {
-          rule: row.explicit_end_date ? 'explicit_end_date' : `lcsp_${FRAMEWORK_MAX_MONTHS}m_cap`,
-          end_date: row.end_date,
-          award_date: row.award_date,
-          source_ref: row.source_ref,
-        },
+        confidence: explicit ? 'medium' : 'low',
+        basis: contractBasis(
+          row,
+          explicit ? 'explicit_end_date' : `lcsp_${FRAMEWORK_MAX_MONTHS}m_cap`,
+          row.end_date,
+          explicit ? CONFIDENCE_RULES.explicit_end_date : CONFIDENCE_RULES.lcsp_cap,
+        ),
       });
     } else if (row.award_date) {
       const end = addMonthsIso(row.award_date, FRAMEWORK_MAX_MONTHS);
@@ -141,28 +194,30 @@ export function contractSignals(row: ContractSignalRow): SignalInsert[] {
         window_start: addDaysIso(end, -RENEWAL_WINDOW_DAYS),
         window_end: addDaysIso(end, RENEWAL_WINDOW_DAYS),
         confidence: 'low',
-        basis: {
-          rule: `lcsp_${FRAMEWORK_MAX_MONTHS}m_cap`,
-          end_date: end,
-          award_date: row.award_date,
-          source_ref: row.source_ref,
-        },
+        basis: contractBasis(
+          row,
+          `lcsp_${FRAMEWORK_MAX_MONTHS}m_cap`,
+          end,
+          CONFIDENCE_RULES.lcsp_cap,
+        ),
       });
     }
     return out;
   }
   if (row.end_date) {
+    const explicit = row.explicit_end_date !== null;
     out.push({
       ...base,
       signal_type: 'duration_expiry',
       window_start: addDaysIso(row.end_date, -RENEWAL_WINDOW_DAYS),
       window_end: addDaysIso(row.end_date, RENEWAL_WINDOW_DAYS),
-      confidence: row.explicit_end_date ? 'medium' : 'low',
-      basis: {
-        rule: row.explicit_end_date ? 'explicit_end_date' : 'derived_from_duration',
-        end_date: row.end_date,
-        source_ref: row.source_ref,
-      },
+      confidence: explicit ? 'medium' : 'low',
+      basis: contractBasis(
+        row,
+        explicit ? 'explicit_end_date' : 'derived_from_duration',
+        row.end_date,
+        explicit ? CONFIDENCE_RULES.explicit_end_date : CONFIDENCE_RULES.derived_from_duration,
+      ),
     });
   }
   return out;
@@ -190,10 +245,12 @@ export function recurrenceSignals(rows: RecurrenceAwardRow[]): SignalInsert[] {
     if (group.length < 2) continue;
     const sorted = [...group].sort((a, b) => a.award_date.localeCompare(b.award_date));
     const dates = sorted.map((r) => r.award_date);
-    const medianDays = medianIntervalDays(dates);
+    const gaps = intervalDays(dates);
+    const medianDays = median(gaps);
     if (medianDays === null || medianDays <= 0) continue;
     const last = sorted[sorted.length - 1];
-    const { windowStart, windowEnd } = recurrenceWindow(last.award_date, medianDays);
+    const confidence = confidenceForEvidence(sorted.length);
+    const { windowStart, windowEnd, predictedDate } = recurrenceWindow(last.award_date, medianDays);
     out.push({
       buyer_id: last.buyer_id,
       cpv: last.cpv_main.slice(0, 2),
@@ -202,12 +259,23 @@ export function recurrenceSignals(rows: RecurrenceAwardRow[]): SignalInsert[] {
       signal_type: 'recurrence',
       window_start: windowStart,
       window_end: windowEnd,
-      confidence: confidenceForEvidence(sorted.length),
+      confidence,
       basis: {
+        basis_version: BASIS_VERSION,
         evidence_count: sorted.length,
+        confidence_rule:
+          `${confidence}: ${sorted.length} dated awards for this buyer + CPV division ` +
+          '(2 → medium, ≥ 3 → high)',
+        window_rule: RECURRENCE_WINDOW_RULE,
+        predicted_date: predictedDate,
         median_interval_days: medianDays,
+        intervals_days: gaps,
         last_award_date: last.award_date,
         award_refs: sorted.map((r) => r.source_ref),
+        award_history: sorted.map((r) => ({
+          source_ref: r.source_ref,
+          award_date: r.award_date,
+        })),
       },
     });
   }
@@ -230,8 +298,12 @@ export async function recomputeSignals(db: Db): Promise<RecomputeResult> {
     (
       await db.query(
         `SELECT c.id AS contract_id, c.buyer_id, c.company_id, c.cpv, c.framework,
-                c.end_date, a.award_date, a.end_date AS explicit_end_date, a.source_ref
-         FROM contracts c JOIN awards a ON a.id = c.award_id`,
+                c.end_date, c.start_date, c.duration_months,
+                a.award_date, a.end_date AS explicit_end_date, a.source_ref,
+                t.source_ref AS tender_source_ref
+         FROM contracts c
+         JOIN awards a ON a.id = c.award_id
+         JOIN tenders t ON t.id = a.tender_id`,
       )
     ).rows as Array<Record<string, unknown>>
   ).map((r) => ({
@@ -243,7 +315,13 @@ export async function recomputeSignals(db: Db): Promise<RecomputeResult> {
     end_date: toIsoDate(r.end_date),
     award_date: toIsoDate(r.award_date),
     explicit_end_date: toIsoDate(r.explicit_end_date),
+    start_date: toIsoDate(r.start_date),
+    duration_months:
+      r.duration_months === null || r.duration_months === undefined
+        ? null
+        : Number(r.duration_months),
     source_ref: String(r.source_ref),
+    tender_source_ref: (r.tender_source_ref as string | null) ?? null,
   })) as ContractSignalRow[];
 
   const recurrenceRows = (

@@ -5,14 +5,18 @@ import {
   addMonthsIso,
 } from '../../src/ingest/normalize.js';
 import {
+  BASIS_VERSION,
   confidenceForEvidence,
   contractSignals,
+  intervalDays,
   median,
   medianIntervalDays,
+  RECURRENCE_WINDOW_RULE,
   recomputeSignals,
   recurrenceSignals,
   recurrenceWindow,
   toIsoDate,
+  type ContractSignalRow,
   type RecurrenceAwardRow,
 } from '../../src/forecast/signals.js';
 import { makeTestDb } from './testdb.js';
@@ -37,6 +41,12 @@ describe('pure signal helpers', () => {
     // predicted = 2026-01-01 + 400d = 2027-02-05; window ±100d
     expect(w.windowStart).toBe('2026-10-28');
     expect(w.windowEnd).toBe('2027-05-16');
+    expect(w.predictedDate).toBe('2027-02-05');
+  });
+
+  it('intervalDays lists the gaps between consecutive dates', () => {
+    expect(intervalDays(['2024-01-01', '2025-01-01', '2025-02-01'])).toEqual([366, 31]);
+    expect(intervalDays(['2024-01-01'])).toEqual([]);
   });
 
   it('confidence by evidence count: 1 low, 2 medium, >=3 high', () => {
@@ -55,18 +65,24 @@ describe('pure signal helpers', () => {
 });
 
 describe('contractSignals', () => {
+  const mk = (over: Partial<ContractSignalRow>): ContractSignalRow => ({
+    contract_id: 1,
+    buyer_id: 1,
+    company_id: 2,
+    cpv: '72000000',
+    framework: false,
+    end_date: '2027-01-15',
+    award_date: '2026-01-15',
+    explicit_end_date: '2027-01-15',
+    start_date: '2026-01-15',
+    duration_months: 12,
+    source_ref: '1-2026',
+    tender_source_ref: '99-2026',
+    ...over,
+  });
+
   it('duration_expiry: explicit end → medium, ±90d window', () => {
-    const s = contractSignals({
-      contract_id: 1,
-      buyer_id: 1,
-      company_id: 2,
-      cpv: '72000000',
-      framework: false,
-      end_date: '2027-01-15',
-      award_date: '2026-01-15',
-      explicit_end_date: '2027-01-15',
-      source_ref: '1-2026',
-    });
+    const s = contractSignals(mk({}));
     expect(s).toHaveLength(1);
     expect(s[0].signal_type).toBe('duration_expiry');
     expect(s[0].confidence).toBe('medium');
@@ -74,56 +90,76 @@ describe('contractSignals', () => {
     expect(s[0].window_end).toBe('2027-04-15');
   });
 
-  it('duration_expiry: derived end (no explicit) → low', () => {
-    const s = contractSignals({
-      contract_id: 1,
-      buyer_id: 1,
-      company_id: 2,
-      cpv: '72000000',
+  it('duration_expiry basis: full evidence trail + basis_version', () => {
+    const s = contractSignals(mk({}));
+    expect(s[0].basis).toEqual({
+      basis_version: BASIS_VERSION,
+      rule: 'explicit_end_date',
+      confidence_rule: 'medium: the award notice carried an explicit end date',
+      end_date: '2027-01-15',
+      award_date: '2026-01-15',
+      start_date: '2026-01-15',
+      duration_months: 12,
       framework: false,
-      end_date: '2028-07-24',
-      award_date: '2026-07-24',
-      explicit_end_date: null,
-      source_ref: '2-2026',
+      buyer_id: 1,
+      cpv: '72000000',
+      incumbent_company_id: 2,
+      source_ref: '1-2026',
+      tender_source_ref: '99-2026',
     });
+  });
+
+  it('duration_expiry: derived end (no explicit) → low, rule auditable', () => {
+    const s = contractSignals(
+      mk({
+        end_date: '2028-07-24',
+        award_date: '2026-07-24',
+        explicit_end_date: null,
+        source_ref: '2-2026',
+      }),
+    );
     expect(s[0].signal_type).toBe('duration_expiry');
     expect(s[0].confidence).toBe('low');
+    expect(s[0].basis.rule).toBe('derived_from_duration');
+    expect(String(s[0].basis.confidence_rule)).toContain('low:');
   });
 
   it('framework_expiry: no explicit end → award_date + 48m ± 90d, low', () => {
-    const s = contractSignals({
-      contract_id: 1,
-      buyer_id: 1,
-      company_id: 2,
-      cpv: '72000000',
-      framework: true,
-      end_date: null,
-      award_date: '2026-01-15',
-      explicit_end_date: null,
-      source_ref: '3-2026',
-    });
+    const s = contractSignals(
+      mk({
+        framework: true,
+        end_date: null,
+        award_date: '2026-01-15',
+        explicit_end_date: null,
+        duration_months: null,
+        source_ref: '3-2026',
+      }),
+    );
     expect(s).toHaveLength(1);
     expect(s[0].signal_type).toBe('framework_expiry');
     expect(s[0].confidence).toBe('low');
     const expectedEnd = addMonthsIso('2026-01-15', 48);
     expect(s[0].window_start).toBe(addDaysIso(expectedEnd, -90));
     expect(s[0].window_end).toBe(addDaysIso(expectedEnd, 90));
+    expect(s[0].basis.rule).toBe('lcsp_48m_cap');
+    expect(s[0].basis.end_date).toBe(expectedEnd);
+    expect(s[0].basis.framework).toBe(true);
+    expect(s[0].basis.basis_version).toBe(BASIS_VERSION);
   });
 
   it('framework_expiry: explicit end → medium', () => {
-    const s = contractSignals({
-      contract_id: 1,
-      buyer_id: 1,
-      company_id: 2,
-      cpv: '72000000',
-      framework: true,
-      end_date: '2026-12-31',
-      award_date: '2026-05-27',
-      explicit_end_date: '2026-12-31',
-      source_ref: '4-2026',
-    });
+    const s = contractSignals(
+      mk({
+        framework: true,
+        end_date: '2026-12-31',
+        award_date: '2026-05-27',
+        explicit_end_date: '2026-12-31',
+        source_ref: '4-2026',
+      }),
+    );
     expect(s[0].signal_type).toBe('framework_expiry');
     expect(s[0].confidence).toBe('medium');
+    expect(s[0].basis.rule).toBe('explicit_end_date');
   });
 });
 
@@ -169,6 +205,30 @@ describe('recurrenceSignals', () => {
     const { windowStart, windowEnd } = recurrenceWindow('2025-01-01', 365.5);
     expect(s[0].window_start).toBe(windowStart);
     expect(s[0].window_end).toBe(windowEnd);
+  });
+
+  it('recurrence basis exposes the full dated evidence trail', () => {
+    const s = recurrenceSignals([
+      mk('2023-01-01', 'a'),
+      mk('2024-01-01', 'b'),
+      mk('2025-01-01', 'c'),
+    ]);
+    expect(s[0].basis).toEqual({
+      basis_version: BASIS_VERSION,
+      evidence_count: 3,
+      confidence_rule: 'high: 3 dated awards for this buyer + CPV division (2 → medium, ≥ 3 → high)',
+      window_rule: RECURRENCE_WINDOW_RULE,
+      predicted_date: recurrenceWindow('2025-01-01', 365.5).predictedDate,
+      median_interval_days: 365.5,
+      intervals_days: [365, 366],
+      last_award_date: '2025-01-01',
+      award_refs: ['a', 'b', 'c'],
+      award_history: [
+        { source_ref: 'a', award_date: '2023-01-01' },
+        { source_ref: 'b', award_date: '2024-01-01' },
+        { source_ref: 'c', award_date: '2025-01-01' },
+      ],
+    });
   });
 });
 
@@ -250,6 +310,35 @@ describe('recomputeSignals on pg-mem', () => {
     expect(byType.framework_expiry.confidence).toBe('low');
     expect(byType.recurrence.confidence).toBe('high');
     expect(byType.recurrence.basis.evidence_count).toBe(3);
+
+    // every persisted basis carries the auditable evidence trail (basis_version 1)
+    for (const r of rows) {
+      expect(r.basis.basis_version).toBe(BASIS_VERSION);
+      expect(typeof r.basis.confidence_rule).toBe('string');
+    }
+    expect(byType.duration_expiry.basis).toMatchObject({
+      rule: 'explicit_end_date',
+      end_date: '2027-01-15',
+      award_date: '2026-01-15',
+      source_ref: 't1',
+      tender_source_ref: 't1',
+      framework: false,
+      buyer_id: 1,
+      incumbent_company_id: 1,
+    });
+    expect(byType.framework_expiry.basis).toMatchObject({
+      rule: 'lcsp_48m_cap',
+      award_date: '2025-03-01',
+      source_ref: 't2',
+      tender_source_ref: 't2',
+      framework: true,
+    });
+    expect(byType.recurrence.basis).toMatchObject({
+      window_rule: RECURRENCE_WINDOW_RULE,
+      intervals_days: [458, 501],
+      last_award_date: '2026-01-15',
+      award_refs: ['t3', 't4', 't1'],
+    });
 
     // delete + rebuild: second run yields identical state, no duplicates
     const res2 = await recomputeSignals(db);
