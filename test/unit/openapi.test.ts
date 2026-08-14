@@ -59,4 +59,30 @@ describe('openapi document', () => {
   it('is JSON-serializable', () => {
     expect(() => JSON.stringify(doc)).not.toThrow();
   });
+
+  it('declares the x402 v2 PAYMENT-SIGNATURE security scheme and applies it to paid endpoints', () => {
+    const schemes = doc.components.securitySchemes as Record<
+      string,
+      { type: string; in: string; name: string }
+    >;
+    expect(schemes.paymentSignature).toBeDefined();
+    expect(schemes.paymentSignature).toMatchObject({
+      type: 'apiKey',
+      in: 'header',
+      name: 'PAYMENT-SIGNATURE',
+    });
+    for (const [key, price] of Object.entries(ENDPOINT_PRICES)) {
+      const p = key.split(' ')[1].replace(':id', '{id}');
+      const op = doc.paths[p].get as { security?: unknown[] };
+      if (price === '0.00') expect(op.security, key).toBeUndefined();
+      else expect(op.security, key).toEqual([{ paymentSignature: [] }]);
+    }
+  });
+
+  it('documents the PAYMENT-REQUIRED header on the 402 response', () => {
+    const responses = doc.paths['/v1/search'].get.responses as Record<string, unknown>;
+    const r402 = responses['402'] as { headers?: Record<string, unknown> };
+    expect(r402.headers).toBeDefined();
+    expect(r402.headers?.['PAYMENT-REQUIRED']).toBeDefined();
+  });
 });

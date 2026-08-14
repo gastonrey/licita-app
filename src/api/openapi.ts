@@ -153,13 +153,27 @@ const awardWithTender = {
 
 const paymentRequired = {
   description:
-    'Payment required. Body follows x402 shape: { x402Version: 1, accepts: [{ scheme, network, asset, amount, payTo, resource }], hint }. In dev mode obtain a proof via POST /v1/dev-faucet and retry with header X-PAYMENT.',
+    'Payment required (x402 v2). The response also carries a base64 PAYMENT-REQUIRED header whose JSON is { x402Version: 2, resource, accepts[] }; accepts[0] is the exact requirement (scheme "exact", CAIP-2 network, USDC asset, amount in base units, payTo, maxTimeoutSeconds, EIP-712 domain). Sign an EIP-3009 transferWithAuthorization and retry with header PAYMENT-SIGNATURE (v2; the legacy v1 X-PAYMENT header is still accepted). In dev mode obtain a proof via POST /v1/dev-faucet.',
+  headers: {
+    'PAYMENT-REQUIRED': {
+      description: 'Base64 JSON payment requirements: { x402Version: 2, resource, accepts[] }.',
+      schema: { type: 'string' },
+    },
+  },
   content: {
     'application/json': {
       schema: {
         type: 'object',
         properties: {
-          x402Version: { type: 'integer', enum: [1] },
+          x402Version: { type: 'integer', enum: [1, 2] },
+          resource: {
+            type: 'object',
+            properties: {
+              url: { type: 'string' },
+              description: { type: 'string' },
+              mimeType: { type: 'string' },
+            },
+          },
           accepts: {
             type: 'array',
             items: {
@@ -168,8 +182,10 @@ const paymentRequired = {
                 scheme: { type: 'string' },
                 network: { type: 'string' },
                 asset: { type: 'string' },
-                amount: { type: 'string', example: '0.05' },
+                amount: { type: 'string', example: '20000' },
                 payTo: { type: 'string' },
+                maxTimeoutSeconds: { type: 'integer' },
+                extra: { type: 'object' },
                 resource: { type: 'string' },
               },
             },
@@ -236,6 +252,7 @@ function paths(): Record<string, unknown> {
     '/v1/search': {
       get: {
         operationId: 'search',
+        security: [{ paymentSignature: [] }],
         summary: 'Search awards, tenders and contracts',
         description: desc(
           'GET /v1/search',
@@ -258,6 +275,7 @@ function paths(): Record<string, unknown> {
     '/v1/tenders/{id}': {
       get: {
         operationId: 'getTender',
+        security: [{ paymentSignature: [] }],
         summary: 'Full tender with awards and provenance',
         description: desc('GET /v1/tenders/:id', 'Full tender record, its awards, and provenance including the TED notice URL.'),
         parameters: [idPathParam],
@@ -290,6 +308,7 @@ function paths(): Record<string, unknown> {
     '/v1/companies/{id}': {
       get: {
         operationId: 'getCompany',
+        security: [{ paymentSignature: [] }],
         summary: 'Company profile with aggregate win stats',
         description: desc(
           'GET /v1/companies/:id',
@@ -364,6 +383,7 @@ function paths(): Record<string, unknown> {
     '/v1/companies/{id}/awards': {
       get: {
         operationId: 'getCompanyAwards',
+        security: [{ paymentSignature: [] }],
         summary: 'Paginated awards won by a company',
         description: desc(
           'GET /v1/companies/:id/awards',
@@ -376,6 +396,7 @@ function paths(): Record<string, unknown> {
     '/v1/companies/{id}/opportunities': {
       get: {
         operationId: 'getCompanyOpportunities',
+        security: [{ paymentSignature: [] }],
         summary: 'Active tenders matching a company\'s historical CPV/buyer profile',
         description: desc(
           'GET /v1/companies/:id/opportunities',
@@ -412,6 +433,7 @@ function paths(): Record<string, unknown> {
     '/v1/buyers/{id}/history': {
       get: {
         operationId: 'getBuyerHistory',
+        security: [{ paymentSignature: [] }],
         summary: 'Buyer profile, award history, supplier concentration and recurrence',
         description: desc(
           'GET /v1/buyers/:id/history',
@@ -471,6 +493,7 @@ function paths(): Record<string, unknown> {
     '/v1/renewals': {
       get: {
         operationId: 'getRenewals',
+        security: [{ paymentSignature: [] }],
         summary: 'Forecast renewal/re-tender signals',
         description: desc(
           'GET /v1/renewals',
@@ -606,7 +629,9 @@ export function buildOpenApi(): Record<string, unknown> {
       description:
         'Agent-native procurement intelligence API for the Spanish public sector (TED data, IT/software/cyber CPV vertical). ' +
         'All data endpoints return the envelope { data, meta: { request_id, price_usd, paid, provenance[] } }. ' +
-        'Errors return { error: { code, message, hint } }. Paid endpoints require header X-PAYMENT (see /v1/pricing).',
+        'Errors return { error: { code, message, hint } }. Paid endpoints use x402 v2: an unpaid request gets 402 with a ' +
+        'base64 PAYMENT-REQUIRED header; sign the EIP-3009 transferWithAuthorization and retry with the PAYMENT-SIGNATURE ' +
+        'header (legacy v1 X-PAYMENT still accepted). See /v1/pricing for the full flow.',
     },
     servers: [{ url: '/' }],
     paths: paths(),
@@ -617,6 +642,15 @@ export function buildOpenApi(): Record<string, unknown> {
         Meta: meta,
         SearchRow: searchRow,
         Award: award,
+      },
+      securitySchemes: {
+        paymentSignature: {
+          type: 'apiKey',
+          in: 'header',
+          name: 'PAYMENT-SIGNATURE',
+          description:
+            'x402 v2 payment payload (base64 JSON) proving payment for this call. Obtained by paying the requirement in the 402 PAYMENT-REQUIRED header: an EIP-3009 transferWithAuthorization of USDC on the stated network. The legacy v1 X-PAYMENT header is also accepted.',
+        },
       },
     },
   };

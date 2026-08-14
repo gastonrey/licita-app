@@ -137,6 +137,12 @@ describe('buildPricing', () => {
       expect(e.price_usd).toBe(ENDPOINT_PRICES[e.endpoint]);
       expect(e.free).toBe(e.price_usd === '0.00');
     }
+    expect(p.payment_flow.protocol).toBe('x402');
+    expect(p.payment_flow.version).toBe(2);
+    expect(p.payment_flow.required_header).toBe('PAYMENT-REQUIRED');
+    expect(p.payment_flow.signature_header).toBe('PAYMENT-SIGNATURE');
+    expect(p.payment_flow.steps.join(' ')).toContain('PAYMENT-REQUIRED');
+    expect(p.payment_flow.steps.join(' ')).toContain('PAYMENT-SIGNATURE');
     expect(p.payment_flow.header).toBe('X-PAYMENT');
     expect(p.payment_flow.faucet).toContain('/v1/dev-faucet');
   });

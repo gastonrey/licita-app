@@ -26,13 +26,20 @@ export function buildPricing(paymentsMode: string): {
       free: price === '0.00',
     })),
     payment_flow: {
-      protocol: 'x402-compatible',
+      protocol: 'x402',
+      version: 2,
       steps: [
-        '1. Call a paid endpoint without payment → HTTP 402 with body { x402Version, accepts[], hint }.',
-        '2. In dev mode (PAYMENTS_MODE=dev): POST /v1/dev-faucet with {"endpoint": "<METHOD PATH>"} → { proof }.',
-        '3. Retry the original request with header X-PAYMENT: <proof>. Proofs are single-use and expire after 5 minutes.',
-        '4. Successful responses include meta.price_usd and meta.paid=true.',
+        '1. Call a paid endpoint without payment → HTTP 402 with a base64 PAYMENT-REQUIRED response header (v2): JSON { x402Version: 2, resource, accepts[] } describing the exact USDC requirement (scheme "exact", EIP-3009 transferWithAuthorization).',
+        '2. Sign the EIP-3009 transferWithAuthorization of USDC for accepts[0].amount on the stated network with an x402 client (or viem), producing a base64 payment payload.',
+        '3. Retry the original request with header PAYMENT-SIGNATURE: <payload> (v2). The server verifies AND settles the payment with its facilitator before serving content; proofs are single-use. The legacy v1 X-PAYMENT header is still accepted.',
+        '4. Dev caveat (PAYMENTS_MODE=dev only): POST /v1/dev-faucet {"endpoint": "<METHOD PATH>"} → { proof }; retry with X-PAYMENT: <proof>. The faucet is NOT available in production.',
+        '5. Successful responses include meta.price_usd and meta.paid=true.',
       ],
+      /** v2 response header carrying the base64 payment requirements. */
+      required_header: 'PAYMENT-REQUIRED',
+      /** v2 request header carrying the base64 payment payload. */
+      signature_header: 'PAYMENT-SIGNATURE',
+      /** Legacy v1 request header, still accepted. Kept for machine-shape stability. */
       header: 'X-PAYMENT',
       faucet: paymentsMode === 'dev' ? 'POST /v1/dev-faucet {"endpoint": "<METHOD PATH>"}' : null,
     },
