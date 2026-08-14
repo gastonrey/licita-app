@@ -14,14 +14,6 @@ import type { AppConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import { DevPaymentProvider } from './devProvider.js';
 
-/** Thrown by X402PaymentProvider internals when facilitator config is missing. */
-export class PaymentNotConfiguredError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'PaymentNotConfiguredError';
-  }
-}
-
 /**
  * Stub for the real x402 flow. Reads X402_FACILITATOR_URL / X402_PAY_TO /
  * X402_NETWORK from config and shapes 402 responses accordingly, but verify()
