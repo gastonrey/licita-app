@@ -35,7 +35,7 @@ track record, and which contracts are likely to be re-tendered soon.
 
 | Area | Files |
 |---|---|
-| Wiring / config / DB | `src/index.ts`, `src/config.ts`, `src/db/{client,migrate}.ts`, `migrations/001_core.sql` |
+| Wiring / config / DB | `src/index.ts`, `src/config.ts`, `src/config.validate.ts`, `src/db/{client,migrate}.ts`, `migrations/001_core.sql` |
 | Ingestion + scheduler | `src/ingest/{ted,normalize,scheduler,cli}.ts`, `scripts/ingest-once.ts` |
 | Forecast signals | `src/forecast/signals.ts` |
 | REST API + observability | `src/api/{server,openapi,validate,ratelimit}.ts`, `src/api/routes/*`, `src/obs/*` |
@@ -69,19 +69,26 @@ npm run dev                   # tsx src/index.ts, listens on :3000
 
 ## Environment variables
 
+Secrets have **no defaults**. Boot fails fast with an error listing every
+missing/invalid variable (`src/config.validate.ts`, called from `src/index.ts`).
+
 | Var | Default | Meaning |
 |---|---|---|
 | `PORT` | `3000` | HTTP listen port |
-| `DATABASE_URL` | — | Full Postgres URL; overrides the PG* parts |
+| `NODE_ENV` | `development` | `production` enables the strict boot checks below |
+| `DATABASE_URL` | — | Admin Postgres URL; overrides the PG* parts. Used by migrations |
+| `APP_DATABASE_URL` | — | Optional low-privilege role URL for app traffic (falls back to `DATABASE_URL`) |
 | `PGHOST` `PGPORT` `PGUSER` `PGPASSWORD` `PGDATABASE` | `db/5432/licita/licita/licita` | Connection parts (compose sets these) |
 | `LOG_LEVEL` | `info` | `error`/`info`/`debug` for structured JSON logs |
+| `TRUST_PROXY` | `false` | `true`/`false`/hop count → Fastify `trustProxy`. Set `true` only behind a reverse proxy |
+| `RATE_LIMIT_MAX_KEYS` | `10000` | Max distinct client keys tracked by the in-memory rate limiter |
 | `PAYMENTS_MODE` | `dev` | `dev` = built-in HMAC faucet; `x402` = real facilitator seam (see Payments) |
-| `PAY_HMAC_SECRET` | `change-me-in-prod` | HMAC secret signing dev payment tokens — **change in any shared deployment** |
-| `OPERATOR_KEY` | `change-me` | Header `x-operator-key` required by `GET /v1/stats` |
+| `PAY_HMAC_SECRET` | **required in dev mode** | HMAC secret signing dev payment tokens |
+| `OPERATOR_KEY` | **required always** | Header `x-operator-key` required by `GET /v1/stats` |
 | `INGEST_MONTHS` | `24` | Harvest window (months back from today) |
 | `INGEST_ON_BOOT` | `false` | `true` = start the daily ingest scheduler inside the app process |
 | `INGEST_CRON_HOUR` | `4` | Hour (server-local) the scheduler fires the daily ingest |
-| `X402_FACILITATOR_URL` `X402_PAY_TO` `X402_NETWORK` | — | Real x402 facilitator config (stub seam only — see Payments) |
+| `X402_FACILITATOR_URL` `X402_PAY_TO` `X402_NETWORK` | required in production | Real x402 facilitator config (stub seam only — see Payments) |
 
 ## First ingestion
 
@@ -188,24 +195,66 @@ curl -s -X POST "$BASE/mcp" \
 - **`PAYMENTS_MODE=x402` (seam, NOT yet functional).** Setting this plus
   `X402_FACILITATOR_URL` / `X402_PAY_TO` / `X402_NETWORK` switches the 402
   bodies to real x402 shape (USDC, e.g. `base`, Coinbase facilitator), and
-  disables the dev faucet (it answers 410). **What is not implemented:** the
-  facilitator round-trip — `X402PaymentProvider.verify()` always fails with
-  reason `x402_not_configured`, so in this mode paid endpoints are
+  removes the dev faucet route entirely (it 404s like any unknown path).
+  **What is not implemented:** the facilitator round-trip —
+  `X402PaymentProvider.verify()` always fails with reason
+  `x402_not_configured`, so in this mode paid endpoints are
   unreachable. Wiring it means forwarding `{paymentPayload, paymentRequirements}`
   to the facilitator's `/verify` + `/settle` endpoints in
   `src/pay/provider.ts`. No private keys are stored anywhere.
 
-## Security posture
+## Security model
 
-- Rate limit: 60 req/min per client (in-memory token bucket; key = payment
-  proof hash when present, else client IP). Over limit → 429 + `retry-after`.
-- Replay protection on payment proofs (single-use, unique DB constraint),
+- **Fail-fast configuration.** No secret has a default. At boot,
+  `validateConfig` requires `OPERATOR_KEY` always and `PAY_HMAC_SECRET` in dev
+  mode; with `NODE_ENV=production` it additionally requires
+  `PAYMENTS_MODE=x402`, a valid `X402_PAY_TO` (`0x` + 40 hex), an https
+  `X402_FACILITATOR_URL`, and rejects known placeholder secrets
+  (`change-me`, `change-me-in-prod`). All violations are reported in one error.
+- **Faucet gating.** `POST /v1/dev-faucet` exists only when
+  `PAYMENTS_MODE=dev` AND `NODE_ENV != 'production'`; otherwise no route is
+  registered at all (generic 404 — the faucet is undiscoverable).
+- **Rate limit:** 60 req/min per client (in-memory token bucket; key = payment
+  proof hash when present, else client IP). The bucket map is bounded
+  (`RATE_LIMIT_MAX_KEYS`, default 10,000; oldest-activity eviction + periodic
+  sweep of expired windows). Over limit → 429 + `retry-after`. Per-instance;
+  not shared across replicas.
+- **Replay protection** on payment proofs (single-use, unique DB constraint),
   5-minute token expiry, timing-safe HMAC comparison.
-- `GET /v1/stats` requires `x-operator-key: $OPERATOR_KEY` (401 otherwise).
+- `GET /v1/stats` requires `x-operator-key: $OPERATOR_KEY` (401 otherwise);
+  the comparison is constant-time (SHA-256 digests + `crypto.timingSafeEqual`).
+- **`GET /health`** is free and unauthenticated: 200 `{status:'ok',db:'up'}`,
+  or 503 `{status:'degraded',db:'down'}` when `SELECT 1` fails/times out.
+- **Least-privilege DB role.** `docker/db/init/01_roles.sh` creates
+  `licita_app` (CONNECT + SELECT/INSERT/UPDATE/DELETE on all tables, no DDL).
+  Set `APP_DATABASE_URL` so app traffic uses it; migrations always run on the
+  admin `DATABASE_URL`.
 - All inputs zod-validated (max lengths, CPV/date formats); parameterized SQL
   only; secrets via env only; no keys in any response body.
 - Error envelope `{ "error": { "code", "message", "hint" } }` with an
   agent-actionable hint.
+
+## Production configuration
+
+Use the hardened profile:
+
+```bash
+export POSTGRES_PASSWORD=... LICITA_APP_PASSWORD=... OPERATOR_KEY=...
+export X402_FACILITATOR_URL=https://... X402_PAY_TO=0x... X402_NETWORK=base
+docker compose -f docker-compose.prod.yml up --build -d
+```
+
+- `docker-compose.prod.yml` sets `NODE_ENV=production` + `PAYMENTS_MODE=x402`
+  and requires every secret via compose `:?` interpolation — nothing has a
+  working default.
+- The app port binds to **127.0.0.1 only**: a reverse proxy must terminate
+  TLS in front. With a proxy, keep `TRUST_PROXY=true` (default in the prod
+  file) so rate limiting keys on the real client IP from `X-Forwarded-For`;
+  set `TRUST_PROXY=false` if the app is ever exposed directly.
+- App traffic runs as `licita_app` (`APP_DATABASE_URL`); migrations run as
+  the admin user (`DATABASE_URL`) on container boot.
+- The image builds with `npm ci`, runs as the `node` user, and carries a
+  `HEALTHCHECK` hitting `/health` (busybox wget).
 
 ## Observability
 

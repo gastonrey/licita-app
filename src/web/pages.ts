@@ -196,7 +196,8 @@ ${lines}
 
 ## Payment (x402-compatible; mode: ${config.paymentsMode})
 - Paid endpoints return 402 with {x402Version: 1, accepts: [{scheme: "exact", network, asset, amount, payTo, resource}], hint}.
-- Dev mode: POST /v1/dev-faucet {"endpoint": "<METHOD PATH>"} -> {token, expires_at}; retry with header X-PAYMENT: <token>.
+- Dev mode only: POST /v1/dev-faucet {"endpoint": "<METHOD PATH>"} -> {token, expires_at}; retry with header X-PAYMENT: <token>.
+  The faucet route exists only when PAYMENTS_MODE=dev and NODE_ENV is not production; elsewhere the path 404s.
 - Tokens are HMAC-signed, single-use (replay rejected), expire after 5 minutes.
 
 ## MCP
