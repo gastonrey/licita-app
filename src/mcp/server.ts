@@ -12,6 +12,8 @@ import type { AppConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import type { PaymentProvider } from '../domain/types.js';
 import { getPaymentProvider } from '../pay/middleware.js';
+import { createLogger, type Logger } from '../obs/log.js';
+import { hashIp, logRequest, strField } from '../obs/requestlog.js';
 import { dateStr, num, provenanceFor, tedUrl } from '../api/routes/common.js';
 import {
   awardsQuerySchema,
@@ -367,10 +369,99 @@ const TOOLS: Record<string, ToolDef> = {
   },
 };
 
+// --- P0.7 tool-call observability ------------------------------------------------
+// Lightweight arg → request_logs field extraction. `company`/`buyer` carry the
+// numeric entity id as text for the get_* tools (matches the REST hook which
+// stores params.id in the same columns). search_tenders exposes q/cpv/buyer/
+// company filters directly.
+
+const TOOL_ARG_FIELDS: Record<string, { q?: string; cpv?: string; buyer?: string; company?: string }> = {
+  search_tenders: { q: 'q', cpv: 'cpv', buyer: 'buyer', company: 'company' },
+  get_renewals: { cpv: 'cpv', buyer: 'buyer' },
+  get_company: { company: 'id' },
+  get_company_awards: { company: 'id' },
+  get_company_opportunities: { company: 'id' },
+  get_buyer_history: { buyer: 'id' },
+};
+
+function extractToolFields(
+  name: string,
+  args: Record<string, unknown>,
+): { q: string | null; cpv: string | null; buyer: string | null; company: string | null } {
+  const map = TOOL_ARG_FIELDS[name];
+  if (!map) return { q: null, cpv: null, buyer: null, company: null };
+  const pick = (k?: string): string | null => (k ? strField(args[k]) : null);
+  return { q: pick(map.q), cpv: pick(map.cpv), buyer: pick(map.buyer), company: pick(map.company) };
+}
+
+/** true when the tool result came back with an empty result set. */
+function isEmptyResult(data: unknown): boolean {
+  if (data === null || typeof data !== 'object') return false;
+  const obj = data as Record<string, unknown>;
+  for (const key of ['results', 'awards', 'opportunities', 'renewals']) {
+    if (Array.isArray(obj[key])) return obj[key].length === 0;
+  }
+  return false;
+}
+
+/** HTTP-ish status for a tool error code (request_logs.status is int). */
+function statusForError(code: string): number {
+  if (code === 'not_found') return 404;
+  if (code === 'invalid_query') return 400;
+  return 500;
+}
+
+interface ToolLogOpts {
+  clientIp?: string;
+  clientKey?: string;
+  status: number;
+  error?: string;
+  zeroResult: boolean;
+  latencyMs: number;
+  paid: boolean;
+}
+
+/** Fire-and-forget request_logs write for a finished MCP tool call. */
+function toolCallLog(
+  db: Db,
+  log: Logger,
+  config: AppConfig,
+  name: string,
+  args: Record<string, unknown>,
+  opts: ToolLogOpts,
+): void {
+  logRequest(db, log, {
+    client_key: opts.clientKey ?? (opts.clientIp ? hashIp(opts.clientIp, config.operatorKey) : null),
+    endpoint: `mcp:${name}`,
+    method: 'POST',
+    status: opts.status,
+    latency_ms: opts.latencyMs,
+    ...extractToolFields(name, args),
+    error: opts.error ?? null,
+    paid: opts.paid,
+    zero_result: opts.zeroResult,
+    user_agent: null,
+    source: 'mcp',
+  });
+}
+
 // --- server construction ---------------------------------------------------------
 
+export interface McpServerOpts {
+  /** client IP, used to derive the pseudonymous client_key when no payment was made */
+  clientIp?: string;
+  log?: Logger;
+}
+
 /** Build the MCP server with all 8 tools registered. Exported for tests. */
-export function buildMcpServer(provider: PaymentProvider, db: Db, config: AppConfig): McpServer {
+export function buildMcpServer(
+  provider: PaymentProvider,
+  db: Db,
+  config: AppConfig,
+  opts: McpServerOpts = {},
+): McpServer {
+  const log = opts.log ?? createLogger(config.logLevel);
+  const clientIp = opts.clientIp;
   const server = new McpServer(
     { name: 'licita-agent', version: '0.1.0' },
     {
@@ -403,27 +494,75 @@ export function buildMcpServer(provider: PaymentProvider, db: Db, config: AppCon
         const { payment_token: token, ...rest } = args as Record<string, unknown> & {
           payment_token?: string;
         };
+        const started = Date.now();
+        let clientKey: string | undefined;
         try {
           const price = provider.price(def.endpointKey);
+          const paid = price !== '0.00';
           if (price !== '0.00') {
             if (typeof token !== 'string' || token.length === 0) {
+              toolCallLog(db, log, config, name, rest, {
+                clientIp,
+                status: 402,
+                error: 'payment_required',
+                zeroResult: false,
+                latencyMs: Date.now() - started,
+                paid: false,
+              });
               return paymentRequiredResult(provider, def.endpointKey);
             }
             const v = await provider.verify(token, def.endpointKey);
             if (!v.ok) {
+              toolCallLog(db, log, config, name, rest, {
+                clientIp,
+                status: 402,
+                error: 'payment_required',
+                zeroResult: false,
+                latencyMs: Date.now() - started,
+                paid: false,
+              });
               return paymentRequiredResult(provider, def.endpointKey, v.reason ?? 'invalid');
             }
+            clientKey = v.clientKey;
           }
           const data = await def.run(db, rest, config);
           if (data !== null && typeof data === 'object' && 'error' in (data as Record<string, unknown>)) {
             const err = (data as { error: { code?: string; message?: string } }).error;
-            return errorResult(err.code ?? 'not_found', err.message ?? 'not found');
+            const code = err.code ?? 'not_found';
+            toolCallLog(db, log, config, name, rest, {
+              clientIp,
+              clientKey,
+              status: statusForError(code),
+              error: code,
+              zeroResult: false,
+              latencyMs: Date.now() - started,
+              paid,
+            });
+            return errorResult(code, err.message ?? 'not found');
           }
+          const zero = isEmptyResult(data);
+          toolCallLog(db, log, config, name, rest, {
+            clientIp,
+            clientKey,
+            status: 200,
+            zeroResult: zero,
+            latencyMs: Date.now() - started,
+            paid,
+          });
           return textResult({
             data,
-            meta: { price_usd: price, paid: price !== '0.00' },
+            meta: { price_usd: price, paid },
           });
         } catch (err) {
+          toolCallLog(db, log, config, name, rest, {
+            clientIp,
+            clientKey,
+            status: 500,
+            error: 'internal',
+            zeroResult: false,
+            latencyMs: Date.now() - started,
+            paid: provider.price(def.endpointKey) !== '0.00',
+          });
           return errorResult(
             'internal',
             `Tool ${name} failed: ${err instanceof Error ? err.message : String(err)}`,
@@ -449,13 +588,14 @@ export function buildMcpServer(provider: PaymentProvider, db: Db, config: AppCon
  */
 export function mountMcp(app: FastifyInstance, config: AppConfig, db: Db): void {
   const provider = getPaymentProvider();
+  const log = createLogger(config.logLevel);
 
   app.route({
     method: ['GET', 'POST', 'DELETE'],
     url: '/mcp',
     handler: async (req, reply) => {
       reply.hijack();
-      const server = buildMcpServer(provider, db, config);
+      const server = buildMcpServer(provider, db, config, { clientIp: req.ip, log });
       const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
       reply.raw.on('close', () => {
         void transport.close().catch(() => undefined);
