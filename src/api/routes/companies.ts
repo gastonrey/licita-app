@@ -171,6 +171,7 @@ export function companyAwardsHandler(ctx: RouteCtx) {
     if (!(await loadCompany(ctx.db, id))) throw notFound(`Company ${id}`);
     const res = await ctx.db.query(COMPANY_AWARDS_SQL, [id, size, (page - 1) * size]);
     const total = res.rows.length > 0 ? Number(res.rows[0].total_count) : 0;
+    req.zeroResult = total === 0;
     const rows = res.rows.map((r) => ({
       ...mapAwardRow(r),
       tender: {
@@ -230,6 +231,7 @@ export function opportunitiesHandler(ctx: RouteCtx) {
     if (!(await loadCompany(ctx.db, id))) throw notFound(`Company ${id}`);
     const res = await ctx.db.query(OPPORTUNITIES_SQL, [id, size, (page - 1) * size]);
     const total = res.rows.length > 0 ? Number(res.rows[0].total_count) : 0;
+    req.zeroResult = total === 0;
     const rows = res.rows.map((r) => ({
       id: Number(r.id),
       source_ref: (r.source_ref as string) ?? null,

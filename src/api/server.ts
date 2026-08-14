@@ -7,7 +7,7 @@ import type { AppConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import { createLogger } from '../obs/log.js';
 import { createMetrics } from '../obs/metrics.js';
-import { logRequest } from '../obs/requestlog.js';
+import { logRequest, hashIp, strField } from '../obs/requestlog.js';
 import { paymentPreHandler, initPayments } from '../pay/middleware.js';
 import { createRateLimiter } from './ratelimit.js';
 import { buildOpenApi } from './openapi.js';
@@ -34,11 +34,6 @@ export function rateLimitKey(req: FastifyRequest): string {
     return `pay:${createHash('sha256').update(pay).digest('hex').slice(0, 24)}`;
   }
   return `ip:${req.ip}`;
-}
-
-function strField(v: unknown): string | null {
-  if (typeof v !== 'string' || v.length === 0) return null;
-  return v.slice(0, 200);
 }
 
 export async function buildServer(config: AppConfig, db: Db): Promise<FastifyInstance> {
@@ -84,7 +79,7 @@ export async function buildServer(config: AppConfig, db: Db): Promise<FastifyIns
     const params = (req.params ?? {}) as Record<string, unknown>;
     const routeUrl = req.routeOptions?.url;
     logRequest(db, log, {
-      client_key: req.payment?.clientKey ?? req.ip ?? null,
+      client_key: req.payment?.clientKey ?? hashIp(req.ip, config.operatorKey),
       endpoint: `${req.method} ${typeof routeUrl === 'string' ? routeUrl : req.url.split('?')[0]}`,
       method: req.method,
       status: reply.statusCode,
@@ -102,6 +97,10 @@ export async function buildServer(config: AppConfig, db: Db): Promise<FastifyIns
           : null),
       error: req.errorCode ?? null,
       paid: req.payment?.paid ?? false,
+      q: strField(query.q),
+      zero_result: req.zeroResult === true,
+      user_agent: strField(req.headers['user-agent']),
+      source: 'rest',
     });
     done();
   });

@@ -169,6 +169,7 @@ export function searchHandler(ctx: RouteCtx) {
     const { text, values } = buildSearchQuery(q);
     const res = await ctx.db.query(text, values);
     const total = res.rows.length > 0 ? Number(res.rows[0].total_count) : 0;
+    req.zeroResult = total === 0;
     ctx.metrics.inc('api_requests', { endpoint: 'GET /v1/search', type: q.type });
     return reply.send(
       envelope(

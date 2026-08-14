@@ -89,6 +89,7 @@ export function renewalsHandler(ctx: RouteCtx) {
     const { text, values } = buildRenewalsQuery(q);
     const res = await ctx.db.query(text, values);
     const total = res.rows.length > 0 ? Number(res.rows[0].total_count) : 0;
+    req.zeroResult = total === 0;
     return reply.send(
       envelope(req, res.rows.map(mapRenewalRow), {
         page: q.page,

@@ -20,6 +20,8 @@ declare module 'fastify' {
   interface FastifyRequest {
     payment?: RequestPayment;
     errorCode?: string;
+    /** set by handlers when a paginated data response returned zero rows (P0.7) */
+    zeroResult?: boolean;
   }
 }
 

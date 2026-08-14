@@ -164,6 +164,7 @@ export function buyerHistoryHandler(ctx: RouteCtx) {
     ]);
 
     const totalAwards = awardsRes.rows.length > 0 ? Number(awardsRes.rows[0].total_count) : 0;
+    req.zeroResult = totalAwards === 0;
     const supplierRows: SupplierRow[] = suppliersRes.rows.map((r) => ({
       id: Number(r.id),
       name: String(r.name),
