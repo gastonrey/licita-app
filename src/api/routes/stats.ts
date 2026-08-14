@@ -46,7 +46,7 @@ SELECT source, count(*)::int AS requests
 FROM request_logs GROUP BY source ORDER BY requests DESC, source
 `;
 const ZERO_RESULT_SQL = `
-SELECT count(*) FILTER (WHERE zero_result)::int AS zero_result_count,
+SELECT sum(CASE WHEN zero_result THEN 1 ELSE 0 END)::int AS zero_result_count,
        count(*)::int AS total
 FROM request_logs
 `;
@@ -87,7 +87,7 @@ GROUP BY user_agent ORDER BY n DESC, user_agent LIMIT 10
 `;
 const FAILED_SQL = `SELECT count(*)::int AS n FROM request_logs WHERE status >= 400 OR error IS NOT NULL`;
 const FAILED_RATE_SQL = `
-SELECT count(*) FILTER (WHERE status >= 400 OR error IS NOT NULL)::int AS failed,
+SELECT sum(CASE WHEN status >= 400 OR error IS NOT NULL THEN 1 ELSE 0 END)::int AS failed,
        count(*)::int AS total
 FROM request_logs
 `;
