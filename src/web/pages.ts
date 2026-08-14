@@ -89,25 +89,36 @@ plus PLACSP (licitaciones + contratos menores) when PLACSP ingestion is enabled.
 
 <h2>Payment</h2>
 <p>Payments mode: <code>${config.paymentsMode}</code>. Priced endpoints return
-<code>402</code> with an x402-shaped body; in dev mode a token faucet is available at
-<code>POST /v1/dev-faucet</code>. See <a href="/docs">docs</a> for the full flow.</p>
+<code>402</code> with a base64 <code>PAYMENT-REQUIRED</code> header describing the exact
+USDC requirement (x402 v2): sign the EIP-3009 authorization and retry with
+<code>PAYMENT-SIGNATURE</code>. In dev mode a token faucet is available at
+<code>POST /v1/dev-faucet</code> (local development only — not in production).
+See <a href="/docs">docs</a> for the full flow.</p>
 ${PRICE_TABLE}`,
   );
 }
 
-const DOCS_CURL_SEARCH = `# 1. Try a paid endpoint without payment → HTTP 402
+const DOCS_CURL_SEARCH = `# 1. Try a paid endpoint without payment → HTTP 402 + base64 PAYMENT-REQUIRED header
 curl -i 'http://localhost:3000/v1/search?q=software&type=award'
+# → 402
+#   PAYMENT-REQUIRED: <base64 { x402Version: 2, resource, accepts: [{ scheme: "exact",
+#     network: "eip155:84532", asset: "<USDC>", amount: "<base units>", payTo: "<addr>", ... }] }>
 
-# 2. Mint a dev token (dev mode only)
+# 2. Sign an EIP-3009 transferWithAuthorization of USDC with an x402 client
+#    (or viem directly) from the PAYMENT-REQUIRED requirement → base64 payload <payload>
+
+# 3. Retry with the payment payload (v2; legacy X-PAYMENT also accepted)
+curl -s 'http://localhost:3000/v1/search?q=software&type=award' \\
+  -H "PAYMENT-SIGNATURE: <payload>"
+# → {"data":[...],"meta":{"paid":true,"price_usd":"0.02",...}}
+
+# 4. Local development only (PAYMENTS_MODE=dev): mint a dev token instead
 curl -s -X POST 'http://localhost:3000/v1/dev-faucet' \\
   -H 'content-type: application/json' \\
   -d '{"endpoint":"GET /v1/search"}'
 # → {"token":"<token>","proof":"<token>","endpoint":"GET /v1/search","amount":"0.02","expires_at":"..."}
-
-# 3. Retry with the proof
 curl -s 'http://localhost:3000/v1/search?q=software&type=award' \\
-  -H "X-PAYMENT: <token>"
-# → {"data":[...],"meta":{"paid":true,"price_usd":"0.02",...}}`;
+  -H "X-PAYMENT: <token>"`;
 
 function docsPage(config: AppConfig): string {
   return page(
@@ -123,12 +134,22 @@ function docsPage(config: AppConfig): string {
 <li>Call paid endpoints, paying per call (below), or use MCP at <code>/mcp</code>.</li>
 </ol>
 
-<h2>Payment flow (x402-compatible, dev mode)</h2>
-<p>Priced endpoints require a single-use proof in the <code>X-PAYMENT</code> header.
-Without it you get <code>402</code> with body
-<code>{ x402Version: 1, accepts: [{ scheme, network, asset, amount, payTo, resource }], hint, error }</code>.
-In dev mode (<code>PAYMENTS_MODE=${config.paymentsMode}</code>) proofs are HMAC tokens
-from the faucet; they expire after 5 minutes and cannot be replayed.</p>
+<h2>Payment flow (x402 v2)</h2>
+<p>Priced endpoints require a payment per call. Unpaid requests get <code>HTTP 402</code>
+with the exact requirement in a base64 <code>PAYMENT-REQUIRED</code> response header
+(<code>{ x402Version: 2, resource, accepts: [{ scheme, network, asset, amount, payTo, maxTimeoutSeconds, extra }] }</code>).</p>
+<ol>
+<li>Call a paid endpoint without payment → <code>402</code> + <code>PAYMENT-REQUIRED</code> header.</li>
+<li>Sign an EIP-3009 <code>transferWithAuthorization</code> of USDC for the advertised amount on the
+advertised network (scheme <code>exact</code>) with an x402 client, producing a base64 payment payload.</li>
+<li>Retry the original request with <code>PAYMENT-SIGNATURE: &lt;payload&gt;</code> (v2).
+The legacy v1 header <code>X-PAYMENT</code> is still accepted for backward compatibility.</li>
+<li>The server verifies <strong>and settles</strong> the payment through its facilitator before serving
+content; proofs are single-use.</li>
+</ol>
+<p>Local development only (<code>PAYMENTS_MODE=${config.paymentsMode}</code>): when the payments mode is
+<code>dev</code>, <code>POST /v1/dev-faucet</code> mints a dev token instead — retry with
+<code>X-PAYMENT: &lt;token&gt;</code>. The faucet is <strong>not available in production</strong>.</p>
 <pre>${DOCS_CURL_SEARCH}</pre>
 
 <h2>Endpoints</h2>
@@ -140,10 +161,13 @@ ${PRICE_TABLE}
 <h2>MCP</h2>
 <p>Streamable-HTTP MCP server at <code>POST /mcp</code> (transport is free; tools are
 priced like their REST equivalents). Each tool accepts an optional
-<code>payment_token</code> argument. Unpaid calls return
+<code>payment_token</code> argument — the base64 payment payload (the same value a
+REST client sends as <code>PAYMENT-SIGNATURE</code>). Unpaid calls return
 <code>{"payment_required": true, "price_usd": "...", "how_to_pay": {...}}</code>
-as normal content (not an error) — parse it, mint a token via the faucet, and retry
-with <code>payment_token</code> set.</p>
+as normal content (not an error) — parse it, create the payment with an x402 client
+from the <code>PAYMENT-REQUIRED</code> requirement, and retry with
+<code>payment_token</code> set. In dev mode <code>how_to_pay</code> points at the
+faucet instead.</p>
 <pre># tools/list then e.g.
 {"jsonrpc":"2.0","id":1,"method":"tools/call",
  "params":{"name":"search_tenders",
@@ -172,10 +196,14 @@ function pricingPage(config: AppConfig): string {
 ${PRICE_TABLE}
 <h2>How payment works</h2>
 <ol>
-<li>Call a paid endpoint → <code>402</code> with an x402-shaped <code>accepts</code> body.</li>
-<li>Dev mode: <code>POST /v1/dev-faucet {"endpoint":"&lt;METHOD PATH&gt;"}</code> → <code>{ token, expires_at }</code>.</li>
-<li>Retry with <code>X-PAYMENT: &lt;token&gt;</code> (REST) or <code>payment_token</code> (MCP).</li>
-<li>Proofs are single-use and expire after 5 minutes.</li>
+<li>Call a paid endpoint → <code>402</code> with a base64 <code>PAYMENT-REQUIRED</code> header
+describing the exact USDC requirement (scheme <code>exact</code>, EIP-3009 transferWithAuthorization).</li>
+<li>Sign the authorization with an x402 client and retry with
+<code>PAYMENT-SIGNATURE: &lt;payload&gt;</code> (v2; the legacy <code>X-PAYMENT</code> header still works).</li>
+<li>The server verifies and settles the payment before serving content; proofs are single-use.</li>
+<li>Local dev only (<code>PAYMENTS_MODE=dev</code>): <code>POST /v1/dev-faucet {"endpoint":"&lt;METHOD PATH&gt;"}</code>
+→ <code>{ token, expires_at }</code>, then retry with <code>X-PAYMENT</code> (REST) or
+<code>payment_token</code> (MCP). Not available in production.</li>
 </ol>`,
   );
 }
@@ -186,43 +214,72 @@ function llmsTxt(config: AppConfig): string {
     .join('\n');
   return `# licita-agent
 
-> Agent-native procurement intelligence for the Spanish public sector (IT/software/cyber,
-> CPV 72*/48*) built from TED award notices, plus PLACSP (CODICE/ATOM: licitaciones
-> and contratos menores) when PLACSP ingestion is enabled. Answers: who bought, who won, how much, which
-> CPV, contract windows, similar active tenders, likely re-tender signals. All data rows
-> carry provenance (source + source_ref + upstream url). Nulls are never fabricated.
+## Overview
+Agent-native procurement intelligence for the Spanish public sector (IT / software / cybersecurity
+vertical, CPV 72*/48*). Answers: who bought, who won, for how much, under which CPV codes, contract
+windows, similar active tenders, and likely re-tender signals. Every data row carries provenance
+(source + source_ref + upstream url). Nulls are never fabricated.
+
+## Data
+- Sources: TED (Tenders Electronic Daily) Search API v3 award notices — live, default. PLACSP
+  sindicación (licitaciones + contratos menores, CODICE 3.2 over ATOM) when PLACSP ingestion is
+  enabled (PLACSP_ENABLED=true).
+- Provenance: every row exposes meta.provenance as [{ source, source_ref, url }]. source is "ted" or
+  "placsp"; source_ref is the upstream publication reference; url is the original notice where known.
+- License/attribution: PLACSP data is "datos abiertos" (reuse per datos.gob.es/avisolegal); TED data
+  is subject to the TED's reuse terms. Attribute the source when republishing.
 
 ## Discovery
-- /llms.txt (this file), /openapi.json, /v1/pricing, /docs, /pricing, /mcp
+- /llms.txt (this file), /openapi.json (OpenAPI 3.1), /v1/pricing (machine-readable price ladder +
+  payment flow), /docs (human docs), /pricing (price table), /mcp (MCP endpoint)
 
-## Endpoints (base /v1, JSON envelope {data, meta{request_id, price_usd, paid, provenance}})
+## Endpoints (base /v1; USD per call; JSON envelope {data, meta})
 ${lines}
-- Common params: q (full-text), cpv (prefix), buyer, company, region (NUTS), from/to (YYYY-MM-DD), type=award|tender|contract, page, size (<=100)
-- GET /v1/stats requires header x-operator-key (operator only)
+- Common params: q (full-text), cpv (prefix), buyer, company, region (NUTS), from/to (YYYY-MM-DD),
+  type=award|tender|contract, page, size (<=100)
+- GET /v1/stats additionally requires header x-operator-key (operator only)
 
-## Payment (x402-compatible; mode: ${config.paymentsMode})
-- Paid endpoints return 402 with {x402Version: 1, accepts: [{scheme: "exact", network, asset, amount, payTo, resource}], hint}.
-- Dev mode only: POST /v1/dev-faucet {"endpoint": "<METHOD PATH>"} -> {token, expires_at}; retry with header X-PAYMENT: <token>.
-  The faucet route exists only when PAYMENTS_MODE=dev and NODE_ENV is not production; elsewhere the path 404s.
-- Tokens are HMAC-signed, single-use (replay rejected), expire after 5 minutes.
+## Payment (x402 v2; current mode: ${config.paymentsMode})
+1. Call a paid endpoint without payment → HTTP 402 with a base64 PAYMENT-REQUIRED response header.
+   The header value is JSON { x402Version: 2, resource, accepts[] }; accepts[0] is the exact
+   requirement: scheme "exact", network (CAIP-2), USDC asset contract, amount (base units), payTo
+   (recipient), maxTimeoutSeconds, and the EIP-712 domain (extra.name / extra.version) for signing.
+2. Sign an EIP-3009 transferWithAuthorization of USDC for that amount on the stated network with an
+   x402 client (or viem), producing a base64 payment payload.
+3. Retry the request with the base64 payload in the PAYMENT-SIGNATURE header (v2). The server
+   verifies AND settles the payment with its facilitator before serving content; proofs are
+   single-use (replay rejected).
+4. Legacy: the v1 X-PAYMENT header is still accepted for backward compatibility; v1 payloads are
+   clearly marked x402Version: 1.
+5. Local development ONLY (PAYMENTS_MODE=dev): POST /v1/dev-faucet {"endpoint": "<METHOD PATH>"} →
+   {token, expires_at}; retry with header X-PAYMENT: <token>. The faucet route exists only when
+   PAYMENTS_MODE=dev and NODE_ENV is not production — it is NOT available in production (the path 404s).
+
+## Response envelope
+- Success: {"data": ..., "meta": {"request_id", "price_usd", "paid", "provenance": [...]}}.
+  meta.provenance is an array of { source, source_ref, url }.
+- Error: {"error": {"code", "message", "hint"}}. codes: invalid_query | not_found |
+  payment_required | rate_limited | internal. The hint is agent-actionable.
+- Nulls are never fabricated; framework agreement values are ceiling amounts, not actual spend.
 
 ## MCP
-- Streamable-HTTP at POST /mcp. Tools: search_tenders, get_tender, get_company,
-  get_company_awards, get_company_opportunities, get_buyer_history, get_renewals, get_pricing.
-- Every tool accepts optional payment_token. Unpaid -> content {"payment_required": true,
-  "price_usd": ..., "how_to_pay": {...}} with isError=false (parse as data, then pay + retry).
+- Streamable-HTTP at POST /mcp (transport is free; tools priced like their REST equivalents).
+  Tools: search_tenders, get_tender, get_company, get_company_awards, get_company_opportunities,
+  get_buyer_history, get_renewals, get_pricing.
+- Every tool accepts optional payment_token — the base64 payment payload (same value a REST client
+  sends as PAYMENT-SIGNATURE). Unpaid calls return {"payment_required": true, "price_usd": ...,
+  "how_to_pay": {...}} with isError=false (parse as data, then pay + retry with payment_token).
 
-## Examples
-- curl 'BASE/v1/search?q=firewall&type=award' -H 'X-PAYMENT: <token>'
-- curl -X POST 'BASE/v1/dev-faucet' -H 'content-type: application/json' -d '{"endpoint":"GET /v1/renewals"}'
-- curl 'BASE/v1/renewals?cpv=72&window_months=12&min_confidence=medium' -H 'X-PAYMENT: <token>'
+## Renewals honesty
+- GET /v1/renewals signals (framework_expiry | duration_expiry | recurrence) are a DETERMINISTIC
+  HEURISTIC over historical awards and contract dates — NOT calibrated probabilities.
+  meta.methodology states this framing; meta.confidence_scale is only [low, medium, high]; every
+  signal exposes its full evidence in basis.
 
-## Caveats
-- Framework agreement values are ceiling amounts, not actual spend.
-- Renewal signals (GET /v1/renewals) are deterministic heuristics over historical awards and contract dates,
-  with confidence low/medium/high — NOT calibrated probabilities. Every signal carries its evidence in basis,
-  and meta.methodology states this framing.
-- Rate limit: 60 req/min per client; 429 with retry-after.
+## Limits
+- Rate limit: 60 requests/min per client; over limit → 429 with retry-after.
+- ToS / attribution: reuse the data per the upstream sources' terms (TED and PLACSP) and attribute
+  the source when republishing. See /docs.
 `;
 }
 
