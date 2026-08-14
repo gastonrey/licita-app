@@ -11,6 +11,19 @@ const PLACEHOLDER_SECRETS = new Set(['change-me', 'change-me-in-prod']);
 /** Ethereum address: 0x + 40 hex chars (x402 payTo on Base). */
 const ETH_ADDRESS_RE = /^0x[0-9a-fA-F]{40}$/;
 
+/**
+ * x402 networks supported out of the box: Base Sepolia (testnet) and Base
+ * (mainnet), in CAIP-2 form. Any other eip155:<chainId> value is accepted as
+ * an explicit operator override.
+ */
+export const KNOWN_X402_NETWORKS = new Set(['eip155:84532', 'eip155:8453']);
+const EIP155_CAIP2_RE = /^eip155:[0-9]+$/;
+
+export function isValidX402Network(network: string | undefined): boolean {
+  if (!network) return false;
+  return KNOWN_X402_NETWORKS.has(network) || EIP155_CAIP2_RE.test(network);
+}
+
 function isHttpsUrl(raw: string | undefined): boolean {
   if (!raw) return false;
   try {
@@ -25,8 +38,9 @@ function isHttpsUrl(raw: string | undefined): boolean {
  * - PAYMENTS_MODE=dev requires PAY_HMAC_SECRET (dev token signing).
  * - OPERATOR_KEY is always required (protects GET /v1/stats).
  * - NODE_ENV=production additionally requires PAYMENTS_MODE=x402, a valid
- *   X402_PAY_TO address, an https X402_FACILITATOR_URL, and rejects any
- *   secret equal to a known placeholder.
+ *   X402_PAY_TO address, an https X402_FACILITATOR_URL, a CAIP-2 X402_NETWORK
+ *   (Base Sepolia / Base mainnet, or an explicit eip155:<chainId> override),
+ *   and rejects any secret equal to a known placeholder.
  */
 export function validateConfig(config: AppConfig): void {
   const violations: string[] = [];
@@ -55,6 +69,11 @@ export function validateConfig(config: AppConfig): void {
     }
     if (!isHttpsUrl(config.x402.facilitatorUrl)) {
       violations.push('X402_FACILITATOR_URL is required in production and must be an https:// URL.');
+    }
+    if (!isValidX402Network(config.x402.network)) {
+      violations.push(
+        'X402_NETWORK is required in production and must be a CAIP-2 EVM network: "eip155:84532" (Base Sepolia) or "eip155:8453" (Base mainnet); other eip155:<chainId> values are accepted as explicit overrides.',
+      );
     }
     if (PLACEHOLDER_SECRETS.has(config.payHmacSecret)) {
       violations.push('PAY_HMAC_SECRET must not be a known placeholder value ("change-me-in-prod").');

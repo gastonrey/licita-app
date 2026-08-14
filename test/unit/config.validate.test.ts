@@ -12,7 +12,7 @@ function prodConfig(overrides = {}) {
   return makeTestConfig({
     nodeEnv: 'production',
     paymentsMode: 'x402',
-    x402: { facilitatorUrl: VALID_FACILITATOR, payTo: VALID_PAY_TO, network: 'base' },
+    x402: { facilitatorUrl: VALID_FACILITATOR, payTo: VALID_PAY_TO, network: 'eip155:84532' },
     payHmacSecret: '',
     operatorKey: 'real-operator-secret',
     ...overrides,
@@ -40,7 +40,9 @@ describe('validateConfig (dev mode)', () => {
   });
 
   it('does not require x402 vars outside production', () => {
-    expect(() => validateConfig(makeTestConfig({ paymentsMode: 'x402', x402: {} }))).not.toThrow();
+    expect(() =>
+      validateConfig(makeTestConfig({ paymentsMode: 'x402', x402: { facilitatorUrl: '', network: '' } })),
+    ).not.toThrow();
   });
 });
 
@@ -58,7 +60,7 @@ describe('validateConfig (production)', () => {
   it('rejects a malformed X402_PAY_TO (not an Ethereum address)', () => {
     for (const bad of ['0xabc', 'not-an-address', '0x' + 'g'.repeat(40), '1234567890abcdef1234567890abcdef12345678']) {
       expect(() =>
-        validateConfig(prodConfig({ x402: { facilitatorUrl: VALID_FACILITATOR, payTo: bad, network: 'base' } })),
+        validateConfig(prodConfig({ x402: { facilitatorUrl: VALID_FACILITATOR, payTo: bad, network: 'eip155:84532' } })),
       ).toThrow(/X402_PAY_TO/);
     }
   });
@@ -67,7 +69,7 @@ describe('validateConfig (production)', () => {
     expect(() =>
       validateConfig(
         prodConfig({
-          x402: { facilitatorUrl: VALID_FACILITATOR, payTo: '0xAaBbCcDdEeFf00112233445566778899aAbBcCdD', network: 'base' },
+          x402: { facilitatorUrl: VALID_FACILITATOR, payTo: '0xAaBbCcDdEeFf00112233445566778899aAbBcCdD', network: 'eip155:84532' },
         }),
       ),
     ).not.toThrow();
@@ -76,7 +78,7 @@ describe('validateConfig (production)', () => {
   it('rejects a non-https X402_FACILITATOR_URL', () => {
     for (const bad of ['http://facilitator.example.com', 'not-a-url', '']) {
       expect(() =>
-        validateConfig(prodConfig({ x402: { facilitatorUrl: bad, payTo: VALID_PAY_TO, network: 'base' } })),
+        validateConfig(prodConfig({ x402: { facilitatorUrl: bad, payTo: VALID_PAY_TO, network: 'eip155:84532' } })),
       ).toThrow(/X402_FACILITATOR_URL/);
     }
   });
@@ -87,7 +89,7 @@ describe('validateConfig (production)', () => {
       paymentsMode: 'dev',
       payHmacSecret: 'change-me-in-prod',
       operatorKey: 'change-me',
-      x402: {},
+      x402: { facilitatorUrl: '', network: '' },
     });
     let message = '';
     try {
@@ -98,8 +100,29 @@ describe('validateConfig (production)', () => {
     expect(message).toContain('PAYMENTS_MODE');
     expect(message).toContain('X402_PAY_TO');
     expect(message).toContain('X402_FACILITATOR_URL');
+    expect(message).toContain('X402_NETWORK');
     expect(message).toContain('PAY_HMAC_SECRET must not be a known placeholder');
     expect(message).toContain('OPERATOR_KEY must not be a known placeholder');
-    expect(message).toContain('5 violation(s)');
+    expect(message).toContain('6 violation(s)');
+  });
+
+  it('rejects a non-CAIP-2 X402_NETWORK in production', () => {
+    for (const bad of ['base', 'base-sepolia', 'eip155:', 'eip155:abc', '']) {
+      expect(() =>
+        validateConfig(
+          prodConfig({ x402: { facilitatorUrl: VALID_FACILITATOR, payTo: VALID_PAY_TO, network: bad } }),
+        ),
+      ).toThrow(/X402_NETWORK/);
+    }
+  });
+
+  it('accepts Base mainnet and explicit eip155 overrides for X402_NETWORK', () => {
+    for (const good of ['eip155:84532', 'eip155:8453', 'eip155:11155111']) {
+      expect(() =>
+        validateConfig(
+          prodConfig({ x402: { facilitatorUrl: VALID_FACILITATOR, payTo: VALID_PAY_TO, network: good } }),
+        ),
+      ).not.toThrow();
+    }
   });
 });

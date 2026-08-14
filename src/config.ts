@@ -9,7 +9,13 @@ export interface AppConfig {
   pg: { host: string; port: number; user: string; password: string; database: string };
   paymentsMode: 'dev' | 'x402';
   payHmacSecret: string;
-  x402: { facilitatorUrl?: string; payTo?: string; network?: string };
+  /**
+   * x402 facilitator seam. facilitatorUrl and network have safe defaults
+   * (Coinbase CDP facilitator, Base Sepolia testnet); payTo has NO default —
+   * production boot fails without it (see config.validate.ts).
+   * network is CAIP-2: 'eip155:84532' (Base Sepolia) or 'eip155:8453' (Base).
+   */
+  x402: { facilitatorUrl: string; payTo?: string; network: string };
   operatorKey: string;
   /** Fastify trustProxy setting: false (default), true, or a hop count */
   trustProxy: boolean | number;
@@ -56,9 +62,9 @@ export function loadConfig(): AppConfig {
     paymentsMode: mode === 'x402' ? 'x402' : 'dev',
     payHmacSecret: env('PAY_HMAC_SECRET'),
     x402: {
-      facilitatorUrl: env('X402_FACILITATOR_URL') || undefined,
+      facilitatorUrl: env('X402_FACILITATOR_URL', 'https://www.x402.org/facilitator'),
       payTo: env('X402_PAY_TO') || undefined,
-      network: env('X402_NETWORK') || undefined,
+      network: env('X402_NETWORK', 'eip155:84532'),
     },
     operatorKey: env('OPERATOR_KEY'),
     trustProxy: parseTrustProxy(env('TRUST_PROXY', 'false')),
