@@ -17,6 +17,7 @@ export function makeTestConfig(overrides: Partial<AppConfig> = {}): AppConfig {
     ingestMonths: 24,
     ingestOnBoot: false,
     ingestCronHour: 4,
+    placsp: { enabled: false, maxPages: 5, delayMs: 500, schedule: false },
     ...overrides,
   };
 }

@@ -24,6 +24,8 @@ export interface AppConfig {
   ingestMonths: number;
   ingestOnBoot: boolean;
   ingestCronHour: number;
+  /** PLACSP ingestion (P0.3): disabled by default, opt-in via PLACSP_ENABLED. */
+  placsp: { enabled: boolean; maxPages: number; delayMs: number; schedule: boolean };
 }
 
 function env(name: string, fallback = ''): string {
@@ -72,5 +74,11 @@ export function loadConfig(): AppConfig {
     ingestMonths: parseInt(env('INGEST_MONTHS', '24'), 10),
     ingestOnBoot: env('INGEST_ON_BOOT', 'false') === 'true',
     ingestCronHour: parseInt(env('INGEST_CRON_HOUR', '4'), 10),
+    placsp: {
+      enabled: env('PLACSP_ENABLED', 'false') === 'true',
+      maxPages: parseInt(env('PLACSP_MAX_PAGES', '5'), 10),
+      delayMs: parseInt(env('PLACSP_DELAY_MS', '500'), 10),
+      schedule: env('PLACSP_SCHEDULE', 'false') === 'true',
+    },
   };
 }
