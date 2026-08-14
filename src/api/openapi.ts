@@ -214,6 +214,107 @@ const stdResponses = (dataSchema: Record<string, unknown>, priced: boolean) => (
   '500': errResp('Internal error (internal)'),
 });
 
+/** GET /v1/stats data payload — P0.7 observability aggregates (kept loose). */
+const statsData = {
+  type: 'object',
+  properties: {
+    unique_clients: { type: 'integer' },
+    requests_by_endpoint: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          endpoint: { type: 'string' },
+          requests: { type: 'integer' },
+          paid_requests: { type: 'integer' },
+        },
+      },
+    },
+    requests_by_source: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          source: { type: 'string', enum: ['rest', 'mcp'] },
+          requests: { type: 'integer' },
+        },
+      },
+    },
+    zero_result_queries: {
+      type: 'object',
+      properties: { count: { type: 'integer' }, rate: { type: 'number', nullable: true } },
+    },
+    payment_required_responses: { type: 'integer' },
+    payments: {
+      type: 'object',
+      properties: {
+        attempts: { type: 'integer' },
+        successes: { type: 'integer' },
+        revenue_usd: { type: 'number' },
+        by_status: { type: 'object' },
+        by_network_provider: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              provider: { type: 'string' },
+              network: { type: 'string' },
+              count: { type: 'integer' },
+              amount_usd: { type: 'number' },
+            },
+          },
+        },
+      },
+    },
+    repeat_clients: {
+      type: 'object',
+      properties: {
+        count: { type: 'integer' },
+        paid_requests_total: { type: 'integer' },
+        top: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: { client_key: { type: 'string' }, paid_requests: { type: 'integer' } },
+          },
+        },
+      },
+    },
+    top_searches: {
+      type: 'array',
+      items: { type: 'object', properties: { q: { type: 'string' }, requests: { type: 'integer' } } },
+    },
+    unique_user_agents: {
+      type: 'object',
+      properties: {
+        count: { type: 'integer' },
+        top: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: { user_agent: { type: 'string' }, requests: { type: 'integer' } },
+          },
+        },
+      },
+    },
+    top_requested: {
+      type: 'object',
+      properties: {
+        cpvs: { type: 'array' },
+        buyers: { type: 'array' },
+        companies: { type: 'array' },
+      },
+    },
+    failed_queries: { type: 'integer' },
+    failed_requests_rate: {
+      type: 'object',
+      properties: { count: { type: 'integer' }, total: { type: 'integer' }, rate: { type: 'number', nullable: true } },
+    },
+    data_null_rates: { type: 'object' },
+    in_memory_metrics: { type: 'object' },
+  },
+} as const;
+
 // --- parameter schemas ------------------------------------------------------------
 
 const qParam = (name: string, description: string, schema: Record<string, unknown>) => ({
@@ -583,7 +684,7 @@ function paths(): Record<string, unknown> {
         operationId: 'getStats',
         summary: 'Operator observability aggregates',
         description:
-          'Free, operator-only. Requires header x-operator-key. Aggregates from request_logs and payments: unique clients, requests by endpoint, payment attempts/successes, revenue, top requested CPVs/buyers/companies, failed queries, data-null rates.',
+          'Free, operator-only. Requires header x-operator-key. One JSON document aggregating request_logs and payments: unique clients, requests by endpoint and by source (rest/mcp), zero-result queries, payment-required responses, payment attempts/successes, revenue (by status and by network/provider), repeat paid clients, top searches, unique user agents, top requested CPVs/buyers/companies, failed queries + rate, data-null rates.',
         parameters: [
           {
             name: 'x-operator-key',
@@ -593,7 +694,10 @@ function paths(): Record<string, unknown> {
           },
         ],
         responses: {
-          ...stdResponses({ type: 'object' }, false),
+          '200': {
+            description: 'Observability envelope',
+            content: { 'application/json': { schema: envelopeOf(statsData) } },
+          },
           '401': errResp('Missing/invalid operator key'),
         },
       },
