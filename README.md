@@ -37,8 +37,8 @@ track record, and which contracts are likely to be re-tendered soon.
 
 | Area | Files |
 |---|---|
-| Wiring / config / DB | `src/index.ts`, `src/config.ts`, `src/config.validate.ts`, `src/db/{client,migrate}.ts`, `migrations/001_core.sql` |
-| Ingestion + scheduler | `src/ingest/{ted,normalize,placsp,placsp-parse,normalize-placsp,scheduler,cli}.ts`, `scripts/ingest-once.ts` |
+| Wiring / config / DB | `src/index.ts`, `src/config.ts`, `src/config.validate.ts`, `src/db/{client,migrate}.ts`, `migrations/*.sql` |
+| Ingestion + scheduler | `src/ingest/{ted,normalize,placsp,placsp-parse,normalize-placsp,identity,scheduler,cli}.ts`, `scripts/ingest-once.ts` |
 | Forecast signals | `src/forecast/signals.ts` |
 | REST API + observability | `src/api/{server,openapi,validate,ratelimit}.ts`, `src/api/routes/*`, `src/obs/*` |
 | Payments | `src/pay/{provider,devProvider,middleware}.ts` |
@@ -67,6 +67,19 @@ npx tsx scripts/dev-db.ts &   # embedded postgres on :5433, prints DATABASE_URL
 export PGHOST=127.0.0.1 PGPORT=5433 PGUSER=licita PGPASSWORD=licita PGDATABASE=licita
 npm run migrate               # idempotent
 npm run dev                   # tsx src/index.ts, listens on :3000
+```
+
+### Company identity (migration 003)
+
+Companies are deduplicated per source by `source_ref`, and across sources ONLY
+by exact normalized NIF (uppercase, no spaces/dots/dashes) — never by name.
+`company_identifiers` (schemes `nif`/`ted`/`placsp`) is the cross-source
+backbone; `company_aliases` records alternative observed names. Conflicting
+late-NIF discoveries are logged as `identity_conflict` and never merged
+automatically. For databases ingested before migration 003, run once:
+
+```bash
+npm run backfill-identity     # idempotent; registers identifiers/aliases for existing rows
 ```
 
 ## Environment variables

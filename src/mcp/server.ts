@@ -1,9 +1,8 @@
 // mountMcp(app, config, db) — streamable-HTTP MCP endpoint at /mcp (SPEC §6).
 // 8 tools mirroring the REST endpoints, each with an optional `payment_token`
 // arg. Unpaid calls return a structured `payment_required` payload with
-// isError=false so agents read it as data. Paid calls run the same queries as
-// the REST routes (exported pure builders are imported; non-exported SQL is
-// replicated below against the same db pool).
+// isError=false so agents read it as data. Paid calls run the SAME queries as
+// the REST routes: all SQL lives in src/api/routes/* and is imported here.
 
 import { z } from 'zod';
 import type { FastifyInstance } from 'fastify';
@@ -25,107 +24,23 @@ import { buildSearchQuery, mapSearchRow } from '../api/routes/search.js';
 import { TENDER_SQL, TENDER_AWARDS_SQL, mapAwardRow } from '../api/routes/tenders.js';
 import { buildRenewalsQuery, mapRenewalRow } from '../api/routes/renewals.js';
 import {
+  COMPANY_AWARDS_SQL,
   FRAMEWORK_CAVEAT,
   OPPORTUNITIES_SQL,
   SCORE_EXPLANATION,
+  companyProfileData,
+  loadCompany,
 } from '../api/routes/companies.js';
 import {
+  BUYER_AWARD_DATES_SQL,
+  BUYER_AWARDS_SQL,
+  BUYER_SQL,
+  BUYER_SUPPLIERS_SQL,
   computeConcentration,
   computeRecurrence,
   type SupplierRow,
 } from '../api/routes/buyers.js';
 import { buildPricing } from '../api/routes/pricing.js';
-
-// --- SQL replicated from src/api/routes/companies.ts + buyers.ts (non-exported there) ---
-
-const COMPANY_SQL = `
-SELECT c.*, s.code AS source_code
-FROM companies c
-JOIN sources s ON s.id = c.source_id
-WHERE c.id = $1
-`;
-
-const COMPANY_AGG_SQL = `
-SELECT count(*)::int AS wins, sum(a.value) AS total_value
-FROM awards a
-WHERE a.winner_company_id = $1
-`;
-
-const COMPANY_TOP_CPVS_SQL = `
-SELECT t.cpv_main AS code, cp.label_en, cp.label_es, count(*)::int AS wins, sum(a.value) AS total_value
-FROM awards a
-JOIN tenders t ON t.id = a.tender_id
-LEFT JOIN cpvs cp ON cp.code = t.cpv_main
-WHERE a.winner_company_id = $1 AND t.cpv_main IS NOT NULL
-GROUP BY t.cpv_main, cp.label_en, cp.label_es
-ORDER BY wins DESC, t.cpv_main
-LIMIT 5
-`;
-
-const COMPANY_TOP_BUYERS_SQL = `
-SELECT t.buyer_id AS id, b.name, count(*)::int AS wins, sum(a.value) AS total_value
-FROM awards a
-JOIN tenders t ON t.id = a.tender_id
-LEFT JOIN buyers b ON b.id = t.buyer_id
-WHERE a.winner_company_id = $1 AND t.buyer_id IS NOT NULL
-GROUP BY t.buyer_id, b.name
-ORDER BY wins DESC, t.buyer_id
-LIMIT 5
-`;
-
-const COMPANY_AWARDS_SQL = `
-SELECT a.*, c.id AS c_id, c.name AS c_name,
-       t.title AS t_title, t.cpv_main AS t_cpv, t.publication_date AS t_pubdate,
-       t.buyer_id AS t_buyer_id, b.name AS t_buyer_name,
-       count(*) OVER() AS total_count
-FROM awards a
-JOIN tenders t ON t.id = a.tender_id
-LEFT JOIN companies c ON c.id = a.winner_company_id
-LEFT JOIN buyers b ON b.id = t.buyer_id
-WHERE a.winner_company_id = $1
-ORDER BY a.award_date DESC NULLS LAST, a.id
-LIMIT $2 OFFSET $3
-`;
-
-const BUYER_SQL = `
-SELECT b.*, s.code AS source_code
-FROM buyers b
-JOIN sources s ON s.id = b.source_id
-WHERE b.id = $1
-`;
-
-const BUYER_AWARDS_SQL = `
-SELECT a.*, c.id AS c_id, c.name AS c_name,
-       t.title AS t_title, t.cpv_main AS t_cpv, t.source_ref AS t_ref,
-       count(*) OVER() AS total_count
-FROM awards a
-JOIN tenders t ON t.id = a.tender_id
-LEFT JOIN companies c ON c.id = a.winner_company_id
-WHERE t.buyer_id = $1
-ORDER BY a.award_date DESC NULLS LAST, a.id
-LIMIT 50
-`;
-
-const BUYER_SUPPLIERS_SQL = `
-SELECT a.winner_company_id AS id, c.name,
-       count(*)::int AS wins, sum(a.value) AS total_value
-FROM awards a
-JOIN tenders t ON t.id = a.tender_id
-LEFT JOIN companies c ON c.id = a.winner_company_id
-WHERE t.buyer_id = $1 AND a.winner_company_id IS NOT NULL
-GROUP BY a.winner_company_id, c.name
-ORDER BY wins DESC, a.winner_company_id
-`;
-
-const BUYER_AWARD_DATES_SQL = `
-SELECT left(t.cpv_main, 2) AS division, a.award_date
-FROM awards a
-JOIN tenders t ON t.id = a.tender_id
-WHERE t.buyer_id = $1 AND a.award_date IS NOT NULL AND t.cpv_main IS NOT NULL
-ORDER BY division, a.award_date
-`;
-
-// --- tool plumbing --------------------------------------------------------------
 
 interface ToolTextResult {
   [key: string]: unknown;
@@ -203,11 +118,6 @@ const pageShape = {
   page: z.number().int().min(1).default(1),
   size: z.number().int().min(1).max(100).default(20),
 };
-
-async function loadCompany(db: Db, id: number): Promise<Record<string, unknown> | null> {
-  const res = await db.query(COMPANY_SQL, [id]);
-  return res.rows.length > 0 ? (res.rows[0] as Record<string, unknown>) : null;
-}
 
 const TOOLS: Record<string, ToolDef> = {
   search_tenders: {
@@ -287,41 +197,15 @@ const TOOLS: Record<string, ToolDef> = {
   get_company: {
     endpointKey: 'GET /v1/companies/:id',
     description:
-      'Company profile by id: name, country, NIF, plus aggregate stats (wins, total awarded value, top CPVs, top buyers).',
+      'Company profile by id: name, country, NIF, aliases and source identifiers (cross-source identity), plus aggregate stats (wins, total awarded value, top CPVs, top buyers).',
     schema: idShape,
     run: async (db, args) => {
       const { id } = idParamSchema.parse(args);
       const c = await loadCompany(db, id);
       if (!c) return { error: { code: 'not_found', message: `Company ${id} not found` } };
-      const [agg, topCpvs, topBuyers] = await Promise.all([
-        db.query(COMPANY_AGG_SQL, [id]),
-        db.query(COMPANY_TOP_CPVS_SQL, [id]),
-        db.query(COMPANY_TOP_BUYERS_SQL, [id]),
-      ]);
-      const a = agg.rows[0];
+      const data = await companyProfileData(db, c);
       return {
-        id: Number(c.id),
-        source_ref: (c.source_ref as string) ?? null,
-        name: String(c.name),
-        country: (c.country as string) ?? null,
-        nif: (c.nif as string) ?? null,
-        stats: {
-          wins: Number(a.wins),
-          total_awarded_value: num(a.total_value),
-          top_cpvs: topCpvs.rows.map((r) => ({
-            code: String(r.code),
-            label_en: (r.label_en as string) ?? null,
-            label_es: (r.label_es as string) ?? null,
-            wins: Number(r.wins),
-            total_value: num(r.total_value),
-          })),
-          top_buyers: topBuyers.rows.map((r) => ({
-            id: Number(r.id),
-            name: String(r.name),
-            wins: Number(r.wins),
-            total_value: num(r.total_value),
-          })),
-        },
+        ...data,
         caveats: [FRAMEWORK_CAVEAT],
         provenance: provenanceFor(c.source_code as string, (c.source_ref as string) ?? null),
       };

@@ -51,6 +51,25 @@ function fakeDb(): { db: Db; calls: QueryCall[] } {
       if (t.includes('FROM awards a LEFT JOIN companies c ON c.id = a.winner_company_id WHERE a.tender_id')) {
         return { rows: [] };
       }
+      if (t.includes('FROM companies c JOIN sources s')) {
+        return {
+          rows: [
+            {
+              id: 7,
+              source_ref: 'acme s.a.|ESP',
+              source_code: 'ted',
+              name: 'ACME S.A.',
+              country: 'ESP',
+              nif: 'A12345674',
+            },
+          ],
+        };
+      }
+      if (t.includes('FROM awards a WHERE a.winner_company_id'))
+        return { rows: [{ wins: 2, total_value: '80000' }] };
+      if (t.includes('FROM company_aliases')) return { rows: [{ alias: 'ACME SA' }] };
+      if (t.includes('FROM company_identifiers'))
+        return { rows: [{ scheme: 'nif', value: 'A12345674' }] };
       if (t.includes('FROM awards a') && t.includes('count(*) OVER()')) {
         return {
           rows: [
@@ -152,6 +171,21 @@ describe('buildServer wiring (stubbed payment, fake db)', () => {
       url: 'https://ted.europa.eu/udl?uri=TED:NOTICE:123-2026:TEXT:EN:HTML',
     });
     expect(body.meta.price_usd).toBe('0.02');
+  });
+
+  it('GET /v1/companies/:id returns profile with identity aliases/identifiers', async () => {
+    const res = await app.inject({ method: 'GET', url: '/v1/companies/7', headers: PAY });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.data).toMatchObject({
+      id: 7,
+      name: 'ACME S.A.',
+      nif: 'A12345674',
+      aliases: ['ACME SA'],
+      identifiers: [{ scheme: 'nif', value: 'A12345674' }],
+    });
+    expect(body.data.stats.wins).toBe(2);
+    expect(body.meta.caveats[0]).toContain('Framework agreement values');
   });
 
   it('GET /v1/pricing is free and machine-readable', async () => {

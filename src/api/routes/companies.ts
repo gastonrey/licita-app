@@ -1,6 +1,11 @@
 // GET /v1/companies/:id, /v1/companies/:id/awards, /v1/companies/:id/opportunities (SPEC §5).
+//
+// The SQL below is the SINGLE source for company queries: the MCP tools
+// (src/mcp/server.ts) import these constants and companyProfileData() instead
+// of replicating statements — keep any change here reflected there.
 
 import type { FastifyReply, FastifyRequest } from 'fastify';
+import type { Db } from '../../db/client.js';
 import { awardsQuerySchema, idParamSchema, opportunitiesQuerySchema } from '../validate.js';
 import {
   dateStr,
@@ -22,20 +27,20 @@ export const opportunitiesValidation = validate(opportunitiesQuerySchema, 'query
 export const FRAMEWORK_CAVEAT =
   'Framework agreement values are ceiling amounts (maximum possible spend), not actual expenditure.';
 
-const COMPANY_SQL = `
+export const COMPANY_SQL = `
 SELECT c.*, s.code AS source_code
 FROM companies c
 JOIN sources s ON s.id = c.source_id
 WHERE c.id = $1
 `;
 
-const AGG_SQL = `
+export const COMPANY_AGG_SQL = `
 SELECT count(*)::int AS wins, sum(a.value) AS total_value
 FROM awards a
 WHERE a.winner_company_id = $1
 `;
 
-const TOP_CPVS_SQL = `
+export const COMPANY_TOP_CPVS_SQL = `
 SELECT t.cpv_main AS code, cp.label_en, cp.label_es, count(*)::int AS wins, sum(a.value) AS total_value
 FROM awards a
 JOIN tenders t ON t.id = a.tender_id
@@ -46,7 +51,7 @@ ORDER BY wins DESC, t.cpv_main
 LIMIT 5
 `;
 
-const TOP_BUYERS_SQL = `
+export const COMPANY_TOP_BUYERS_SQL = `
 SELECT t.buyer_id AS id, b.name, count(*)::int AS wins, sum(a.value) AS total_value
 FROM awards a
 JOIN tenders t ON t.id = a.tender_id
@@ -57,7 +62,7 @@ ORDER BY wins DESC, t.buyer_id
 LIMIT 5
 `;
 
-const COMPANY_AWARDS_SQL = `
+export const COMPANY_AWARDS_SQL = `
 SELECT a.*, c.id AS c_id, c.name AS c_name,
        t.title AS t_title, t.cpv_main AS t_cpv, t.publication_date AS t_pubdate,
        t.buyer_id AS t_buyer_id, b.name AS t_buyer_name,
@@ -71,20 +76,69 @@ ORDER BY a.award_date DESC NULLS LAST, a.id
 LIMIT $2 OFFSET $3
 `;
 
-function companyProfile(c: Record<string, unknown>): Record<string, unknown> {
+/** Alternative names observed for the company in source payloads (P0.4). */
+export const COMPANY_ALIASES_SQL = `
+SELECT alias FROM company_aliases WHERE company_id = $1 ORDER BY alias
+`;
+
+/** Cross-source identity backbone: nif + per-source identifiers (P0.4). */
+export const COMPANY_IDENTIFIERS_SQL = `
+SELECT scheme, value FROM company_identifiers WHERE company_id = $1 ORDER BY scheme, value
+`;
+
+/** Company row (with source_code) or null — shared by REST and MCP. */
+export async function loadCompany(db: Db, id: number): Promise<Record<string, unknown> | null> {
+  const res = await db.query(COMPANY_SQL, [id]);
+  return res.rows.length > 0 ? (res.rows[0] as Record<string, unknown>) : null;
+}
+
+/**
+ * Full company profile payload (id/source_ref/name/country/nif + aliases +
+ * identifiers + aggregate stats) — the exact `data` shape of
+ * GET /v1/companies/:id, shared with the MCP get_company tool.
+ */
+export async function companyProfileData(
+  db: Db,
+  c: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  const id = Number(c.id);
+  const [agg, topCpvs, topBuyers, aliases, identifiers] = await Promise.all([
+    db.query(COMPANY_AGG_SQL, [id]),
+    db.query(COMPANY_TOP_CPVS_SQL, [id]),
+    db.query(COMPANY_TOP_BUYERS_SQL, [id]),
+    db.query(COMPANY_ALIASES_SQL, [id]),
+    db.query(COMPANY_IDENTIFIERS_SQL, [id]),
+  ]);
+  const a = agg.rows[0];
   return {
-    id: Number(c.id),
+    id,
     source_ref: (c.source_ref as string) ?? null,
     name: String(c.name),
     country: (c.country as string) ?? null,
     nif: (c.nif as string) ?? null,
+    aliases: aliases.rows.map((r) => String(r.alias)),
+    identifiers: identifiers.rows.map((r) => ({
+      scheme: String(r.scheme),
+      value: String(r.value),
+    })),
+    stats: {
+      wins: Number(a.wins),
+      total_awarded_value: num(a.total_value),
+      top_cpvs: topCpvs.rows.map((r) => ({
+        code: String(r.code),
+        label_en: (r.label_en as string) ?? null,
+        label_es: (r.label_es as string) ?? null,
+        wins: Number(r.wins),
+        total_value: num(r.total_value),
+      })),
+      top_buyers: topBuyers.rows.map((r) => ({
+        id: Number(r.id),
+        name: String(r.name),
+        wins: Number(r.wins),
+        total_value: num(r.total_value),
+      })),
+    },
   };
-}
-
-async function loadCompany(ctx: RouteCtx, id: number): Promise<Record<string, unknown>> {
-  const res = await ctx.db.query(COMPANY_SQL, [id]);
-  if (res.rows.length === 0) throw notFound(`Company ${id}`);
-  return res.rows[0];
 }
 
 // --- GET /v1/companies/:id ------------------------------------------------------
@@ -92,33 +146,9 @@ async function loadCompany(ctx: RouteCtx, id: number): Promise<Record<string, un
 export function companyProfileHandler(ctx: RouteCtx) {
   return async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = idParamSchema.parse(req.params);
-    const c = await loadCompany(ctx, id);
-    const [agg, topCpvs, topBuyers] = await Promise.all([
-      ctx.db.query(AGG_SQL, [id]),
-      ctx.db.query(TOP_CPVS_SQL, [id]),
-      ctx.db.query(TOP_BUYERS_SQL, [id]),
-    ]);
-    const a = agg.rows[0];
-    const data = {
-      ...companyProfile(c),
-      stats: {
-        wins: Number(a.wins),
-        total_awarded_value: num(a.total_value),
-        top_cpvs: topCpvs.rows.map((r) => ({
-          code: String(r.code),
-          label_en: (r.label_en as string) ?? null,
-          label_es: (r.label_es as string) ?? null,
-          wins: Number(r.wins),
-          total_value: num(r.total_value),
-        })),
-        top_buyers: topBuyers.rows.map((r) => ({
-          id: Number(r.id),
-          name: String(r.name),
-          wins: Number(r.wins),
-          total_value: num(r.total_value),
-        })),
-      },
-    };
+    const c = await loadCompany(ctx.db, id);
+    if (!c) throw notFound(`Company ${id}`);
+    const data = await companyProfileData(ctx.db, c);
     return reply.send(
       envelope(req, data, {
         provenance: provenanceFor(
@@ -138,7 +168,7 @@ export function companyAwardsHandler(ctx: RouteCtx) {
   return async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = idParamSchema.parse(req.params);
     const { page, size } = awardsQuerySchema.parse(req.query);
-    await loadCompany(ctx, id); // 404 if unknown company
+    if (!(await loadCompany(ctx.db, id))) throw notFound(`Company ${id}`);
     const res = await ctx.db.query(COMPANY_AWARDS_SQL, [id, size, (page - 1) * size]);
     const total = res.rows.length > 0 ? Number(res.rows[0].total_count) : 0;
     const rows = res.rows.map((r) => ({
@@ -195,7 +225,7 @@ export function opportunitiesHandler(ctx: RouteCtx) {
   return async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = idParamSchema.parse(req.params);
     const { page, size } = opportunitiesQuerySchema.parse(req.query);
-    await loadCompany(ctx, id);
+    if (!(await loadCompany(ctx.db, id))) throw notFound(`Company ${id}`);
     const res = await ctx.db.query(OPPORTUNITIES_SQL, [id, size, (page - 1) * size]);
     const total = res.rows.length > 0 ? Number(res.rows[0].total_count) : 0;
     const rows = res.rows.map((r) => ({

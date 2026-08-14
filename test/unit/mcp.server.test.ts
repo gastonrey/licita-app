@@ -52,6 +52,15 @@ const TENDER_ROW = {
   b_org_type: null,
 };
 
+const COMPANY_ROW = {
+  id: 7,
+  source_ref: 'acme s.a.|ESP',
+  source_code: 'ted',
+  name: 'ACME S.A.',
+  country: 'ESP',
+  nif: 'A12345674',
+};
+
 /**
  * Fake db: real pg-mem only for the payments table (replay protection);
  * canned rows for the data queries the tools run.
@@ -65,6 +74,10 @@ function makeDb(): { db: Db; payments: Db } {
       const t = text.replace(/\s+/g, ' ');
       if (t.includes('INSERT INTO payments')) return payments.query(text, values);
       if (t.includes('FROM tenders t JOIN sources s')) return { rows: [TENDER_ROW] };
+      if (t.includes('FROM companies c JOIN sources s'))
+        return { rows: values[0] === 7 ? [COMPANY_ROW] : [] };
+      if (t.includes('FROM awards a WHERE a.winner_company_id'))
+        return { rows: [{ wins: 1, total_value: '1000' }] };
       if (t.includes('FROM awards a LEFT JOIN companies c ON c.id = a.winner_company_id WHERE a.tender_id'))
         return { rows: [] };
       return { rows: [] };
@@ -178,6 +191,40 @@ describe('MCP tools (in-process client)', () => {
       arguments: { id: 7, payment_token: token },
     })) as ToolCallResult;
     expect(parseText(res).reason).toBe('wrong_endpoint');
+  });
+
+  it('get_company returns the shared profile shape incl. aliases/identifiers', async () => {
+    const { token } = provider.createToken('GET /v1/companies/:id');
+    const res = (await client.callTool({
+      name: 'get_company',
+      arguments: { id: 7, payment_token: token },
+    })) as ToolCallResult;
+    expect(res.isError).toBeFalsy();
+    const body = parseText(res);
+    const data = body.data as Record<string, unknown> & {
+      id: number;
+      nif: string;
+      aliases: string[];
+      identifiers: Array<{ scheme: string; value: string }>;
+      stats: { wins: number };
+    };
+    expect(data.id).toBe(7);
+    expect(data.nif).toBe('A12345674');
+    expect(data.aliases).toEqual([]);
+    expect(data.identifiers).toEqual([]);
+    expect(data.stats.wins).toBe(1);
+    expect(data.caveats).toBeDefined();
+    expect(data.provenance).toBeDefined();
+  });
+
+  it('get_company on an unknown id → not_found error result', async () => {
+    const { token } = provider.createToken('GET /v1/companies/:id');
+    const res = (await client.callTool({
+      name: 'get_company',
+      arguments: { id: 999, payment_token: token },
+    })) as ToolCallResult;
+    expect(res.isError).toBe(true);
+    expect(parseText(res).error).toMatchObject({ code: 'not_found' });
   });
 
   it('invalid tool args are rejected by schema validation', async () => {

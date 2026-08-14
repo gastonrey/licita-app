@@ -243,7 +243,7 @@ function paths(): Record<string, unknown> {
         summary: 'Company profile with aggregate win stats',
         description: desc(
           'GET /v1/companies/:id',
-          'Company profile plus aggregates: wins, total awarded value (framework values are ceilings — see meta.caveats), top CPVs, top buyers.',
+          'Company profile plus cross-source identity (aliases, identifiers) and aggregates: wins, total awarded value (framework values are ceilings — see meta.caveats), top CPVs, top buyers.',
         ),
         parameters: [idPathParam],
         responses: stdResponses(
@@ -255,6 +255,24 @@ function paths(): Record<string, unknown> {
               name: { type: 'string' },
               country: { type: ['string', 'null'] },
               nif: { type: ['string', 'null'] },
+              aliases: {
+                type: 'array',
+                items: { type: 'string' },
+                description: 'Alternative names observed for this company in source payloads.',
+              },
+              identifiers: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  required: ['scheme', 'value'],
+                  properties: {
+                    scheme: { type: 'string', enum: ['nif', 'ted', 'placsp'] },
+                    value: { type: 'string' },
+                  },
+                },
+                description:
+                  'Cross-source identity: the normalized NIF plus each source\'s source_ref linked to this company.',
+              },
               stats: {
                 type: 'object',
                 properties: {

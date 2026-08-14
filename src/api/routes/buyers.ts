@@ -1,4 +1,7 @@
 // GET /v1/buyers/:id/history — buyer profile + awards + supplier concentration + recurrence (SPEC §5).
+//
+// The SQL below is the SINGLE source for buyer queries: the MCP get_buyer_history
+// tool (src/mcp/server.ts) imports these constants instead of replicating them.
 
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { idParamSchema } from '../validate.js';
@@ -16,14 +19,14 @@ import { mapAwardRow } from './tenders.js';
 
 export const buyerIdValidation = validate(idParamSchema, 'params');
 
-const BUYER_SQL = `
+export const BUYER_SQL = `
 SELECT b.*, s.code AS source_code
 FROM buyers b
 JOIN sources s ON s.id = b.source_id
 WHERE b.id = $1
 `;
 
-const BUYER_AWARDS_SQL = `
+export const BUYER_AWARDS_SQL = `
 SELECT a.*, c.id AS c_id, c.name AS c_name,
        t.title AS t_title, t.cpv_main AS t_cpv, t.source_ref AS t_ref,
        count(*) OVER() AS total_count
@@ -35,7 +38,7 @@ ORDER BY a.award_date DESC NULLS LAST, a.id
 LIMIT 50
 `;
 
-const SUPPLIERS_SQL = `
+export const BUYER_SUPPLIERS_SQL = `
 SELECT a.winner_company_id AS id, c.name,
        count(*)::int AS wins, sum(a.value) AS total_value
 FROM awards a
@@ -46,7 +49,7 @@ GROUP BY a.winner_company_id, c.name
 ORDER BY wins DESC, a.winner_company_id
 `;
 
-const AWARD_DATES_SQL = `
+export const BUYER_AWARD_DATES_SQL = `
 SELECT left(t.cpv_main, 2) AS division, a.award_date
 FROM awards a
 JOIN tenders t ON t.id = a.tender_id
@@ -156,8 +159,8 @@ export function buyerHistoryHandler(ctx: RouteCtx) {
 
     const [awardsRes, suppliersRes, datesRes] = await Promise.all([
       ctx.db.query(BUYER_AWARDS_SQL, [id]),
-      ctx.db.query(SUPPLIERS_SQL, [id]),
-      ctx.db.query(AWARD_DATES_SQL, [id]),
+      ctx.db.query(BUYER_SUPPLIERS_SQL, [id]),
+      ctx.db.query(BUYER_AWARD_DATES_SQL, [id]),
     ]);
 
     const totalAwards = awardsRes.rows.length > 0 ? Number(awardsRes.rows[0].total_count) : 0;
