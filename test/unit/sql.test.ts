@@ -57,10 +57,12 @@ describe('buildSearchQuery', () => {
     expect(text).toContain('ct.start_date AS row_date');
   });
 
-  it('mapSearchRow maps compact rows with nullable company', () => {
+  it('mapSearchRow maps compact rows with nullable company and tender link', () => {
     const row = mapSearchRow('award', {
       row_id: '7',
       source_ref: '123-2026',
+      tender_id: '3',
+      tender_source_ref: '9000-2025',
       title: 'Soporte',
       row_date: new Date('2026-01-15T00:00:00Z'),
       buyer_id: '3',
@@ -75,6 +77,8 @@ describe('buildSearchQuery', () => {
       kind: 'award',
       id: 7,
       source_ref: '123-2026',
+      tender_id: 3,
+      tender_source_ref: '9000-2025',
       title: 'Soporte',
       date: '2026-01-15',
       buyer: { id: 3, name: 'Ayuntamiento' },
@@ -83,6 +87,13 @@ describe('buildSearchQuery', () => {
       currency: 'EUR',
       cpv: '72000000',
     });
+  });
+
+  it('award search rows expose the linked tender id and publication ref', () => {
+    const q = searchQuerySchema.parse({ type: 'award', q: 'cyber' });
+    const { text } = buildSearchQuery(q);
+    expect(text).toContain('t.id AS tender_id');
+    expect(text).toContain('t.source_ref AS tender_source_ref');
   });
 });
 

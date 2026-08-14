@@ -107,6 +107,8 @@ export function buildSearchQuery(q: SearchQuery): { text: string; values: unknow
 SELECT
   ${cfg.idCol} AS row_id,
   ${cfg.refCol} AS source_ref,
+  t.id AS tender_id,
+  t.source_ref AS tender_source_ref,
   t.title,
   ${cfg.dateCol} AS row_date,
   b.id AS buyer_id,
@@ -137,6 +139,9 @@ export interface SearchRow {
   value: number | null;
   currency: string | null;
   cpv: string | null;
+  /** tender this row belongs to (award/contract rows; equals id for tender rows) */
+  tender_id: number | null;
+  tender_source_ref: string | null;
 }
 
 export function mapSearchRow(kind: SearchQuery['type'], r: Record<string, unknown>): SearchRow {
@@ -151,6 +156,8 @@ export function mapSearchRow(kind: SearchQuery['type'], r: Record<string, unknow
     value: num(r.value),
     currency: (r.currency as string) ?? null,
     cpv: (r.cpv as string) ?? null,
+    tender_id: r.tender_id != null ? Number(r.tender_id) : null,
+    tender_source_ref: (r.tender_source_ref as string) ?? null,
   };
 }
 

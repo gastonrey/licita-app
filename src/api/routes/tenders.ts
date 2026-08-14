@@ -35,6 +35,7 @@ ORDER BY a.award_date DESC NULLS LAST, a.id
 export function mapAwardRow(r: Record<string, unknown>): Record<string, unknown> {
   return {
     id: Number(r.id),
+    tender_id: r.tender_id != null ? Number(r.tender_id) : null,
     source_ref: (r.source_ref as string) ?? null,
     award_date: dateStr(r.award_date),
     lot: (r.lot as string) ?? null,

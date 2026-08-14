@@ -76,6 +76,8 @@ function fakeDb(): { db: Db; calls: QueryCall[] } {
             {
               row_id: 9,
               source_ref: '123-2026',
+              tender_id: 1,
+              tender_source_ref: '123-2026',
               title: 'Servicio de ciberseguridad',
               row_date: '2026-01-15',
               buyer_id: 5,
@@ -138,7 +140,14 @@ describe('buildServer wiring (stubbed payment, fake db)', () => {
     expect(res.statusCode).toBe(200);
     const body = res.json();
     expect(body.data).toHaveLength(1);
-    expect(body.data[0]).toMatchObject({ kind: 'award', id: 9, cpv: '72000000', value: 80000 });
+    expect(body.data[0]).toMatchObject({
+      kind: 'award',
+      id: 9,
+      cpv: '72000000',
+      value: 80000,
+      tender_id: 1,
+      tender_source_ref: '123-2026',
+    });
     expect(body.meta.price_usd).toBe('0.02');
     expect(body.meta.paid).toBe(true);
     expect(body.meta.total).toBe(1);

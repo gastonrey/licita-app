@@ -64,7 +64,7 @@ LIMIT 5
 
 export const COMPANY_AWARDS_SQL = `
 SELECT a.*, c.id AS c_id, c.name AS c_name,
-       t.title AS t_title, t.cpv_main AS t_cpv, t.publication_date AS t_pubdate,
+       t.id AS t_id, t.source_ref AS t_ref, t.title AS t_title, t.cpv_main AS t_cpv, t.publication_date AS t_pubdate,
        t.buyer_id AS t_buyer_id, b.name AS t_buyer_name,
        count(*) OVER() AS total_count
 FROM awards a
@@ -174,6 +174,8 @@ export function companyAwardsHandler(ctx: RouteCtx) {
     const rows = res.rows.map((r) => ({
       ...mapAwardRow(r),
       tender: {
+        id: r.t_id != null ? Number(r.t_id) : null,
+        source_ref: (r.t_ref as string) ?? null,
         title: (r.t_title as string) ?? null,
         cpv_main: (r.t_cpv as string) ?? null,
         publication_date: dateStr(r.t_pubdate),

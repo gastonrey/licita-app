@@ -78,7 +78,20 @@ const entityRef = {
 
 const searchRow = {
   type: 'object',
-  required: ['kind', 'id', 'source_ref', 'title', 'date', 'buyer', 'company', 'value', 'currency', 'cpv'],
+  required: [
+    'kind',
+    'id',
+    'source_ref',
+    'title',
+    'date',
+    'buyer',
+    'company',
+    'value',
+    'currency',
+    'cpv',
+    'tender_id',
+    'tender_source_ref',
+  ],
   properties: {
     kind: { type: 'string', enum: ['award', 'tender', 'contract'] },
     id: { type: 'integer' },
@@ -90,6 +103,14 @@ const searchRow = {
     value: { type: ['number', 'null'] },
     currency: { type: ['string', 'null'], example: 'EUR' },
     cpv: { type: ['string', 'null'], example: '72000000' },
+    tender_id: {
+      type: ['integer', 'null'],
+      description: 'Tender this row belongs to (equals id for tender rows).',
+    },
+    tender_source_ref: {
+      type: ['string', 'null'],
+      description: 'Tender publication reference (e.g. the TED notice number).',
+    },
   },
 } as const;
 
@@ -97,6 +118,7 @@ const award = {
   type: 'object',
   properties: {
     id: { type: 'integer' },
+    tender_id: { type: ['integer', 'null'] },
     source_ref: { type: ['string', 'null'] },
     award_date: { type: ['string', 'null'], format: 'date' },
     lot: { type: ['string', 'null'] },
@@ -109,6 +131,24 @@ const award = {
     start_date: { type: ['string', 'null'], format: 'date' },
     end_date: { type: ['string', 'null'], format: 'date' },
   },
+} as const;
+
+const tenderContext = {
+  type: 'object',
+  properties: {
+    id: { type: ['integer', 'null'] },
+    source_ref: { type: ['string', 'null'] },
+    title: { type: ['string', 'null'] },
+    cpv_main: { type: ['string', 'null'] },
+    publication_date: { type: ['string', 'null'], format: 'date' },
+    buyer: entityRef,
+  },
+} as const;
+
+/** Award row as returned inside lists that join tender context (company/buyer histories). */
+const awardWithTender = {
+  ...award,
+  properties: { ...award.properties, tender: tenderContext },
 } as const;
 
 const paymentRequired = {
@@ -325,9 +365,12 @@ function paths(): Record<string, unknown> {
       get: {
         operationId: 'getCompanyAwards',
         summary: 'Paginated awards won by a company',
-        description: desc('GET /v1/companies/:id/awards', 'Paginated award list with tender context.'),
+        description: desc(
+          'GET /v1/companies/:id/awards',
+          'Paginated award list with tender context (tender id, source ref, buyer).',
+        ),
         parameters: [idPathParam, ...pageParams],
-        responses: stdResponses({ type: 'array', items: award }, true),
+        responses: stdResponses({ type: 'array', items: awardWithTender }, true),
       },
     },
     '/v1/companies/{id}/opportunities': {
@@ -385,7 +428,7 @@ function paths(): Record<string, unknown> {
               country: { type: ['string', 'null'] },
               nuts: { type: ['string', 'null'] },
               org_type: { type: ['string', 'null'] },
-              awards: { type: 'array', items: award },
+              awards: { type: 'array', items: awardWithTender },
               awards_total: { type: 'integer' },
               awards_returned: { type: 'integer' },
               supplier_concentration: {

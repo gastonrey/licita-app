@@ -233,6 +233,8 @@ const TOOLS: Record<string, ToolDef> = {
         awards: res.rows.map((r) => ({
           ...mapAwardRow(r),
           tender: {
+            id: r.t_id != null ? Number(r.t_id) : null,
+            source_ref: (r.t_ref as string) ?? null,
             title: (r.t_title as string) ?? null,
             cpv_main: (r.t_cpv as string) ?? null,
             publication_date: dateStr(r.t_pubdate),
@@ -314,6 +316,7 @@ const TOOLS: Record<string, ToolDef> = {
         awards: awardsRes.rows.map((r) => ({
           ...mapAwardRow(r),
           tender: {
+            id: r.t_id != null ? Number(r.t_id) : null,
             source_ref: (r.t_ref as string) ?? null,
             title: (r.t_title as string) ?? null,
             cpv_main: (r.t_cpv as string) ?? null,

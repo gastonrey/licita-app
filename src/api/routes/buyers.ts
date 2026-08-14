@@ -28,7 +28,7 @@ WHERE b.id = $1
 
 export const BUYER_AWARDS_SQL = `
 SELECT a.*, c.id AS c_id, c.name AS c_name,
-       t.title AS t_title, t.cpv_main AS t_cpv, t.source_ref AS t_ref,
+       t.id AS t_id, t.title AS t_title, t.cpv_main AS t_cpv, t.source_ref AS t_ref,
        count(*) OVER() AS total_count
 FROM awards a
 JOIN tenders t ON t.id = a.tender_id
@@ -181,6 +181,7 @@ export function buyerHistoryHandler(ctx: RouteCtx) {
       awards: awardsRes.rows.map((r) => ({
         ...mapAwardRow(r),
         tender: {
+          id: r.t_id != null ? Number(r.t_id) : null,
           source_ref: (r.t_ref as string) ?? null,
           title: (r.t_title as string) ?? null,
           cpv_main: (r.t_cpv as string) ?? null,
