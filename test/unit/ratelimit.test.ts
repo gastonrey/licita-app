@@ -42,3 +42,52 @@ describe('rate limiter token bucket', () => {
     expect(r.remaining).toBe(59);
   });
 });
+
+describe('rate limiter bounds', () => {
+  it('never exceeds maxKeys; evicts the oldest bucket on insert when full', () => {
+    let now = 0;
+    const rl = createRateLimiter({ capacity: 1, refillPerMinute: 60, maxKeys: 3, now: () => now });
+    rl.take('a');
+    now += 10;
+    rl.take('b');
+    now += 10;
+    rl.take('c');
+    expect(rl.size()).toBe(3);
+    // 'a' is the oldest (lastMs 0); inserting 'd' must evict 'a', keeping size at 3.
+    now += 10;
+    rl.take('d');
+    expect(rl.size()).toBe(3);
+    // 'b' and 'c' still have exhausted buckets (1 capacity each, consumed).
+    expect(rl.take('b').allowed).toBe(false);
+    expect(rl.take('c').allowed).toBe(false);
+    // 'a' was evicted → comes back as a fresh, full bucket.
+    now += 10;
+    expect(rl.take('a').allowed).toBe(true);
+  });
+
+  it('touching a key refreshes its eviction age', () => {
+    let now = 0;
+    const rl = createRateLimiter({ capacity: 60, refillPerMinute: 60, maxKeys: 2, now: () => now });
+    rl.take('a');
+    now += 10;
+    rl.take('b');
+    now += 10;
+    rl.take('a'); // 'a' is now newer than 'b'
+    now += 10;
+    rl.take('c'); // evicts 'b', not 'a'
+    expect(rl.take('a').remaining).toBeLessThan(59); // 'a' kept its consumed bucket
+    expect(rl.size()).toBe(2);
+  });
+
+  it('periodic sweep removes buckets idle long enough to be fully refilled', async () => {
+    let now = 0;
+    // capacity 60 @ 60/min → fully refilled after 60s idle.
+    const rl = createRateLimiter({ maxKeys: 100, sweepIntervalMs: 5, now: () => now });
+    rl.take('a');
+    rl.take('b');
+    expect(rl.size()).toBe(2);
+    now += 120_000; // both buckets idle past the refill window
+    await new Promise((r) => setTimeout(r, 30)); // let the real interval tick
+    expect(rl.size()).toBe(0);
+  });
+});

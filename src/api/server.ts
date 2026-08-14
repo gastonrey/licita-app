@@ -44,7 +44,7 @@ function strField(v: unknown): string | null {
 export async function buildServer(config: AppConfig, db: Db): Promise<FastifyInstance> {
   const log = createLogger(config.logLevel);
   const metrics = createMetrics();
-  const limiter = createRateLimiter({ capacity: 60, refillPerMinute: 60 });
+  const limiter = createRateLimiter({ capacity: 60, refillPerMinute: 60, maxKeys: config.rateLimitMaxKeys });
   const ctx: RouteCtx = { config, db, log, metrics };
 
   const app = Fastify({
