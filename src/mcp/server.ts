@@ -151,26 +151,42 @@ function paymentRequiredResult(
   reason?: string,
 ): ToolTextResult {
   const price = provider.price(endpointKey);
+  const howToPay =
+    provider.name === 'x402'
+      ? {
+          protocol: 'x402',
+          mode: provider.name,
+          steps: [
+            `1. Call the REST endpoint (${endpointKey}) without payment → HTTP 402 with a base64 PAYMENT-REQUIRED header (v2) and a body { x402Version: 2, resource, accepts[] } describing the exact USDC requirement.`,
+            '2. Create the payment with an x402 client (scheme "exact", EIP-3009 transferWithAuthorization of USDC on the advertised network) and obtain the base64 payment payload.',
+            '3. Retry this tool with payment_token set to that base64 payload — the same value a REST client sends as the PAYMENT-SIGNATURE (v2) or X-PAYMENT (v1) header.',
+            'Proofs are single-use: the payment is verified AND settled on-chain before the tool runs.',
+          ],
+          faucet: null,
+          mcp_arg: 'payment_token',
+          rest_header: 'PAYMENT-SIGNATURE',
+        }
+      : {
+          protocol: 'x402-compatible',
+          mode: provider.name,
+          steps: [
+            `1. POST /v1/dev-faucet with {"endpoint":"${endpointKey}"} → { token, expires_at } (dev mode only).`,
+            '2. Retry this tool with payment_token set to the token. Tokens are single-use and expire after 5 minutes.',
+            'For REST: send the token as header X-PAYMENT instead.',
+          ],
+          faucet:
+            provider.name === 'dev'
+              ? `POST /v1/dev-faucet {"endpoint":"${endpointKey}"}`
+              : null,
+          mcp_arg: 'payment_token',
+          rest_header: 'X-PAYMENT',
+        };
   return textResult({
     payment_required: true,
     endpoint: endpointKey,
     price_usd: price,
     ...(reason ? { reason } : {}),
-    how_to_pay: {
-      protocol: 'x402-compatible',
-      mode: provider.name,
-      steps: [
-        `1. POST /v1/dev-faucet with {"endpoint":"${endpointKey}"} → { token, expires_at } (dev mode only).`,
-        '2. Retry this tool with payment_token set to the token. Tokens are single-use and expire after 5 minutes.',
-        'For REST: send the token as header X-PAYMENT instead.',
-      ],
-      faucet:
-        provider.name === 'dev'
-          ? `POST /v1/dev-faucet {"endpoint":"${endpointKey}"}`
-          : null,
-      mcp_arg: 'payment_token',
-      rest_header: 'X-PAYMENT',
-    },
+    how_to_pay: howToPay,
   });
 }
 
@@ -477,7 +493,9 @@ export function buildMcpServer(provider: PaymentProvider, db: Db, config: AppCon
           payment_token: z
             .string()
             .optional()
-            .describe('Single-use dev payment token from POST /v1/dev-faucet (or x402 proof)'),
+            .describe(
+              'Payment proof: dev mode → single-use token from POST /v1/dev-faucet; x402 mode → base64 payment payload (the PAYMENT-SIGNATURE / X-PAYMENT header value)',
+            ),
         },
       },
       async (args) => {

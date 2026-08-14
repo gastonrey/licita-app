@@ -11,6 +11,8 @@ import type { PaymentProvider, PaymentVerification } from '../../src/domain/type
 import { initPayments, getPaymentProvider, paymentPreHandler, resetPayments } from '../../src/pay/middleware.js';
 import { DevPaymentProvider, registerDevFaucet } from '../../src/pay/devProvider.js';
 import { X402PaymentProvider } from '../../src/pay/provider.js';
+import { decodePaymentRequiredHeader } from '@x402/core/http';
+import type { FacilitatorClient } from '@x402/core/server';
 import { makeTestConfig } from './testconfig.js';
 
 const SECRET = 'mw-test-secret';
@@ -27,7 +29,8 @@ const PAYMENTS_DDL = `
 CREATE TABLE payments (
   id bigserial PRIMARY KEY, client_id bigint,
   endpoint text NOT NULL, amount_usd numeric NOT NULL, provider text NOT NULL,
-  proof text UNIQUE NOT NULL, status text NOT NULL, created_at timestamptz DEFAULT now()
+  proof text UNIQUE NOT NULL, status text NOT NULL, created_at timestamptz DEFAULT now(),
+  payer_address text, tx_hash text, network text
 );
 `;
 
@@ -320,8 +323,7 @@ describe('registerWeb discovery surfaces', () => {
   });
 });
 
-describe('X402PaymentProvider construction guards', () => {
-  it('throws without X402_PAY_TO and shapes v2 402 requirements when configured', () => {
+describe('X402PaymentProvider construction guards', () => {  it('throws without X402_PAY_TO and shapes v2 402 requirements when configured', () => {
     expect(
       () =>
         new X402PaymentProvider({ facilitatorUrl: 'https://fac.example', network: 'eip155:84532' }),
@@ -341,5 +343,141 @@ describe('X402PaymentProvider construction guards', () => {
       amount: '20000',
       payTo: '0x3bF0F00f4c8e46CA4bFEa5D77cCDdCFC95c5ac5E',
     });
+  });
+});
+
+describe('paymentPreHandler in x402 mode', () => {
+  const PAY_TO = '0x3bF0F00f4c8e46CA4bFEa5D77cCDdCFC95c5ac5E';
+  const PAYER = '0x1111111111111111111111111111111111111111';
+
+  function mockFacilitator(overrides: Partial<FacilitatorClient> = {}): FacilitatorClient {
+    return {
+      async verify() {
+        return { isValid: true, payer: PAYER };
+      },
+      async settle() {
+        return { success: true, transaction: '0xtxhash', network: 'eip155:84532', payer: PAYER };
+      },
+      async getSupported() {
+        return { kinds: [], extensions: [], signers: {} };
+      },
+      ...overrides,
+    };
+  }
+
+  function x402Provider(facilitator: FacilitatorClient, db: Db): X402PaymentProvider {
+    return new X402PaymentProvider(
+      { facilitatorUrl: 'https://facilitator.test', payTo: PAY_TO, network: 'eip155:84532' },
+      db,
+      { facilitator },
+    );
+  }
+
+  async function buildX402App(facilitator: FacilitatorClient): Promise<FastifyInstance> {
+    resetPayments();
+    const db = makeDb();
+    await db.query(PAYMENTS_DDL);
+    initPayments(config, db, x402Provider(facilitator, db));
+    return buildApp();
+  }
+
+  const v2Proof = (provider: X402PaymentProvider, endpoint: string): string =>
+    Buffer.from(
+      JSON.stringify({ x402Version: 2, accepted: provider.requirementsFor(endpoint), payload: {} }),
+    ).toString('base64');
+
+  afterEach(() => resetPayments());
+
+  it('402 without proof carries a decodable PAYMENT-REQUIRED header with the v2 requirements', async () => {
+    const app = await buildX402App(mockFacilitator());
+    const res = await app.inject({ method: 'GET', url: '/v1/search' });
+    expect(res.statusCode).toBe(402);
+    expect(res.json().x402Version).toBe(2);
+
+    const header = res.headers['payment-required'];
+    expect(typeof header).toBe('string');
+    const decoded = decodePaymentRequiredHeader(header as string);
+    expect(decoded.x402Version).toBe(2);
+    expect(decoded.error).toContain('Payment required');
+    expect(decoded.resource.url).toBe('GET /v1/search');
+    expect(decoded.accepts[0]).toMatchObject({
+      scheme: 'exact',
+      network: 'eip155:84532',
+      asset: '0x036CbD53842c5426634e7929541eC2318f3dCF7e',
+      amount: '20000',
+      payTo: PAY_TO,
+      maxTimeoutSeconds: 300,
+      extra: { name: 'USDC', version: '2' },
+    });
+    await app.close();
+  });
+
+  it('rejected-proof 402 also carries the PAYMENT-REQUIRED header', async () => {
+    const app = await buildX402App(mockFacilitator());
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/search',
+      headers: { 'payment-signature': 'garbage' },
+    });
+    expect(res.statusCode).toBe(402);
+    expect(res.json().error.message).toContain('invalid_payload');
+    expect(typeof res.headers['payment-required']).toBe('string');
+    await app.close();
+  });
+
+  it('accepts a v2 proof from the PAYMENT-SIGNATURE header and serves content', async () => {
+    let provider: X402PaymentProvider | null = null;
+    const app = await (async () => {
+      resetPayments();
+      const db = makeDb();
+      await db.query(PAYMENTS_DDL);
+      provider = x402Provider(mockFacilitator(), db);
+      initPayments(config, db, provider);
+      return buildApp();
+    })();
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/search',
+      headers: { 'payment-signature': v2Proof(provider!, 'GET /v1/search') },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().payment).toEqual({
+      paid: true,
+      priceUsd: '0.02',
+      clientKey: `x402_${PAYER}`,
+    });
+    await app.close();
+  });
+
+  it('accepts a v1 legacy proof from the X-PAYMENT header', async () => {
+    const app = await buildX402App(mockFacilitator());
+    const proof = Buffer.from(
+      JSON.stringify({ x402Version: 1, scheme: 'exact', network: 'eip155:84532', payload: {} }),
+    ).toString('base64');
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/search',
+      headers: { 'x-payment': proof },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().payment.paid).toBe(true);
+    await app.close();
+  });
+
+  it('fails closed: facilitator outage → 402 facilitator_unavailable, no content served', async () => {
+    const app = await buildX402App(
+      mockFacilitator({
+        async verify() {
+          throw new TypeError('fetch failed');
+        },
+      }),
+    );
+    const proof = Buffer.from(
+      JSON.stringify({ x402Version: 1, scheme: 'exact', network: 'eip155:84532', payload: {} }),
+    ).toString('base64');
+    const res = await app.inject({ method: 'GET', url: '/v1/search', headers: { 'x-payment': proof } });
+    expect(res.statusCode).toBe(402);
+    expect(res.json().error.message).toContain('facilitator_unavailable');
+    await app.close();
   });
 });

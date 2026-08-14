@@ -11,6 +11,7 @@ import type { Db } from '../../src/db/client.js';
 import type { AppConfig } from '../../src/config.js';
 import { buildMcpServer, mountMcp } from '../../src/mcp/server.js';
 import { DevPaymentProvider } from '../../src/pay/devProvider.js';
+import { X402PaymentProvider } from '../../src/pay/x402Provider.js';
 import { initPayments, resetPayments } from '../../src/pay/middleware.js';
 import { ENDPOINT_PRICES } from '../../src/domain/types.js';
 import { makeTestConfig } from './testconfig.js';
@@ -23,7 +24,8 @@ const PAYMENTS_DDL = `
 CREATE TABLE payments (
   id bigserial PRIMARY KEY, client_id bigint,
   endpoint text NOT NULL, amount_usd numeric NOT NULL, provider text NOT NULL,
-  proof text UNIQUE NOT NULL, status text NOT NULL, created_at timestamptz DEFAULT now()
+  proof text UNIQUE NOT NULL, status text NOT NULL, created_at timestamptz DEFAULT now(),
+  payer_address text, tx_hash text, network text
 );
 `;
 
@@ -273,5 +275,101 @@ describe('mountMcp HTTP transport', () => {
     expect(body.result.isError).toBeFalsy();
     const payload = JSON.parse(body.result.content[0].text as string);
     expect(payload).toMatchObject({ payment_required: true, price_usd: '0.25' });
+  });
+});
+
+describe('MCP tools in x402 mode', () => {
+  const PAY_TO = '0x3bF0F00f4c8e46CA4bFEa5D77cCDdCFC95c5ac5E';
+  const PAYER = '0x1111111111111111111111111111111111111111';
+
+  function mockFacilitator(): import('@x402/core/server').FacilitatorClient {
+    return {
+      async verify() {
+        return { isValid: true, payer: PAYER };
+      },
+      async settle() {
+        return { success: true, transaction: '0xtxhash', network: 'eip155:84532', payer: PAYER };
+      },
+      async getSupported() {
+        return { kinds: [], extensions: [], signers: {} };
+      },
+    };
+  }
+
+  async function makeX402Client(): Promise<{ client: Client; provider: X402PaymentProvider }> {
+    const { db, payments } = makeDb();
+    await payments.query(PAYMENTS_DDL);
+    const provider = new X402PaymentProvider(
+      { facilitatorUrl: 'https://facilitator.test', payTo: PAY_TO, network: 'eip155:84532' },
+      db,
+      { facilitator: mockFacilitator() },
+    );
+    const server = buildMcpServer(provider, db, config);
+    const [clientT, serverT] = InMemoryTransport.createLinkedPair();
+    const client = new Client({ name: 'test-client', version: '0.0.1' });
+    await Promise.all([client.connect(clientT), server.connect(serverT)]);
+    return { client, provider };
+  }
+
+  it('unpaid tool result documents the x402 payment_token semantics', async () => {
+    const { client } = await makeX402Client();
+    const res = (await client.callTool({
+      name: 'search_tenders',
+      arguments: { q: 'software' },
+    })) as ToolCallResult;
+    expect(res.isError).toBeFalsy();
+    const body = parseText(res);
+    expect(body.payment_required).toBe(true);
+    const how = body.how_to_pay as {
+      protocol: string;
+      mode: string;
+      faucet: null;
+      rest_header: string;
+      steps: string[];
+    };
+    expect(how.protocol).toBe('x402');
+    expect(how.mode).toBe('x402');
+    expect(how.faucet).toBeNull();
+    expect(how.rest_header).toBe('PAYMENT-SIGNATURE');
+    expect(how.steps.join(' ')).toContain('PAYMENT-REQUIRED');
+    expect(how.steps.join(' ')).toContain('payment_token');
+  });
+
+  it('paid call with a valid base64 payment payload → data; replay → payment_required(replay)', async () => {
+    const { client, provider } = await makeX402Client();
+    const proof = Buffer.from(
+      JSON.stringify({
+        x402Version: 2,
+        accepted: provider.requirementsFor('GET /v1/tenders/:id'),
+        payload: { signature: '0xsig' },
+      }),
+    ).toString('base64');
+
+    const res = (await client.callTool({
+      name: 'get_tender',
+      arguments: { id: 7, payment_token: proof },
+    })) as ToolCallResult;
+    expect(res.isError).toBeFalsy();
+    const body = parseText(res);
+    expect(body.meta).toMatchObject({ price_usd: '0.02', paid: true });
+    expect((body.data as { id: number }).id).toBe(7);
+
+    const again = (await client.callTool({
+      name: 'get_tender',
+      arguments: { id: 7, payment_token: proof },
+    })) as ToolCallResult;
+    expect(parseText(again).reason).toBe('replay');
+  });
+
+  it('malformed payment_token → payment_required with invalid_payload', async () => {
+    const { client } = await makeX402Client();
+    const res = (await client.callTool({
+      name: 'get_tender',
+      arguments: { id: 7, payment_token: 'not-a-payment' },
+    })) as ToolCallResult;
+    expect(res.isError).toBeFalsy();
+    const body = parseText(res);
+    expect(body.payment_required).toBe(true);
+    expect(body.reason).toBe('invalid_payload');
   });
 });

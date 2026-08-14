@@ -7,7 +7,9 @@
 // middleware before initPayments throws a clear error.
 
 import type { FastifyReply, FastifyRequest, preHandlerHookHandler } from 'fastify';
-import { ENDPOINT_PRICES, type PaymentProvider } from '../domain/types.js';
+import { encodePaymentRequiredHeader } from '@x402/core/http';
+import type { PaymentRequired } from '@x402/core/types';
+import { ENDPOINT_PRICES, type PaymentProvider, type PaymentRequirement } from '../domain/types.js';
 import type { AppConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import { createLogger, type Logger } from '../obs/log.js';
@@ -64,8 +66,7 @@ export function getPaymentProvider(): PaymentProvider {
   return getRuntime().provider;
 }
 
-function paymentRequiredBody(provider: PaymentProvider, endpointKey: string, message: string) {
-  const requirement = provider.requiredResponse(endpointKey);
+function paymentRequiredBody(requirement: PaymentRequirement, message: string) {
   return {
     ...requirement,
     error: {
@@ -77,12 +78,33 @@ function paymentRequiredBody(provider: PaymentProvider, endpointKey: string, mes
 }
 
 /**
+ * x402 v2: the 402 response must also carry the payment requirements as a
+ * base64 PAYMENT-REQUIRED header (v2 clients read the header, not the body).
+ * The `hint` field is our operator-facing addition and is not part of the
+ * protocol object. v1-shaped requirements (dev mode) emit no header, keeping
+ * the dev path byte-identical.
+ */
+function paymentRequiredHeaders(
+  requirement: PaymentRequirement,
+  message: string,
+): Record<string, string> {
+  if (requirement.x402Version !== 2) return {};
+  const { hint: _hint, ...protocol } = requirement;
+  return {
+    'PAYMENT-REQUIRED': encodePaymentRequiredHeader({ ...protocol, error: message } as PaymentRequired),
+  };
+}
+
+/**
  * Fastify preHandler enforcing payment for `endpointKey` (an ENDPOINT_PRICES
  * key like 'GET /v1/search'). Free endpoints ('0.00') mark the request paid
- * and continue. Priced endpoints without a valid X-PAYMENT proof get a 402 in
- * x402 shape plus the standard error envelope; the preHandler sends it and
- * halts the chain. On valid proof the payment row is recorded by the provider
- * (unique proof insert — replay → verify fails with reason 'replay').
+ * and continue. Payment proofs are read from the PAYMENT-SIGNATURE header
+ * (x402 v2) or the X-PAYMENT header (v1 legacy; also the dev-token header).
+ * Priced endpoints without a valid proof get a 402 in x402 shape plus the
+ * standard error envelope (v2 responses also carry a base64 PAYMENT-REQUIRED
+ * header); the preHandler sends it and halts the chain. On valid proof the
+ * payment row is recorded by the provider (unique proof insert — replay →
+ * verify fails with reason 'replay').
  */
 export function paymentPreHandler(endpointKey: string): preHandlerHookHandler {
   const price = ENDPOINT_PRICES[endpointKey] ?? '0.00';
@@ -92,19 +114,17 @@ export function paymentPreHandler(endpointKey: string): preHandlerHookHandler {
       return;
     }
 
-    const proof = req.headers['x-payment'];
+    const proofHeader = req.headers['payment-signature'] ?? req.headers['x-payment'];
+    const proof = Array.isArray(proofHeader) ? proofHeader[0] : proofHeader;
     if (typeof proof !== 'string' || proof.length === 0) {
       const provider = getPaymentProvider();
+      const requirement = provider.requiredResponse(endpointKey);
       req.errorCode = 'payment_required';
+      const message = `Payment required: ${endpointKey} costs $${price} per call.`;
       await reply
         .code(402)
-        .send(
-          paymentRequiredBody(
-            provider,
-            endpointKey,
-            `Payment required: ${endpointKey} costs $${price} per call.`,
-          ),
-        );
+        .headers(paymentRequiredHeaders(requirement, message))
+        .send(paymentRequiredBody(requirement, message));
       return; // halt: response sent
     }
 
@@ -116,15 +136,12 @@ export function paymentPreHandler(endpointKey: string): preHandlerHookHandler {
         endpoint: endpointKey,
         reason: verification.reason ?? 'invalid',
       });
+      const requirement = rt.provider.requiredResponse(endpointKey);
+      const message = `Payment proof rejected (${verification.reason ?? 'invalid'}). Proofs are single-use and expire after 5 minutes.`;
       await reply
         .code(402)
-        .send(
-          paymentRequiredBody(
-            rt.provider,
-            endpointKey,
-            `Payment proof rejected (${verification.reason ?? 'invalid'}). Proofs are single-use and expire after 5 minutes.`,
-          ),
-        );
+        .headers(paymentRequiredHeaders(requirement, message))
+        .send(paymentRequiredBody(requirement, message));
       return; // halt: response sent
     }
 
@@ -133,6 +150,7 @@ export function paymentPreHandler(endpointKey: string): preHandlerHookHandler {
       amount: verification.amount ?? price,
       client_key: verification.clientKey,
       provider: rt.provider.name,
+      ...(verification.txHash ? { tx_hash: verification.txHash } : {}),
     });
     req.payment = {
       paid: true,
