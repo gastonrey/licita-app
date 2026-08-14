@@ -4,19 +4,9 @@ import type { FastifyInstance } from 'fastify';
 import { buildServer } from '../../src/api/server.js';
 import type { AppConfig } from '../../src/config.js';
 import type { Db } from '../../src/db/client.js';
+import { makeTestConfig } from '../unit/testconfig.js';
 
-const config: AppConfig = {
-  port: 0,
-  logLevel: 'error',
-  pg: { host: '', port: 0, user: '', password: '', database: '' },
-  paymentsMode: 'dev',
-  payHmacSecret: 'test',
-  x402: {},
-  operatorKey: 'operator-secret',
-  ingestMonths: 24,
-  ingestOnBoot: false,
-  ingestCronHour: 4,
-};
+const config: AppConfig = makeTestConfig({ payHmacSecret: 'test', operatorKey: 'operator-secret' });
 
 interface QueryCall {
   text: string;

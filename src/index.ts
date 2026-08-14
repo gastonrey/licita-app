@@ -1,4 +1,5 @@
 import { loadConfig } from './config.js';
+import { validateConfig } from './config.validate.js';
 import { createDb } from './db/client.js';
 import { runMigrations } from './db/migrate.js';
 import { buildServer } from './api/server.js';
@@ -8,6 +9,7 @@ import { startScheduler } from './ingest/scheduler.js';
 
 async function main(): Promise<void> {
   const config = loadConfig();
+  validateConfig(config);
   const db = createDb(config);
 
   // Idempotent migrations on boot (safe in dev; compose CMD also runs them).

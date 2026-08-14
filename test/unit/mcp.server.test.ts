@@ -12,21 +12,11 @@ import type { AppConfig } from '../../src/config.js';
 import { buildMcpServer, mountMcp } from '../../src/mcp/server.js';
 import { DevPaymentProvider } from '../../src/pay/devProvider.js';
 import { ENDPOINT_PRICES } from '../../src/domain/types.js';
+import { makeTestConfig } from './testconfig.js';
 
 const SECRET = 'mcp-test-secret';
 
-const config: AppConfig = {
-  port: 0,
-  logLevel: 'error',
-  pg: { host: '', port: 0, user: '', password: '', database: '' },
-  paymentsMode: 'dev',
-  payHmacSecret: SECRET,
-  x402: {},
-  operatorKey: 'op',
-  ingestMonths: 24,
-  ingestOnBoot: false,
-  ingestCronHour: 4,
-};
+const config: AppConfig = makeTestConfig({ payHmacSecret: SECRET, operatorKey: 'op' });
 
 const PAYMENTS_DDL = `
 CREATE TABLE payments (

@@ -11,21 +11,11 @@ import type { PaymentProvider, PaymentVerification } from '../../src/domain/type
 import { initPayments, paymentPreHandler, resetPayments } from '../../src/pay/middleware.js';
 import { DevPaymentProvider, registerDevFaucet } from '../../src/pay/devProvider.js';
 import { X402PaymentProvider } from '../../src/pay/provider.js';
+import { makeTestConfig } from './testconfig.js';
 
 const SECRET = 'mw-test-secret';
 
-const config: AppConfig = {
-  port: 0,
-  logLevel: 'error',
-  pg: { host: '', port: 0, user: '', password: '', database: '' },
-  paymentsMode: 'dev',
-  payHmacSecret: SECRET,
-  x402: {},
-  operatorKey: 'op',
-  ingestMonths: 24,
-  ingestOnBoot: false,
-  ingestCronHour: 4,
-};
+const config: AppConfig = makeTestConfig({ payHmacSecret: SECRET, operatorKey: 'op' });
 
 function makeDb(): Db {
   const mem = newDb({ noAstCoverageCheck: true });
