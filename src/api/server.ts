@@ -189,5 +189,25 @@ export async function buildServer(config: AppConfig, db: Db): Promise<FastifyIns
   app.get('/v1/stats', { preHandler: [statsAuth(config.operatorKey)] }, statsHandler(ctx));
   app.get('/openapi.json', async (_req, reply) => reply.send(buildOpenApi()));
 
+  // Liveness/readiness: 200 when `SELECT 1` succeeds within a short timeout,
+  // 503 otherwise. Free, no payment hook (used by Docker HEALTHCHECK).
+  app.get('/health', async (_req, reply) => {
+    let timer: NodeJS.Timeout | undefined;
+    try {
+      await Promise.race([
+        db.query('SELECT 1'),
+        new Promise((_, reject) => {
+          timer = setTimeout(() => reject(new Error('db health check timed out')), 1000);
+          timer.unref();
+        }),
+      ]);
+      return reply.send({ status: 'ok', db: 'up' });
+    } catch {
+      return reply.code(503).send({ status: 'degraded', db: 'down' });
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  });
+
   return app;
 }

@@ -509,6 +509,18 @@ function paths(): Record<string, unknown> {
         responses: { '200': { description: 'OpenAPI 3.1 JSON document' } },
       },
     },
+    '/health': {
+      get: {
+        operationId: 'getHealth',
+        summary: 'Liveness/readiness probe',
+        description:
+          'Free, no payment hook. 200 { status: "ok", db: "up" } when a trivial SELECT 1 succeeds within a short timeout; 503 { status: "degraded", db: "down" } otherwise.',
+        responses: {
+          '200': { description: 'Service healthy; database reachable' },
+          '503': { description: 'Service degraded; database unreachable' },
+        },
+      },
+    },
   };
 }
 
