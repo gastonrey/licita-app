@@ -6,7 +6,11 @@
 //   npx vitest run -c test/vitest.integration.config.ts
 //
 // Network guard: if contrataciondelsectorpublico.gob.es is unreachable from
-// this environment, the whole suite skips with a clear message.
+// this environment, the whole suite skips with a clear message. The portal
+// also serves an F5-style WAF "Request Rejected" page (HTTP 200) when it
+// temporarily throttles an IP; that is treated like unreachable — skipped
+// with a warning, NOT a failure — because it is an upstream transient state,
+// not a code/parser defect.
 
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -18,31 +22,39 @@ import { loadConfig, type AppConfig } from '../../src/config.js';
 import { createDb, type Db } from '../../src/db/client.js';
 import { runMigrations } from '../../src/db/migrate.js';
 import { runIngestOnce, type IngestSummary } from '../../src/ingest/cli.js';
-import { PLACSP_FEEDS } from '../../src/ingest/placsp.js';
+import { isWafBlockPage, PLACSP_FEEDS } from '../../src/ingest/placsp.js';
 
 const REPO_ROOT = join(fileURLToPath(new URL('.', import.meta.url)), '..', '..');
 const PG_PORT = 5433;
 const PG_URL = `postgres://licita:licita@127.0.0.1:${PG_PORT}/licita`;
 
-async function placspReachable(): Promise<boolean> {
+async function probePlacsp(): Promise<{ ok: boolean; blocked: boolean }> {
   try {
     // HEAD is rejected by the server: a ranged GET probing the first bytes.
     const res = await fetch(PLACSP_FEEDS.licitaciones, {
-      headers: { range: 'bytes=0-1024' },
+      headers: { range: 'bytes=0-2048' },
       signal: AbortSignal.timeout(20_000),
     });
-    await res.body?.cancel();
-    return res.status > 0;
+    const text = await res.text();
+    if (isWafBlockPage(text)) return { ok: true, blocked: true };
+    return { ok: res.status > 0, blocked: false };
   } catch {
-    return false;
+    return { ok: false, blocked: false };
   }
 }
 
-const PLACSP_OK = await placspReachable();
+const PLACSP_PROBE = await probePlacsp();
+const PLACSP_OK = PLACSP_PROBE.ok;
+const PLACSP_BLOCKED = PLACSP_PROBE.blocked;
 if (!PLACSP_OK) {
   console.warn(
     '[integration] PLACSP feeds unreachable from this environment — ' +
       'SKIPPING the PLACSP integration slice. Re-run with network access.',
+  );
+} else if (PLACSP_BLOCKED) {
+  console.warn(
+    '[integration] PLACSP portal is temporarily blocking this IP (WAF "Request Rejected") — ' +
+      'SKIPPING the PLACSP integration slice. This is an upstream transient state, not a code defect.',
   );
 }
 
@@ -76,7 +88,7 @@ async function existingDb(): Promise<Db | null> {
   }
 }
 
-describe.runIf(PLACSP_OK)('integration: live PLACSP slice → real postgres', () => {
+describe.runIf(PLACSP_OK && !PLACSP_BLOCKED)('integration: live PLACSP slice → real postgres', () => {
   let db: Db;
   let devDb: ChildProcess | null = null;
   let summary: IngestSummary;

@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
   harvestPlacsp,
+  isWafBlockPage,
   placspFetchPage,
   PLACSP_FEEDS,
   windowCutoffIso,
@@ -160,6 +161,80 @@ describe('harvestPlacsp (single-feed routing)', () => {
     expect(hits).toBe(3);
     expect(res.entries).toHaveLength(3);
     expect(res.stats.feedErrors).toBe(0);
+  });
+});
+
+describe('placsp WAF block resilience', () => {
+  const WAF_PAGE = '<html><head><title>Request Rejected</title></head><body>blocked</body></html>';
+
+  it('detects the portal WAF block page', () => {
+    expect(isWafBlockPage(WAF_PAGE)).toBe(true);
+    expect(isWafBlockPage('<html><head>redirect</head></html>')).toBe(false);
+    expect(isWafBlockPage('<feed xmlns="http://www.w3.org/2005/Atom">')).toBe(false);
+  });
+
+  it('treats a transient WAF block as retryable and recovers', async () => {
+    let hits = 0;
+    const { fetchFn } = mockFetch({
+      [PLACSP_FEEDS.licitaciones]: () => {
+        hits += 1;
+        return hits === 1
+          ? new Response(WAF_PAGE, { status: 200 })
+          : new Response(noNext(licXml), { status: 200 });
+      },
+    });
+    const { entries, stats } = await drain(
+      harvestPlacsp({
+        ...NO_DELAY,
+        fetchFn,
+        months: 2400,
+        feeds: ['licitaciones'],
+        wafBackoffMs: 0,
+      }),
+    );
+    expect(hits).toBe(2);
+    expect(entries).toHaveLength(3);
+    expect(stats.feedErrors).toBe(0);
+    expect(stats.wafBlocks).toBe(0);
+  });
+
+  it('aborts a feed after persistent WAF blocks and counts it without killing other feeds', async () => {
+    const { fetchFn } = mockFetch({
+      [PLACSP_FEEDS.licitaciones]: () => new Response(WAF_PAGE, { status: 200 }),
+      [PLACSP_FEEDS.menores]: noNext(menXml),
+    });
+    const { entries, stats } = await drain(
+      harvestPlacsp({
+        ...NO_DELAY,
+        fetchFn,
+        months: 2400,
+        maxWafRetries: 1,
+        wafBackoffMs: 0,
+      }),
+    );
+    expect(entries).toHaveLength(2); // menores still harvested
+    expect(stats.feedErrors).toBe(1);
+    expect(stats.wafBlocks).toBe(1);
+  });
+
+  it('placspFetchPage retries through a WAF block then returns the feed', async () => {
+    let hits = 0;
+    const { fetchFn } = mockFetch({
+      'https://x.test/feed.atom': () => {
+        hits += 1;
+        return hits === 1
+          ? new Response(WAF_PAGE, { status: 200 })
+          : new Response(noNext(licXml), { status: 200 });
+      },
+    });
+    const xml = await placspFetchPage('https://x.test/feed.atom', {
+      fetchFn,
+      maxWafRetries: 2,
+      wafBackoffMs: 0,
+      log: () => {},
+    });
+    expect(hits).toBe(2);
+    expect(xml).toContain('<feed');
   });
 });
 

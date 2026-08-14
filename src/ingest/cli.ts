@@ -25,6 +25,8 @@ export interface IngestSummary {
   signals: number;
   skipped: number; // notices without publication-number or buyer name
   errors: number;
+  feed_errors: number; // PLACSP feeds that failed entirely (non-ATOM/HTTP)
+  waf_blocks: number; // PLACSP feeds aborted by a persistent portal WAF block
 }
 
 function log(entry: Record<string, unknown>): void {
@@ -69,6 +71,8 @@ export async function runIngestOnce(
     signals: 0,
     skipped: 0,
     errors: 0,
+    feed_errors: 0,
+    waf_blocks: 0,
   };
 
   await runMigrations(db);
@@ -165,6 +169,13 @@ async function runPlacspIngest(
       });
     }
     iterResult = await harvest.next();
+  }
+  // Surface harvester-level failure visibility (WAF blocks, dead feeds) so a
+  // zero-data run is diagnosable from the summary, not silent.
+  const harvestStats = iterResult.value;
+  if (harvestStats) {
+    summary.feed_errors += harvestStats.feedErrors;
+    summary.waf_blocks += harvestStats.wafBlocks;
   }
 }
 

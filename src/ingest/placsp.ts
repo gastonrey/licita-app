@@ -45,6 +45,14 @@ export interface PlacspHarvestOptions {
   maxRetries?: number;
   /** Backoff base in ms (retry wait = base * 2^attempt + jitter; default 1000). */
   backoffBaseMs?: number;
+  /**
+   * Max retries for a WAF block page (portal returns HTTP 200 with a tiny
+   * "Request Rejected" HTML when it temporarily throttles an IP). These are
+   * transient, so we back off much longer than for 429s. Default 3.
+   */
+  maxWafRetries?: number;
+  /** Fixed wait between WAF-block retries in ms (default 30_000 = 30s). */
+  wafBackoffMs?: number;
   /** Feeds to harvest (default: all). */
   feeds?: PlacspFeedName[];
   /** Injectable fetch for tests. */
@@ -60,6 +68,21 @@ export interface PlacspHarvestStats {
   deletedSkipped: number;
   pages: number;
   feedErrors: number;
+  /** Count of feeds aborted because the portal WAF kept blocking (HTTP 200 "Request Rejected"). */
+  wafBlocks: number;
+}
+
+/** Detect the portal WAF block page: HTTP 200 + tiny HTML with "Request Rejected". */
+export function isWafBlockPage(text: string): boolean {
+  const head = text.trimStart().slice(0, 4096);
+  return head.startsWith('<html') && head.includes('Request Rejected');
+}
+
+/** Thrown after WAF-block retries are exhausted (transient block, not a feed error). */
+export class PlacspWafError extends Error {
+  constructor(readonly status: number, body: string) {
+    super(`PLACSP WAF block (HTTP ${status}): ${body.slice(0, 200)}`);
+  }
 }
 
 function defaultLog(entry: Record<string, unknown>): void {
@@ -83,8 +106,11 @@ export async function placspFetchPage(
   const fetchFn = opts.fetchFn ?? fetch;
   const maxRetries = opts.maxRetries ?? 5;
   const baseMs = opts.backoffBaseMs ?? 1000;
+  const maxWafRetries = opts.maxWafRetries ?? 3;
+  const wafBackoffMs = opts.wafBackoffMs ?? 30_000;
   const log = opts.log ?? defaultLog;
   let attempt = 0;
+  let wafAttempt = 0;
   for (;;) {
     let res: Response;
     try {
@@ -102,6 +128,24 @@ export async function placspFetchPage(
       // Unknown sindicación paths answer 200 with a tiny HTML redirect page;
       // that is a hard error, not a feed.
       if (!text.trimStart().startsWith('<') || !text.includes('<feed')) {
+        // The portal WAF temporarily throttles IPs with HTTP 200 "Request
+        // Rejected" pages. Treat as transient: retry with a long fixed
+        // backoff, and only fail the feed after maxWafRetries.
+        if (isWafBlockPage(text)) {
+          if (wafAttempt < maxWafRetries) {
+            wafAttempt += 1;
+            log({
+              level: 'warn',
+              msg: 'placsp waf block, retrying',
+              url,
+              attempt: wafAttempt,
+              waitMs: wafBackoffMs,
+            });
+            await sleep(wafBackoffMs);
+            continue;
+          }
+          throw new PlacspWafError(res.status, text);
+        }
         throw new PlacspHttpError(res.status, `non-ATOM response from ${url}`);
       }
       return text;
@@ -134,7 +178,13 @@ export async function* harvestPlacsp(
   const delayMs = Math.max(opts.requestDelayMs ?? 500, 100);
   const cutoff = windowCutoffIso(opts.months ?? 24, opts.now);
   const feeds = opts.feeds ?? (Object.keys(PLACSP_FEEDS) as PlacspFeedName[]);
-  const stats: PlacspHarvestStats = { entriesSeen: 0, deletedSkipped: 0, pages: 0, feedErrors: 0 };
+  const stats: PlacspHarvestStats = {
+    entriesSeen: 0,
+    deletedSkipped: 0,
+    pages: 0,
+    feedErrors: 0,
+    wafBlocks: 0,
+  };
   log({ msg: 'placsp harvest start', feeds, maxPages, maxDocs: opts.maxDocs ?? null, cutoff });
 
   let lastRequestAt = 0;
@@ -155,7 +205,14 @@ export async function* harvestPlacsp(
         page = parseAtomFeed(await placspFetchPage(url, opts), feed);
       } catch (err) {
         stats.feedErrors += 1;
-        log({ level: 'error', msg: 'placsp feed page failed', feed, url, error: String(err) });
+        if (err instanceof PlacspWafError) stats.wafBlocks += 1;
+        log({
+          level: 'error',
+          msg: err instanceof PlacspWafError ? 'placsp feed blocked by WAF' : 'placsp feed page failed',
+          feed,
+          url,
+          error: String(err),
+        });
         break; // next feed
       }
       feedPages += 1;
