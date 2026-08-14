@@ -74,6 +74,17 @@ CREATE TABLE payments (
   proof text UNIQUE NOT NULL, status text NOT NULL, created_at timestamptz DEFAULT now(),
   payer_address text, tx_hash text, network text
 );
+-- mirrors migrations/004_observability.sql (partial zero_result index kept)
+CREATE TABLE request_logs (
+  id bigserial PRIMARY KEY, ts timestamptz DEFAULT now(),
+  client_key text, endpoint text, method text, status int, latency_ms int,
+  cpv text, buyer text, company text, error text, paid boolean DEFAULT false,
+  q text, zero_result boolean DEFAULT false, user_agent text,
+  source text NOT NULL DEFAULT 'rest' CHECK (source IN ('rest', 'mcp'))
+);
+CREATE INDEX idx_request_logs_source ON request_logs(source);
+CREATE INDEX idx_request_logs_zero_result ON request_logs(zero_result) WHERE zero_result = true;
+CREATE INDEX idx_request_logs_status ON request_logs(status);
 `;
 
 export async function makeTestDb(): Promise<Db> {
