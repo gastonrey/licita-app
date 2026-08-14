@@ -75,7 +75,11 @@ export interface NormalizedAward {
 }
 
 // Payment contract (src/pay/*)
-export interface PaymentRequirement {
+/**
+ * Legacy x402 v1-shaped 402 body. Used by the dev provider (PAYMENTS_MODE=dev)
+ * only — it is NOT what a production x402 deployment emits.
+ */
+export interface PaymentRequirementV1 {
   x402Version: 1;
   accepts: Array<{
     scheme: string;
@@ -88,11 +92,43 @@ export interface PaymentRequirement {
   hint: string;
 }
 
+/**
+ * x402 v2 payment requirements (current protocol). Mirrors the wire
+ * PaymentRequired object ({ x402Version: 2, resource, accepts[] }) so it can
+ * be base64-encoded straight into the PAYMENT-REQUIRED response header;
+ * `hint` is our operator-facing addition and is stripped from the header.
+ * accepts[].amount is in asset base units (USDC = 6 decimals).
+ */
+export interface PaymentRequirementV2 {
+  x402Version: 2;
+  resource: {
+    url: string;
+    description?: string;
+    mimeType?: string;
+  };
+  accepts: Array<{
+    scheme: string;
+    network: string; // CAIP-2, e.g. "eip155:84532"
+    asset: string; // token contract address (USDC for the network)
+    amount: string; // base units, e.g. "20000" = $0.02
+    payTo: string;
+    maxTimeoutSeconds: number;
+    extra: Record<string, unknown>; // EIP-3009 domain: { name, version }
+  }>;
+  hint: string;
+}
+
+export type PaymentRequirement = PaymentRequirementV1 | PaymentRequirementV2;
+
 export interface PaymentVerification {
   ok: boolean;
   clientKey?: string;
   amount?: string;
   reason?: string;
+  /** x402: payer wallet address (pseudonymous on-chain identity). */
+  payer?: string;
+  /** x402: on-chain settlement transaction hash. */
+  txHash?: string;
 }
 
 export interface PaymentProvider {

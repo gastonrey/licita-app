@@ -129,26 +129,38 @@ describe('paymentPreHandler with a stub provider', () => {
   afterEach(() => resetPayments());
 
   it('uses provider.requiredResponse and accepts any provider via initPayments seam', async () => {
-    // x402-mode provider: verify never succeeds, 402 reflects facilitator config.
+    // x402-mode provider: 402 reflects the v2 facilitator requirements; a
+    // garbage proof fails decoding before any facilitator call.
     resetPayments();
     const x402config: AppConfig = {
       ...config,
       paymentsMode: 'x402',
-      x402: { facilitatorUrl: 'https://facilitator.example', payTo: '0xabc', network: 'base' },
+      x402: {
+        facilitatorUrl: 'https://facilitator.example',
+        payTo: '0x3bF0F00f4c8e46CA4bFEa5D77cCDdCFC95c5ac5E',
+        network: 'eip155:84532',
+      },
     };
     initPayments(x402config, makeDb());
     const app = buildApp();
     const res = await app.inject({ method: 'GET', url: '/v1/search' });
     expect(res.statusCode).toBe(402);
     const body = res.json();
-    expect(body.accepts[0]).toMatchObject({ network: 'base', asset: 'USDC', payTo: '0xabc' });
+    expect(body.x402Version).toBe(2);
+    expect(body.accepts[0]).toMatchObject({
+      scheme: 'exact',
+      network: 'eip155:84532',
+      asset: '0x036CbD53842c5426634e7929541eC2318f3dCF7e',
+      amount: '20000',
+      payTo: '0x3bF0F00f4c8e46CA4bFEa5D77cCDdCFC95c5ac5E',
+    });
     const paid = await app.inject({
       method: 'GET',
       url: '/v1/search',
       headers: { 'x-payment': 'any-proof' },
     });
     expect(paid.statusCode).toBe(402);
-    expect(paid.json().error.message).toContain('x402_not_configured');
+    expect(paid.json().error.message).toContain('invalid_payload');
     await app.close();
   });
 
@@ -308,26 +320,26 @@ describe('registerWeb discovery surfaces', () => {
   });
 });
 
-describe('X402PaymentProvider stub', () => {
-  it('reports not-configured reasons and shapes 402 by config', async () => {
-    const unconfigured = new X402PaymentProvider({});
-    expect(await unconfigured.verify('proof', 'GET /v1/search')).toEqual({ ok: false, reason: 'x402_not_configured' });
-    expect(unconfigured.requiredResponse('GET /v1/search').hint).toContain('not fully configured');
+describe('X402PaymentProvider construction guards', () => {
+  it('throws without X402_PAY_TO and shapes v2 402 requirements when configured', () => {
+    expect(
+      () =>
+        new X402PaymentProvider({ facilitatorUrl: 'https://fac.example', network: 'eip155:84532' }),
+    ).toThrow(/X402_PAY_TO/);
 
     const configured = new X402PaymentProvider({
       facilitatorUrl: 'https://fac.example',
-      payTo: '0xdef',
-      network: 'base',
+      payTo: '0x3bF0F00f4c8e46CA4bFEa5D77cCDdCFC95c5ac5E',
+      network: 'eip155:84532',
     });
-    expect(configured.requiredResponse('GET /v1/search').accepts[0]).toMatchObject({
+    const requirement = configured.requiredResponse('GET /v1/search');
+    expect(requirement.x402Version).toBe(2);
+    expect(requirement.accepts[0]).toMatchObject({
       scheme: 'exact',
-      network: 'base',
-      asset: 'USDC',
-      amount: '0.02',
-      payTo: '0xdef',
-      resource: 'GET /v1/search',
+      network: 'eip155:84532',
+      asset: '0x036CbD53842c5426634e7929541eC2318f3dCF7e',
+      amount: '20000',
+      payTo: '0x3bF0F00f4c8e46CA4bFEa5D77cCDdCFC95c5ac5E',
     });
-    // still a seam, never a fake success:
-    expect(await configured.verify('proof', 'GET /v1/search')).toEqual({ ok: false, reason: 'x402_not_configured' });
   });
 });

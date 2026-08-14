@@ -54,6 +54,13 @@ CREATE TABLE forecast_signals (
   window_start date, window_end date, confidence text, basis jsonb,
   computed_at timestamptz DEFAULT now()
 );
+-- mirrors migrations/001_core.sql + 002_payments_x402.sql
+CREATE TABLE payments (
+  id bigserial PRIMARY KEY, client_id bigint,
+  endpoint text NOT NULL, amount_usd numeric NOT NULL, provider text NOT NULL,
+  proof text UNIQUE NOT NULL, status text NOT NULL, created_at timestamptz DEFAULT now(),
+  payer_address text, tx_hash text, network text
+);
 `;
 
 export async function makeTestDb(): Promise<Db> {
