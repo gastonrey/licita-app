@@ -114,7 +114,8 @@ missing/invalid variable (`src/config.validate.ts`, called from `src/index.ts`).
 Either trigger one harvest manually:
 
 ```bash
-# docker:   docker compose exec app npx tsx src/ingest/cli.ts --once
+# docker (prod profile): docker compose -f docker-compose.prod.yml run --rm app \
+#   node dist/ingest/cli.js --once --source all   # compiled CLI, no tsx in the image
 npm run ingest -- --once                 # full window (INGEST_MONTHS), TED only
 npm run ingest -- --once --max-notices 25   # small slice
 npm run ingest -- --once --source placsp --max-notices 25   # PLACSP slice (needs PLACSP_ENABLED=true)
@@ -128,8 +129,10 @@ npm run ingest -- --once --source all                       # TED + PLACSP
 | TED Search API v3 | **live** (default) | ES award notices, CPV 72*/48*, `INGEST_MONTHS` window |
 | PLACSP sindicación (CODICE 3.2 over ATOM) | **live behind flag** (`PLACSP_ENABLED=true`) | Licitaciones feed (sindicacion_643) + contratos menores feed (sindicacion_1143), paged via RFC 5005 `rel=next`. Award rows only from TenderResults with awarded/formalized result codes; NIFs only from `schemeName="NIF"` — nothing is fabricated. License: datos abiertos, reuse per [datos.gob.es/avisolegal](https://www.datos.gob.es/avisolegal). |
 
-or let the app do it: `INGEST_ON_BOOT=true` runs an immediate harvest plus a
-daily re-harvest at `INGEST_CRON_HOUR`.
+or let the app do it: `INGEST_ON_BOOT=true` arms the daily scheduler, which
+fires the first harvest at the next `INGEST_CRON_HOUR` (04:00 UTC by default)
+and re-harvests every 24h. It does **not** ingest at boot — the first harvest
+is a manual `--once` run (see DEPLOYMENT.md).
 
 Ingestion is idempotent (upserts keyed by `(source_id, source_ref)`) and safe
 to kill/re-run. Verified live run against TED (2026-08-13, CPV 72*/48*, Spain,
@@ -317,25 +320,32 @@ curl -s -X POST "$BASE/mcp" \
 - Error envelope `{ "error": { "code", "message", "hint" } }` with an
   agent-actionable hint.
 
-## Production configuration
+## Deployment
 
-Use the hardened profile:
+Public-launch production deployment lives in **[DEPLOYMENT.md](DEPLOYMENT.md)**:
+exact one-time and daily command sequences, the migration step, first-ingest,
+smoke tests, backups, troubleshooting and a mainnet flip checklist.
 
-```bash
-export POSTGRES_PASSWORD=... LICITA_APP_PASSWORD=... OPERATOR_KEY=...
-export X402_FACILITATOR_URL=https://www.x402.org/facilitator X402_PAY_TO=0x... X402_NETWORK=eip155:8453
-docker compose -f docker-compose.prod.yml up --build -d
-```
+The production profile (`docker-compose.prod.yml`) is a single-VM compose
+stack: the hardened image + `postgres:16-alpine` with a named volume. Its
+shape:
 
-- `docker-compose.prod.yml` sets `NODE_ENV=production` + `PAYMENTS_MODE=x402`
-  and requires every secret via compose `:?` interpolation — nothing has a
-  working default.
-- The app port binds to **127.0.0.1 only**: a reverse proxy must terminate
-  TLS in front. With a proxy, keep `TRUST_PROXY=true` (default in the prod
-  file) so rate limiting keys on the real client IP from `X-Forwarded-For`;
-  set `TRUST_PROXY=false` if the app is ever exposed directly.
-- App traffic runs as `licita_app` (`APP_DATABASE_URL`); migrations run as
-  the admin user (`DATABASE_URL`) on container boot.
+- `NODE_ENV=production` + `PAYMENTS_MODE=x402`; every secret is required via
+  compose `:?` interpolation and enforced at boot by `validateConfig` —
+  nothing has a working default, and the dev faucet route does not exist.
+- Migrations are an explicit **`migrate` one-shot service** (admin
+  `DATABASE_URL`, exits 0); the **`app` service starts only after it exits
+  `service_completed_successfully`**.
+- App traffic runs as the low-privilege `licita_app` role
+  (`APP_DATABASE_URL`); migrations/DDL always run as the admin user.
+- The app binds **127.0.0.1:3000 only**: a reverse proxy (Caddy/nginx/
+  Cloudflare) must terminate TLS in front. Keep `TRUST_PROXY=true` (default in
+  the prod file) so rate limiting keys on the real client IP.
+- PLACSP and the daily ingest scheduler are **on by default** in prod
+  (`PLACSP_ENABLED=true`, `PLACSP_SCHEDULE=true`, `INGEST_ON_BOOT=true`), each
+  overridable from `.env`.
+- Postgres binds **127.0.0.1:5432** for host-side ops (`pg_dump` cron,
+  `backfill-identity` from the VM checkout).
 - The image builds with `npm ci`, runs as the `node` user, and carries a
   `HEALTHCHECK` hitting `/health` (busybox wget).
 
@@ -378,9 +388,10 @@ tool list. **It skips gracefully if `api.ted.europa.eu` is unreachable.**
 
 ## Limitations (honest list)
 
-- **PLACSP ingester is implemented but off by default** (`PLACSP_ENABLED=false`);
-  enable it explicitly for `--source placsp|all` or scheduled runs. TED remains
-  the default source.
+- **PLACSP ingester is opt-in** (`PLACSP_ENABLED=false` in the code default;
+  the production profile flips it on with `PLACSP_ENABLED=true` +
+  `PLACSP_SCHEDULE=true`). Enable it explicitly for `--source placsp|all` or
+  scheduled runs. TED remains the default source.
 - **No LLM anywhere** — search is Postgres FTS (`spanish` config), forecast
   signals are deterministic SQL/date math.
 - **x402 settlement is tested against a mock facilitator, not the live one**
