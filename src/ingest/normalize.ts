@@ -391,16 +391,24 @@ export function buildTenderUpsert(t: {
   nuts: string | null;
   url: string | null;
   raw: unknown;
+  /** Optional columns populated by the PLACSP path (TED leaves them null). */
+  procedureType?: string | null;
+  deadline?: string | null;
+  estimatedValue?: number | null;
+  currency?: string | null;
 }): Sql {
   return {
     text: `INSERT INTO tenders(source_id, source_ref, notice_type, publication_date, buyer_id,
-               title, description, cpv_main, cpv_all, nuts, url, raw)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+               title, description, cpv_main, cpv_all, nuts, url, raw,
+               procedure_type, deadline, estimated_value, currency)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
            ON CONFLICT (source_id, source_ref) DO UPDATE SET
              notice_type = EXCLUDED.notice_type, publication_date = EXCLUDED.publication_date,
              buyer_id = EXCLUDED.buyer_id, title = EXCLUDED.title, description = EXCLUDED.description,
              cpv_main = EXCLUDED.cpv_main, cpv_all = EXCLUDED.cpv_all, nuts = EXCLUDED.nuts,
-             url = EXCLUDED.url, raw = EXCLUDED.raw
+             url = EXCLUDED.url, raw = EXCLUDED.raw,
+             procedure_type = EXCLUDED.procedure_type, deadline = EXCLUDED.deadline,
+             estimated_value = EXCLUDED.estimated_value, currency = EXCLUDED.currency
            RETURNING id`,
     values: [
       t.sourceId,
@@ -415,6 +423,10 @@ export function buildTenderUpsert(t: {
       t.nuts,
       t.url,
       JSON.stringify(t.raw ?? null),
+      t.procedureType ?? null,
+      t.deadline ?? null,
+      t.estimatedValue ?? null,
+      t.currency ?? null,
     ],
   };
 }
