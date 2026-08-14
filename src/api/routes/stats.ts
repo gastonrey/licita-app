@@ -1,13 +1,25 @@
 // GET /v1/stats — operator-only observability aggregates (SPEC §5/§9).
 
+import { createHash, timingSafeEqual } from 'node:crypto';
 import type { FastifyReply, FastifyRequest, preHandlerHookHandler } from 'fastify';
 import { envelope, HttpError, type RouteCtx } from './common.js';
+
+/**
+ * Constant-time key comparison: both sides are SHA-256 hashed first (which
+ * normalizes length, so timingSafeEqual never early-exits on length mismatch
+ * and the digest comparison does not leak key length or content timing).
+ */
+function operatorKeyMatches(presented: string, expected: string): boolean {
+  const a = createHash('sha256').update(presented).digest();
+  const b = createHash('sha256').update(expected).digest();
+  return timingSafeEqual(a, b);
+}
 
 /** Requires header x-operator-key === config.operatorKey, else 401 error envelope. */
 export function statsAuth(operatorKey: string): preHandlerHookHandler {
   return async (req) => {
     const key = req.headers['x-operator-key'];
-    if (typeof key !== 'string' || key !== operatorKey) {
+    if (typeof key !== 'string' || !operatorKeyMatches(key, operatorKey)) {
       throw new HttpError(
         401,
         'invalid_query',
