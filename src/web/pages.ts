@@ -63,7 +63,8 @@ function homePage(config: AppConfig): string {
     `${NAV}
 <h1>licita-agent</h1>
 <p class="muted">Agent-native procurement intelligence for the Spanish public sector
-(IT / software / cybersecurity vertical, CPV 72*/48*), built from TED award notices.</p>
+(IT / software / cybersecurity vertical, CPV 72*/48*), built from TED award notices
+plus PLACSP (licitaciones + contratos menores) when PLACSP ingestion is enabled.</p>
 
 <h2>What questions it answers</h2>
 <ul>
@@ -182,9 +183,10 @@ function llmsTxt(config: AppConfig): string {
   return `# licita-agent
 
 > Agent-native procurement intelligence for the Spanish public sector (IT/software/cyber,
-> CPV 72*/48*) built from TED award notices. Answers: who bought, who won, how much, which
+> CPV 72*/48*) built from TED award notices, plus PLACSP (CODICE/ATOM: licitaciones
+> and contratos menores) when PLACSP ingestion is enabled. Answers: who bought, who won, how much, which
 > CPV, contract windows, similar active tenders, likely re-tender signals. All data rows
-> carry provenance (source + source_ref + TED url). Nulls are never fabricated.
+> carry provenance (source + source_ref + upstream url). Nulls are never fabricated.
 
 ## Discovery
 - /llms.txt (this file), /openapi.json, /v1/pricing, /docs, /pricing, /mcp

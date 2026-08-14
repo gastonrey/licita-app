@@ -23,6 +23,8 @@ track record, and which contracts are likely to be re-tendered soon.
  TED Search API ──► │ ingestion              REST /v1            payments           MCP            web   │
  v3 (no auth)       │ src/ingest/ted.ts      src/api/server.ts   src/pay/*          src/mcp/       src/   │
  (poll, 24 mo)      │ src/ingest/normalize   src/api/routes/*    middleware 402 →   server.ts      web/   │
+ PLACSP ATOM ─────► │ src/ingest/placsp.ts   openapi, ratelimit  X-PAYMENT verify   8 tools,       pages   │
+ (behind flag)      │ normalize-placsp.ts                                                    │
                     │ src/ingest/scheduler   openapi, ratelimit  X-PAYMENT verify   8 tools,       pages   │
                     │ src/forecast/signals   src/obs/* (logs,    dev faucet +       /mcp           /docs   │
                     │ (renewal signals)      metrics, request    replay protection                 /llms  │
@@ -36,7 +38,7 @@ track record, and which contracts are likely to be re-tendered soon.
 | Area | Files |
 |---|---|
 | Wiring / config / DB | `src/index.ts`, `src/config.ts`, `src/config.validate.ts`, `src/db/{client,migrate}.ts`, `migrations/001_core.sql` |
-| Ingestion + scheduler | `src/ingest/{ted,normalize,scheduler,cli}.ts`, `scripts/ingest-once.ts` |
+| Ingestion + scheduler | `src/ingest/{ted,normalize,placsp,placsp-parse,normalize-placsp,scheduler,cli}.ts`, `scripts/ingest-once.ts` |
 | Forecast signals | `src/forecast/signals.ts` |
 | REST API + observability | `src/api/{server,openapi,validate,ratelimit}.ts`, `src/api/routes/*`, `src/obs/*` |
 | Payments | `src/pay/{provider,devProvider,middleware}.ts` |
@@ -88,6 +90,10 @@ missing/invalid variable (`src/config.validate.ts`, called from `src/index.ts`).
 | `INGEST_MONTHS` | `24` | Harvest window (months back from today) |
 | `INGEST_ON_BOOT` | `false` | `true` = start the daily ingest scheduler inside the app process |
 | `INGEST_CRON_HOUR` | `4` | Hour (server-local) the scheduler fires the daily ingest |
+| `PLACSP_ENABLED` | `false` | `true` = allow PLACSP ingestion via `--source placsp\|all` |
+| `PLACSP_MAX_PAGES` | `5` | Max RFC 5005 feed pages fetched per PLACSP feed |
+| `PLACSP_DELAY_MS` | `500` | Minimum delay between PLACSP feed requests (politeness) |
+| `PLACSP_SCHEDULE` | `false` | `true` = include PLACSP in the daily scheduler run (needs `PLACSP_ENABLED=true`) |
 | `X402_FACILITATOR_URL` `X402_PAY_TO` `X402_NETWORK` | facilitator/network defaulted; `X402_PAY_TO` required in production | Real x402 facilitator config (CAIP-2 network: `eip155:84532` / `eip155:8453`) |
 
 ## First ingestion
@@ -96,9 +102,18 @@ Either trigger one harvest manually:
 
 ```bash
 # docker:   docker compose exec app npx tsx src/ingest/cli.ts --once
-npm run ingest -- --once                 # full window (INGEST_MONTHS)
+npm run ingest -- --once                 # full window (INGEST_MONTHS), TED only
 npm run ingest -- --once --max-notices 25   # small slice
+npm run ingest -- --once --source placsp --max-notices 25   # PLACSP slice (needs PLACSP_ENABLED=true)
+npm run ingest -- --once --source all                       # TED + PLACSP
 ```
+
+### Data sources
+
+| Source | Status | Notes |
+|---|---|---|
+| TED Search API v3 | **live** (default) | ES award notices, CPV 72*/48*, `INGEST_MONTHS` window |
+| PLACSP sindicación (CODICE 3.2 over ATOM) | **live behind flag** (`PLACSP_ENABLED=true`) | Licitaciones feed (sindicacion_643) + contratos menores feed (sindicacion_1143), paged via RFC 5005 `rel=next`. Award rows only from TenderResults with awarded/formalized result codes; NIFs only from `schemeName="NIF"` — nothing is fabricated. License: datos abiertos, reuse per [datos.gob.es/avisolegal](https://www.datos.gob.es/avisolegal). |
 
 or let the app do it: `INGEST_ON_BOOT=true` runs an immediate harvest plus a
 daily re-harvest at `INGEST_CRON_HOUR`.
@@ -293,8 +308,9 @@ tool list. **It skips gracefully if `api.ted.europa.eu` is unreachable.**
 
 ## Limitations (honest list)
 
-- **PLACSP/CODICE ingester is a stub** (`src/ingest/placsp.ts` logs "not
-  enabled"); TED is the only live source.
+- **PLACSP ingester is implemented but off by default** (`PLACSP_ENABLED=false`);
+  enable it explicitly for `--source placsp|all` or scheduled runs. TED remains
+  the default source.
 - **No LLM anywhere** — search is Postgres FTS (`spanish` config), forecast
   signals are deterministic SQL/date math.
 - **x402 real-facilitator settlement is not wired** (see Payments).
