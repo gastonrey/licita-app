@@ -2,7 +2,8 @@
 #
 # Enforced by src/config.validate.ts at boot (the app refuses to start
 # otherwise): NODE_ENV=production, PAYMENTS_MODE=x402, a valid X402_PAY_TO
-# address, an https X402_FACILITATOR_URL, and non-placeholder secrets.
+# address, an https X402_FACILITATOR_URL, a CAIP-2 X402_NETWORK, and
+# non-placeholder secrets.
 # The dev faucet route does not exist in this profile.
 #
 # Deployment note: the app binds to 127.0.0.1 — a reverse proxy (nginx,
@@ -13,9 +14,9 @@
 #   POSTGRES_PASSWORD     admin DB password (used by migrations)
 #   LICITA_APP_PASSWORD   password for the low-privilege licita_app role
 #   OPERATOR_KEY          x-operator-key header for GET /v1/stats
-#   X402_FACILITATOR_URL  https facilitator endpoint
+#   X402_FACILITATOR_URL  https facilitator endpoint (default https://www.x402.org/facilitator)
 #   X402_PAY_TO           0x + 40 hex chars (USDC recipient)
-#   X402_NETWORK          e.g. base
+#   X402_NETWORK          CAIP-2: eip155:84532 (Base Sepolia) / eip155:8453 (Base mainnet)
 services:
   db:
     image: postgres:16-alpine

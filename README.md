@@ -88,7 +88,7 @@ missing/invalid variable (`src/config.validate.ts`, called from `src/index.ts`).
 | `INGEST_MONTHS` | `24` | Harvest window (months back from today) |
 | `INGEST_ON_BOOT` | `false` | `true` = start the daily ingest scheduler inside the app process |
 | `INGEST_CRON_HOUR` | `4` | Hour (server-local) the scheduler fires the daily ingest |
-| `X402_FACILITATOR_URL` `X402_PAY_TO` `X402_NETWORK` | required in production | Real x402 facilitator config (stub seam only — see Payments) |
+| `X402_FACILITATOR_URL` `X402_PAY_TO` `X402_NETWORK` | facilitator/network defaulted; `X402_PAY_TO` required in production | Real x402 facilitator config (CAIP-2 network: `eip155:84532` / `eip155:8453`) |
 
 ## First ingestion
 
@@ -192,16 +192,21 @@ curl -s -X POST "$BASE/mcp" \
   and replay via a unique insert into `payments.proof` (unique violation =
   replay). Every attempt is audit-logged. The faucet exists so agents can
   complete the flow without a human — disable it by leaving dev mode.
-- **`PAYMENTS_MODE=x402` (seam, NOT yet functional).** Setting this plus
-  `X402_FACILITATOR_URL` / `X402_PAY_TO` / `X402_NETWORK` switches the 402
-  bodies to real x402 shape (USDC, e.g. `base`, Coinbase facilitator), and
-  removes the dev faucet route entirely (it 404s like any unknown path).
-  **What is not implemented:** the facilitator round-trip —
-  `X402PaymentProvider.verify()` always fails with reason
-  `x402_not_configured`, so in this mode paid endpoints are
-  unreachable. Wiring it means forwarding `{paymentPayload, paymentRequirements}`
-  to the facilitator's `/verify` + `/settle` endpoints in
-  `src/pay/provider.ts`. No private keys are stored anywhere.
+- **`PAYMENTS_MODE=x402` (production).** Real x402 v2 payments via the
+  official `@x402/core` + `@x402/evm` packages: priced endpoints return 402
+  with a base64 `PAYMENT-REQUIRED` header (v2) describing the exact USDC
+  requirement (scheme `exact`, EIP-3009 `transferWithAuthorization`, asset and
+  amount in base units for the configured CAIP-2 network — `eip155:84532`
+  Base Sepolia or `eip155:8453` Base mainnet). Clients pay and retry with the
+  base64 payment payload in `PAYMENT-SIGNATURE` (v2) or `X-PAYMENT` (v1
+  legacy). The server verifies AND settles through the configured facilitator
+  (`X402_FACILITATOR_URL`, default `https://www.x402.org/facilitator`) before
+  serving content, fails closed (`facilitator_unavailable`) on facilitator
+  errors, and records settled payments with payer address, tx hash and
+  network in the `payments` table (unique payload hash = replay protection).
+  The dev faucet route is removed entirely in this mode (it 404s like any
+  unknown path). No private keys are stored anywhere — settlement is
+  gasless for the server; funds go straight to `X402_PAY_TO`.
 
 ## Security model
 
@@ -209,7 +214,9 @@ curl -s -X POST "$BASE/mcp" \
   `validateConfig` requires `OPERATOR_KEY` always and `PAY_HMAC_SECRET` in dev
   mode; with `NODE_ENV=production` it additionally requires
   `PAYMENTS_MODE=x402`, a valid `X402_PAY_TO` (`0x` + 40 hex), an https
-  `X402_FACILITATOR_URL`, and rejects known placeholder secrets
+  `X402_FACILITATOR_URL`, a CAIP-2 `X402_NETWORK` (`eip155:84532` Base Sepolia
+  or `eip155:8453` Base mainnet; other `eip155:<chainId>` values are accepted
+  as explicit overrides), and rejects known placeholder secrets
   (`change-me`, `change-me-in-prod`). All violations are reported in one error.
 - **Faucet gating.** `POST /v1/dev-faucet` exists only when
   `PAYMENTS_MODE=dev` AND `NODE_ENV != 'production'`; otherwise no route is
@@ -240,7 +247,7 @@ Use the hardened profile:
 
 ```bash
 export POSTGRES_PASSWORD=... LICITA_APP_PASSWORD=... OPERATOR_KEY=...
-export X402_FACILITATOR_URL=https://... X402_PAY_TO=0x... X402_NETWORK=base
+export X402_FACILITATOR_URL=https://www.x402.org/facilitator X402_PAY_TO=0x... X402_NETWORK=eip155:8453
 docker compose -f docker-compose.prod.yml up --build -d
 ```
 
