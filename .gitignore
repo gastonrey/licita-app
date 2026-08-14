@@ -4,3 +4,5 @@ dist/
 *.log
 .epg-data/
 coverage/
+
+.DS_Store
