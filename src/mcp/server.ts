@@ -376,8 +376,11 @@ export function buildMcpServer(provider: PaymentProvider, db: Db, config: AppCon
     {
       instructions:
         'Spanish public procurement intelligence (TED award notices, IT/software/cyber CPV 72*/48*). ' +
-        'Most tools are paid per call: if a tool returns {"payment_required": true, ...}, follow its how_to_pay steps — in dev mode POST /v1/dev-faucet to get a token, then retry with payment_token. ' +
-        'Start with get_pricing (free) and search_tenders to discover ids.',
+        'Most tools are paid per call. If a tool returns {"payment_required": true, ...}, follow its how_to_pay steps: ' +
+        'in x402 mode create the payment with an x402 client from the 402 PAYMENT-REQUIRED requirement (EIP-3009 ' +
+        'transferWithAuthorization of USDC) and retry with payment_token — the same base64 payload a REST client sends ' +
+        'as the PAYMENT-SIGNATURE header (legacy v1 X-PAYMENT still accepted). In dev mode the how_to_pay steps point ' +
+        'to the local POST /v1/dev-faucet. Start with get_pricing (free) and search_tenders to discover ids.',
     },
   );
 
