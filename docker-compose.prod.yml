@@ -6,9 +6,18 @@
 # non-placeholder secrets.
 # The dev faucet route does not exist in this profile.
 #
-# Deployment note: the app binds to 127.0.0.1 — a reverse proxy (nginx,
-# Caddy, ...) must terminate TLS in front of it. TRUST_PROXY=true lets
-# Fastify read the client IP from X-Forwarded-For set by that proxy.
+# Deployment note: the app binds to 127.0.0.1 — a reverse proxy (Caddy,
+# nginx, Cloudflare Tunnel, ...) must terminate TLS in front of it.
+# TRUST_PROXY=true lets Fastify read the client IP from X-Forwarded-For set
+# by that proxy. Postgres also binds to 127.0.0.1:5432 so host-side ops can
+# reach it locally (pg_dump cron, host checkout scripts like
+# scripts/backfill-identity.ts, psql). Never expose it beyond the loopback.
+#
+# Migrations are an explicit deploy step: the `migrate` one-shot service
+# applies DDL on the admin connection (DATABASE_URL) and exits; the `app`
+# service starts only after migrate exits 0 (depends_on:
+# service_completed_successfully). The app CMD still re-runs the idempotent
+# migrate on boot as a safety net.
 #
 # Required environment (no defaults — compose aborts if unset):
 #   POSTGRES_PASSWORD     admin DB password (used by migrations)
@@ -25,6 +34,9 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
       POSTGRES_DB: licita
       LICITA_APP_PASSWORD: ${LICITA_APP_PASSWORD:?set LICITA_APP_PASSWORD}
+    ports:
+      # Host-side ops only (pg_dump backups, backfill scripts). Loopback only.
+      - "127.0.0.1:5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./docker/db/init:/docker-entrypoint-initdb.d:ro
@@ -35,11 +47,27 @@ services:
       retries: 20
     restart: unless-stopped
 
+  # One-shot: applies pending migrations on the admin connection, then exits.
+  migrate:
+    build: .
+    command: ["node", "dist/db/migrate.js"]
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      # Admin connection ONLY — migrations are DDL and never touch the
+      # low-privilege licita_app role.
+      DATABASE_URL: postgres://licita:${POSTGRES_PASSWORD}@db:5432/licita
+    restart: "no"
+
   app:
     build: .
     depends_on:
       db:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     environment:
       NODE_ENV: production
       PORT: "3000"
@@ -47,17 +75,28 @@ services:
       TRUST_PROXY: ${TRUST_PROXY:-true}
       RATE_LIMIT_MAX_KEYS: ${RATE_LIMIT_MAX_KEYS:-10000}
       PAYMENTS_MODE: x402
+      # Unused by x402; surfaced so it can never be the placeholder
+      # 'change-me-in-prod' if an operator sets it.
+      PAY_HMAC_SECRET: ${PAY_HMAC_SECRET:-}
       X402_FACILITATOR_URL: ${X402_FACILITATOR_URL:?set X402_FACILITATOR_URL}
       X402_PAY_TO: ${X402_PAY_TO:?set X402_PAY_TO}
       X402_NETWORK: ${X402_NETWORK:?set X402_NETWORK}
       OPERATOR_KEY: ${OPERATOR_KEY:?set OPERATOR_KEY}
-      # Admin connection: migrations only (node dist/db/migrate.js on boot).
+      # Admin connection: migrations only (also re-run idempotently on boot).
       DATABASE_URL: postgres://licita:${POSTGRES_PASSWORD}@db:5432/licita
       # App traffic: low-privilege role (SELECT/INSERT/UPDATE/DELETE, no DDL).
       APP_DATABASE_URL: postgres://licita_app:${LICITA_APP_PASSWORD}@db:5432/licita
+      # Ingestion: daily scheduler on by default (arms for the next
+      # INGEST_CRON_HOUR UTC — it does NOT ingest at boot; the first harvest
+      # is a manual `--once` run, see DEPLOYMENT.md).
       INGEST_MONTHS: ${INGEST_MONTHS:-24}
-      INGEST_ON_BOOT: ${INGEST_ON_BOOT:-false}
+      INGEST_ON_BOOT: ${INGEST_ON_BOOT:-true}
       INGEST_CRON_HOUR: ${INGEST_CRON_HOUR:-4}
+      # PLACSP: on in production (TED + PLACSP daily), polite crawl defaults.
+      PLACSP_ENABLED: ${PLACSP_ENABLED:-true}
+      PLACSP_MAX_PAGES: ${PLACSP_MAX_PAGES:-5}
+      PLACSP_DELAY_MS: ${PLACSP_DELAY_MS:-1000}
+      PLACSP_SCHEDULE: ${PLACSP_SCHEDULE:-true}
     ports:
       - "127.0.0.1:3000:3000"
     healthcheck:
