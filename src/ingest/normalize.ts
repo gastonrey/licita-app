@@ -20,6 +20,7 @@
 
 import type { Db } from '../db/client.js';
 import type { NormalizedAward, TedNotice } from '../domain/types.js';
+import { resolveBuyer, resolveCompany } from './identity.js';
 
 /** Row produced by parseTedNotice: the shared NormalizedAward contract plus
  *  the extra columns we persist (kept here, not in domain/types.ts). */
@@ -626,24 +627,24 @@ export async function persistNotice(
     for (const code of first.cpvs) await run(buildCpvInsert(code));
     const cpvMain = first.cpvs.find((c) => c.startsWith('72') || c.startsWith('48')) ?? first.cpvs[0] ?? null;
 
-    const buyerRows = await run(
-      buildBuyerUpsert({
-        sourceId,
-        sourceRef: first.buyer.sourceRef,
-        name: first.buyer.name,
-        nameNorm: normalizeName(first.buyer.name),
-        country: first.buyer.country,
-        nuts: first.buyer.nuts,
-        raw: {
-          'buyer-name': notice['buyer-name'],
-          'buyer-identifier': notice['buyer-identifier'],
-          'buyer-country': notice['buyer-country'],
-          source: 'ted',
-          source_ref: first.sourceRef,
-        },
-      }),
-    );
-    const buyerId = buyerRows[0].id as number;
+    // Buyer: exact-NIF cross-source reuse when TED declares a usable
+    // buyer-identifier, else the per-source '<name_norm>|<country>' upsert.
+    const buyerId = await resolveBuyer(q, {
+      sourceId,
+      sourceCode: 'ted',
+      sourceRef: first.buyer.sourceRef,
+      name: first.buyer.name,
+      country: first.buyer.country,
+      nuts: first.buyer.nuts,
+      nif: pickNif(notice['buyer-identifier']),
+      raw: {
+        'buyer-name': notice['buyer-name'],
+        'buyer-identifier': notice['buyer-identifier'],
+        'buyer-country': notice['buyer-country'],
+        source: 'ted',
+        source_ref: first.sourceRef,
+      },
+    });
     counts.buyers += 1;
 
     const tenderRows = await run(
@@ -668,24 +669,24 @@ export async function persistNotice(
     for (const row of rows) {
       let winnerCompanyId: number | null = null;
       if (row.winner) {
-        const companyRows = await run(
-          buildCompanyUpsert({
-            sourceId,
-            sourceRef: row.winner.sourceRef,
-            name: row.winner.name,
-            nameNorm: normalizeName(row.winner.name),
-            country: row.winner.country,
-            nif: row.winnerNif,
-            raw: {
-              'winner-name': notice['winner-name'],
-              'winner-identifier': notice['winner-identifier'],
-              'winner-country': notice['winner-country'],
-              source: 'ted',
-              source_ref: row.sourceRef,
-            },
-          }),
-        );
-        winnerCompanyId = companyRows[0].id as number;
+        // Identity resolution: exact NIF reuse across sources (single-winner
+        // notices only — multi-winner notices carry no attributable NIF),
+        // else the per-source '<name_norm>|<country>' upsert.
+        winnerCompanyId = await resolveCompany(q, {
+          sourceId,
+          sourceCode: 'ted',
+          sourceRef: row.winner.sourceRef,
+          name: row.winner.name,
+          country: row.winner.country,
+          nif: row.winnerNif,
+          raw: {
+            'winner-name': notice['winner-name'],
+            'winner-identifier': notice['winner-identifier'],
+            'winner-country': notice['winner-country'],
+            source: 'ted',
+            source_ref: row.sourceRef,
+          },
+        });
         counts.companies += 1;
       }
 

@@ -15,19 +15,17 @@
 //   doc actually declares an acuerdo marco (ContractingSystemCode 1/3).
 
 import type { Db } from '../db/client.js';
+import { resolveBuyer, resolveCompany } from './identity.js';
 import {
   buildAwardInsert,
   buildAwardSelect,
   buildAwardUpdate,
-  buildBuyerUpsert,
-  buildCompanyUpsert,
   buildContractEventInsert,
   buildContractEventsDelete,
   buildContractUpsert,
   buildCpvInsert,
   buildTenderUpsert,
   deriveContractDates,
-  normalizeName,
   type PersistCounts,
   type Sql,
 } from './normalize.js';
@@ -93,22 +91,20 @@ export async function persistPlacspDoc(
     for (const code of doc.cpvs) await run(buildCpvInsert(code));
     const cpvMain = doc.cpvs.find((c) => c.startsWith('72') || c.startsWith('48')) ?? doc.cpvs[0] ?? null;
 
-    const buyerRows = await run(
-      buildBuyerUpsert({
-        sourceId,
-        sourceRef: doc.buyer.sourceRef,
-        name: doc.buyer.name,
-        nameNorm: normalizeName(doc.buyer.name),
-        country: doc.buyer.country,
-        nuts: doc.buyer.nuts,
-        raw: {
-          party: { name: doc.buyer.name, country: doc.buyer.country, nif: doc.buyer.nif },
-          source: 'placsp',
-          source_ref: doc.sourceRef,
-        },
-      }),
-    );
-    const buyerId = buyerRows[0].id as number;
+    const buyerId = await resolveBuyer(q, {
+      sourceId,
+      sourceCode: 'placsp',
+      sourceRef: doc.buyer.sourceRef,
+      name: doc.buyer.name,
+      country: doc.buyer.country,
+      nuts: doc.buyer.nuts,
+      nif: doc.buyer.nif,
+      raw: {
+        party: { name: doc.buyer.name, country: doc.buyer.country, nif: doc.buyer.nif },
+        source: 'placsp',
+        source_ref: doc.sourceRef,
+      },
+    });
     counts.buyers += 1;
 
     const tenderRows = await run(
@@ -137,26 +133,23 @@ export async function persistPlacspDoc(
     for (const award of doc.awards) {
       let winnerCompanyId: number | null = null;
       if (award.winner) {
-        const companyRows = await run(
-          buildCompanyUpsert({
-            sourceId,
-            sourceRef: award.winner.sourceRef,
-            name: award.winner.name,
-            nameNorm: normalizeName(award.winner.name),
-            country: award.winner.country,
-            nif: award.winner.nif,
-            raw: {
-              party: {
-                name: award.winner.name,
-                country: award.winner.country,
-                nif: award.winner.nif,
-              },
-              source: 'placsp',
-              source_ref: award.sourceRef,
+        winnerCompanyId = await resolveCompany(q, {
+          sourceId,
+          sourceCode: 'placsp',
+          sourceRef: award.winner.sourceRef,
+          name: award.winner.name,
+          country: award.winner.country,
+          nif: award.winner.nif,
+          raw: {
+            party: {
+              name: award.winner.name,
+              country: award.winner.country,
+              nif: award.winner.nif,
             },
-          }),
-        );
-        winnerCompanyId = companyRows[0].id as number;
+            source: 'placsp',
+            source_ref: award.sourceRef,
+          },
+        });
         counts.companies += 1;
       }
 

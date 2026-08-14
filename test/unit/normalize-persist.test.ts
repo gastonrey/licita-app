@@ -160,13 +160,24 @@ describe('persistNotice on pg-mem (fixtures from real TED responses)', () => {
     const cpvCount = await countRows(db, 'cpvs');
     expect(cpvCount).toBeGreaterThan(0);
 
-    const buyer = (await db.query('SELECT name_norm, country FROM buyers')).rows[0] as {
+    const buyer = (await db.query('SELECT name_norm, country, nif FROM buyers')).rows[0] as {
       name_norm: string;
       country: string;
+      nif: string | null;
     };
     expect(buyer.name_norm).toBe('junta de contratacion del ministerio de sanidad');
+    expect(buyer.nif).toBe('S2827001E'); // parsed from TED buyer-identifier
     const company = (await db.query('SELECT nif FROM companies')).rows[0] as { nif: string };
     expect(company.nif).toBe('A28963767');
+
+    // Identity backbone: nif + per-source identifiers registered.
+    const identifiers = (
+      await db.query('SELECT scheme, value FROM company_identifiers ORDER BY scheme')
+    ).rows as Array<{ scheme: string; value: string }>;
+    expect(identifiers).toEqual([
+      { scheme: 'nif', value: 'A28963767' },
+      { scheme: 'ted', value: 'tecnilogica ecosistemas, s.a.u.|ESP' },
+    ]);
 
     // Re-ingest the same notice: zero new rows (idempotent upsert).
     await persistNotice(db, sourceId, fixture.notices[0]);
@@ -176,6 +187,7 @@ describe('persistNotice on pg-mem (fixtures from real TED responses)', () => {
     expect(await countRows(db, 'contracts')).toBe(1);
     expect(await countRows(db, 'contract_events')).toBe(1);
     expect(await countRows(db, 'cpvs')).toBe(cpvCount);
+    expect(await countRows(db, 'company_identifiers')).toBe(2);
   });
 
   it('dedupes buyers by name_norm+country across notices', async () => {

@@ -88,11 +88,23 @@ describe('persistPlacspDoc on pg-mem (real fixture entries)', () => {
     expect(counts).toEqual({ buyers: 1, companies: 1, tenders: 1, awards: 1, contracts: 1 });
 
     const c = (
-      await db.query('SELECT name, nif, source_ref FROM companies')
-    ).rows[0] as { name: string; nif: string; source_ref: string };
+      await db.query('SELECT id, name, nif, source_ref FROM companies')
+    ).rows[0] as { id: number; name: string; nif: string; source_ref: string };
     expect(c.name).toBe('TRANSVIA,S.L.');
     expect(c.nif).toBe('B46036398');
     expect(c.source_ref).toBe('nif:B46036398');
+
+    // Identity backbone: nif + placsp identifiers registered for the winner.
+    const identifiers = (
+      await db.query(
+        'SELECT scheme, value FROM company_identifiers WHERE company_id = $1 ORDER BY scheme',
+        [c.id],
+      )
+    ).rows as Array<{ scheme: string; value: string }>;
+    expect(identifiers).toEqual([
+      { scheme: 'nif', value: 'B46036398' },
+      { scheme: 'placsp', value: 'nif:B46036398' },
+    ]);
 
     const a = (
       await db.query(
@@ -131,6 +143,7 @@ describe('persistPlacspDoc on pg-mem (real fixture entries)', () => {
     expect(await countRows(db, 'awards')).toBe(1);
     expect(await countRows(db, 'contracts')).toBe(1);
     expect(await countRows(db, 'contract_events')).toBe(2);
+    expect(await countRows(db, 'company_identifiers')).toBe(2);
   });
 
   it('multi-lot RES: one award per lot, deduped by (tender, lot, source_ref)', async () => {
