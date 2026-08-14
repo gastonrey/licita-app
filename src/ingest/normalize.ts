@@ -344,16 +344,18 @@ export function buildBuyerUpsert(b: {
   nameNorm: string;
   country: string | null;
   nuts: string | null;
+  nif?: string | null;
   raw: unknown;
 }): Sql {
   return {
-    text: `INSERT INTO buyers(source_id, source_ref, name, name_norm, country, nuts, raw)
-           VALUES ($1, $2, $3, $4, $5, $6, $7)
+    text: `INSERT INTO buyers(source_id, source_ref, name, name_norm, country, nuts, nif, raw)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
            ON CONFLICT (source_id, source_ref) DO UPDATE SET
              name = EXCLUDED.name, name_norm = EXCLUDED.name_norm,
-             country = EXCLUDED.country, nuts = EXCLUDED.nuts, raw = EXCLUDED.raw
+             country = EXCLUDED.country, nuts = EXCLUDED.nuts,
+             nif = COALESCE(EXCLUDED.nif, buyers.nif), raw = EXCLUDED.raw
            RETURNING id`,
-    values: [b.sourceId, b.sourceRef, b.name, b.nameNorm, b.country, b.nuts, JSON.stringify(b.raw ?? null)],
+    values: [b.sourceId, b.sourceRef, b.name, b.nameNorm, b.country, b.nuts, b.nif ?? null, JSON.stringify(b.raw ?? null)],
   };
 }
 

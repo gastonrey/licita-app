@@ -1,7 +1,9 @@
-// pg-mem test database with the subset of migrations/001_core.sql needed by
-// ingest/forecast. Differences vs production DDL (kept intentional):
+// pg-mem test database with the subset of migrations/001_core.sql +
+// 003_identity.sql needed by ingest/forecast. Differences vs production DDL
+// (kept intentional):
 // - no `unaccent` extension (name_norm is computed in JS, see normalize.ts)
 // - no generated `fts` tsvector column on tenders (pg-mem lacks to_tsvector)
+// - no CHECK on company_identifiers.scheme, no partial nif indexes (pg-mem)
 // Everything else (columns, uniques incl. the COALESCE expression index on
 // awards) mirrors 001_core.sql.
 import { newDb } from 'pg-mem';
@@ -15,12 +17,23 @@ CREATE TABLE sources (
 CREATE TABLE buyers (
   id bigserial PRIMARY KEY, source_id int NOT NULL, source_ref text NOT NULL,
   name text NOT NULL, name_norm text NOT NULL, country text, nuts text,
-  org_type text, raw jsonb, UNIQUE(source_id, source_ref)
+  org_type text, nif text, raw jsonb, UNIQUE(source_id, source_ref)
 );
 CREATE TABLE companies (
   id bigserial PRIMARY KEY, source_id int NOT NULL, source_ref text NOT NULL,
   name text NOT NULL, name_norm text NOT NULL, country text, nif text,
   raw jsonb, UNIQUE(source_id, source_ref)
+);
+-- mirrors migrations/003_identity.sql (CHECK/partial indexes omitted: pg-mem)
+CREATE TABLE company_aliases (
+  id bigserial PRIMARY KEY, company_id bigint NOT NULL, alias text NOT NULL,
+  alias_norm text NOT NULL, source_id int, created_at timestamptz DEFAULT now(),
+  UNIQUE(company_id, alias_norm)
+);
+CREATE TABLE company_identifiers (
+  id bigserial PRIMARY KEY, company_id bigint NOT NULL, scheme text NOT NULL,
+  value text NOT NULL, created_at timestamptz DEFAULT now(),
+  UNIQUE(scheme, value)
 );
 CREATE TABLE cpvs (code text PRIMARY KEY, label_en text, label_es text);
 CREATE TABLE tenders (
