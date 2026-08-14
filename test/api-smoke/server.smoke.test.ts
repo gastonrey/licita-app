@@ -95,11 +95,32 @@ function fakeDb(): { db: Db; calls: QueryCall[] } {
       if (t.includes('count(DISTINCT client_key)')) return { rows: [{ n: 3 }] };
       if (t.includes('FROM request_logs GROUP BY endpoint'))
         return { rows: [{ endpoint: 'GET /v1/search', requests: 10, paid_requests: 4 }] };
+      if (t.includes('FROM request_logs GROUP BY source'))
+        return { rows: [
+          { source: 'rest', requests: 10 },
+          { source: 'mcp', requests: 2 },
+        ] };
+      if (t.includes('zero_result')) return { rows: [{ zero_result_count: 1, total: 12 }] };
+      if (t.includes('status = 402 OR error = \'payment_required\''))
+        return { rows: [{ n: 3 }] };
       if (t.includes('FROM payments GROUP BY status'))
         return { rows: [{ status: 'success', n: 4, amount: '0.20' }] };
+      if (t.includes('FROM payments GROUP BY provider, network'))
+        return { rows: [
+          { provider: 'dev', network: 'dev', n: 3, amount: '0.20' },
+          { provider: 'x402', network: 'eip155:84532', n: 1, amount: '0.05' },
+        ] };
+      if (t.includes('HAVING count(*) >= 2'))
+        return { rows: [{ client_key: 'dev_aaa', paid_requests: 3 }] };
+      if (t.includes('WHERE q IS NOT NULL')) return { rows: [{ q: 'software', n: 5 }] };
+      if (t.includes('count(DISTINCT user_agent)')) return { rows: [{ n: 2 }] };
+      if (t.includes('WHERE user_agent IS NOT NULL'))
+        return { rows: [{ user_agent: 'curl/8.1', n: 9 }] };
       if (t.includes('FROM request_logs WHERE cpv IS NOT NULL')) return { rows: [{ value: '72', n: 6 }] };
       if (t.includes('FROM request_logs WHERE buyer IS NOT NULL')) return { rows: [] };
       if (t.includes('FROM request_logs WHERE company IS NOT NULL')) return { rows: [] };
+      if (t.includes('AS failed,') && t.includes('FROM request_logs'))
+        return { rows: [{ failed: 2, total: 12 }] };
       if (t.includes('status >= 400 OR error IS NOT NULL')) return { rows: [{ n: 2 }] };
       if (t.includes('FROM awards') && t.includes('value_null'))
         return { rows: [{ awards_total: 10, value_null: 3, winner_null: 1 }] };
@@ -221,7 +242,25 @@ describe('buildServer wiring (stubbed payment, fake db)', () => {
     const body = ok.json();
     expect(body.data.unique_clients).toBe(3);
     expect(body.data.payments).toMatchObject({ attempts: 4, successes: 4, revenue_usd: 0.2 });
+    expect(body.data.payments.by_network_provider).toEqual([
+      { provider: 'dev', network: 'dev', count: 3, amount_usd: 0.2 },
+      { provider: 'x402', network: 'eip155:84532', count: 1, amount_usd: 0.05 },
+    ]);
+    expect(body.data.requests_by_source).toEqual([
+      { source: 'rest', requests: 10 },
+      { source: 'mcp', requests: 2 },
+    ]);
+    expect(body.data.zero_result_queries).toEqual({ count: 1, rate: 0.0833 });
+    expect(body.data.payment_required_responses).toBe(3);
+    expect(body.data.repeat_clients).toEqual({
+      count: 1,
+      paid_requests_total: 3,
+      top: [{ client_key: 'dev_aaa', paid_requests: 3 }],
+    });
+    expect(body.data.top_searches).toEqual([{ q: 'software', requests: 5 }]);
+    expect(body.data.unique_user_agents).toEqual({ count: 2, top: [{ user_agent: 'curl/8.1', requests: 9 }] });
     expect(body.data.failed_queries).toBe(2);
+    expect(body.data.failed_requests_rate).toEqual({ count: 2, total: 12, rate: 0.1667 });
     expect(body.data.data_null_rates.award_value_null_rate).toBeCloseTo(0.3);
   });
 
@@ -239,6 +278,8 @@ describe('buildServer wiring (stubbed payment, fake db)', () => {
     expect(searchLogs.length).toBeGreaterThanOrEqual(3); // 402, 200 paid, 400 invalid
     expect(searchLogs.some((c) => c.values[9] === true)).toBe(true); // paid flag on the paid request
     expect(searchLogs.some((c) => c.values[9] === false)).toBe(true); // unpaid 402 request also logged
+    expect(searchLogs.some((c) => c.values[13] === 'rest')).toBe(true); // source = rest
+    expect(searchLogs.some((c) => c.values[10] === 'test')).toBe(true); // q captured
   });
 });
 

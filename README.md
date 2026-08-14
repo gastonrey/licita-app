@@ -341,15 +341,24 @@ docker compose -f docker-compose.prod.yml up --build -d
 
 ## Observability
 
-- Every request writes one async, non-blocking `request_logs` row (endpoint,
-  status, latency, cpv/buyer/company filters, paid flag, error code).
+- Every REST request and every MCP tool call writes one async, non-blocking
+  `request_logs` row: source (`rest`|`mcp`), endpoint, status, latency,
+  cpv/buyer/company filters, search query text (`q`), `zero_result` (empty
+  result set), `user_agent`, paid flag, error code.
+- Data minimization: paid requests record the pseudonymous payment `client_key`
+  (dev token HMAC or x402 payer wallet); unpaid requests record
+  `sha256(ip + OPERATOR_KEY)` — raw IPs are never stored in new rows.
 - Every payment (success/failure/replay) writes a `payments` row.
 - Structured JSON logs on stdout (payment events, harvest progress, errors).
 - `GET /v1/stats` (operator key) returns: `unique_clients`,
-  `requests_by_endpoint` (incl. paid counts), `payments` (attempts, successes,
-  `revenue_usd`, by status), `top_requested` (cpvs/buyers/companies),
-  `failed_queries`, `data_null_rates` (award value/winner null share), and the
-  in-memory metrics snapshot.
+  `requests_by_endpoint` (incl. paid counts), `requests_by_source`,
+  `zero_result_queries` (count + rate), `payment_required_responses`,
+  `payments` (attempts, successes, `revenue_usd`, by status and by
+  network/provider), `repeat_clients` (≥2 paid requests + top repeaters),
+  `top_searches`, `unique_user_agents` (count + top), `top_requested`
+  (cpvs/buyers/companies), `failed_queries`, `failed_requests_rate`,
+  `data_null_rates` (award value/winner null share), and the in-memory metrics
+  snapshot.
 
 ## Testing
 
