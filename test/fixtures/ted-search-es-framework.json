@@ -1,0 +1,161 @@
+{
+ "notices": [
+  {
+   "contract-duration-start-date-lot": [
+    "2026-06-02+02:00"
+   ],
+   "place-of-performance": [
+    "ES511",
+    "ESP",
+    "ES511",
+    "ESP"
+   ],
+   "title-proc": {
+    "spa": "Quincuagésimoséptimo pedido basado en el Acuerdo Marco por los servicios de provisión y mantenimiento de hardware de la Generalitat de Catalunya y su sector público, Lot 4 (CTTI-2023-86)"
+   },
+   "notice-type": "can-standard",
+   "publication-number": "374040-2026",
+   "contract-conclusion-date": [
+    "2026-05-27+02:00"
+   ],
+   "winner-country": [
+    "ESP"
+   ],
+   "dispatch-date": "2026-05-28Z",
+   "total-value-cur": [
+    "EUR"
+   ],
+   "framework-agreement-lot": [
+    "fa-wo-rc"
+   ],
+   "total-value": 399173.53,
+   "buyer-country": [
+    "ESP"
+   ],
+   "received-submissions-type-val": [
+    "1",
+    "0",
+    "0",
+    "1",
+    "0"
+   ],
+   "winner-identifier": [
+    "A78053147"
+   ],
+   "description-lot": {
+    "spa": [
+     "Quincuagésimoséptimo pedido basado en el Acuerdo Marco por los servicios de provisión y mantenimiento de hardware de la Generalitat de Catalunya y su sector público, Lot 4 (CTTI-2023-86)"
+    ]
+   },
+   "classification-cpv": [
+    "72510000",
+    "72510000"
+   ],
+   "publication-date": "2026-06-01+02:00",
+   "buyer-name": {
+    "spa": [
+     "Centre de Telecomunicacions i Tecnologies de la Informació de la Generalitat de Catalunya"
+    ]
+   },
+   "winner-decision-date": [
+    "2026-05-13+02:00"
+   ],
+   "winner-name": {
+    "spa": [
+     "Telefónica Soluciones de Informática y Comunicaciones de España, S.A.U"
+    ]
+   },
+   "contract-duration-end-date-lot": [
+    "2026-12-31+01:00"
+   ],
+   "title-lot": {
+    "spa": [
+     "Quincuagésimoséptimo pedido basado en el Acuerdo Marco por los servicios de provisión y mantenimiento de hardware de la Generalitat de Catalunya y su sector público, Lot 4 (CTTI-2023-86)"
+    ]
+   },
+   "buyer-identifier": [
+    "Q5856338H"
+   ]
+  },
+  {
+   "contract-duration-start-date-lot": [
+    "2026-06-02+02:00"
+   ],
+   "place-of-performance": [
+    "ES511",
+    "ESP",
+    "ES511",
+    "ESP"
+   ],
+   "title-proc": {
+    "spa": "Quincuagésimooctavo pedido basado en el Acuerdo Marco por los servicios de provisión y mantenimiento de hardware de la Generalitat de Catalunya y su sector público, Lot 4 (CTTI-2023-86)"
+   },
+   "notice-type": "can-standard",
+   "publication-number": "377614-2026",
+   "contract-conclusion-date": [
+    "2026-05-28+02:00"
+   ],
+   "winner-country": [
+    "ESP"
+   ],
+   "dispatch-date": "2026-06-01Z",
+   "total-value-cur": [
+    "EUR"
+   ],
+   "framework-agreement-lot": [
+    "fa-wo-rc"
+   ],
+   "total-value": 233884.24,
+   "buyer-country": [
+    "ESP"
+   ],
+   "received-submissions-type-val": [
+    "1",
+    "0",
+    "0",
+    "0",
+    "0"
+   ],
+   "winner-identifier": [
+    "A25027145"
+   ],
+   "description-lot": {
+    "spa": [
+     "Quincuagésimooctavo pedido basado en el Acuerdo Marco por los servicios de provisión y mantenimiento de hardware de la Generalitat de Catalunya y su sector público, Lot 4 (CTTI-2023-86)"
+    ]
+   },
+   "classification-cpv": [
+    "72510000",
+    "72510000"
+   ],
+   "publication-date": "2026-06-02+02:00",
+   "buyer-name": {
+    "spa": [
+     "Centre de Telecomunicacions i Tecnologies de la Informació de la Generalitat de Catalunya"
+    ]
+   },
+   "winner-decision-date": [
+    "2026-05-13+02:00"
+   ],
+   "winner-name": {
+    "spa": [
+     "Servicios Microinformatica, S.A"
+    ]
+   },
+   "contract-duration-end-date-lot": [
+    "2026-12-31+01:00"
+   ],
+   "title-lot": {
+    "spa": [
+     "Quincuagésimooctavo pedido basado en el Acuerdo Marco por los servicios de provisión y mantenimiento de hardware de la Generalitat de Catalunya y su sector público, Lot 4 (CTTI-2023-86)"
+    ]
+   },
+   "buyer-identifier": [
+    "Q5856338H"
+   ]
+  }
+ ],
+ "totalNoticeCount": 11,
+ "iterationNextToken": null,
+ "timedOut": false
+}

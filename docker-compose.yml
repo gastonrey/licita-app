@@ -1,0 +1,43 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: licita
+      POSTGRES_PASSWORD: licita
+      POSTGRES_DB: licita
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U licita"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  app:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGHOST: db
+      PGPORT: "5432"
+      PGUSER: licita
+      PGPASSWORD: licita
+      PGDATABASE: licita
+      PORT: "3000"
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      PAYMENTS_MODE: ${PAYMENTS_MODE:-dev}
+      PAY_HMAC_SECRET: ${PAY_HMAC_SECRET:-change-me-in-prod}
+      OPERATOR_KEY: ${OPERATOR_KEY:-change-me}
+      INGEST_MONTHS: ${INGEST_MONTHS:-24}
+      INGEST_ON_BOOT: ${INGEST_ON_BOOT:-false}
+      INGEST_CRON_HOUR: ${INGEST_CRON_HOUR:-4}
+      X402_FACILITATOR_URL: ${X402_FACILITATOR_URL:-}
+      X402_PAY_TO: ${X402_PAY_TO:-}
+      X402_NETWORK: ${X402_NETWORK:-}
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+
+volumes:
+  pgdata:

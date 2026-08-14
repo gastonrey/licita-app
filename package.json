@@ -1,0 +1,33 @@
+{
+  "name": "licita-agent",
+  "version": "0.1.0",
+  "description": "Agent-native public procurement intelligence API (Spain: TED/PLACSP award, buyer, competitor and renewal intelligence)",
+  "type": "module",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "dev": "tsx src/index.ts",
+    "migrate": "tsx src/db/migrate.ts",
+    "ingest": "tsx src/ingest/cli.ts",
+    "smoke": "tsx scripts/smoke-agent.ts",
+    "test": "vitest run -c test/vitest.config.ts",
+    "test:api-smoke": "vitest run -c test/vitest.smoke.config.ts",
+    "test:integration": "vitest run -c test/vitest.integration.config.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "fastify": "^5.2.0",
+    "pg": "^8.13.1",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.17.0",
+    "@types/pg": "^8.11.10",
+    "embedded-postgres": "^18.4.0-beta.17",
+    "pg-mem": "^3.0.5",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}

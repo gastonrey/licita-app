@@ -1,0 +1,219 @@
+{
+ "notices": [
+  {
+   "place-of-performance": [
+    "ES511",
+    "ESP",
+    "ES511",
+    "ESP"
+   ],
+   "title-proc": {
+    "spa": "25000141"
+   },
+   "notice-type": "can-standard",
+   "publication-number": "533655-2026",
+   "contract-conclusion-date": [
+    "2026-07-24+02:00"
+   ],
+   "winner-country": [
+    "ESP"
+   ],
+   "duration-period-value-lot": [
+    "24"
+   ],
+   "dispatch-date": "2026-07-31Z",
+   "total-value-cur": [
+    "EUR"
+   ],
+   "framework-agreement-lot": [
+    "none"
+   ],
+   "total-value": 1477338.46,
+   "buyer-country": [
+    "ESP"
+   ],
+   "received-submissions-type-val": [
+    "2",
+    "2",
+    "1",
+    "0",
+    "0"
+   ],
+   "duration-period-unit-lot": [
+    "MONTH"
+   ],
+   "winner-identifier": [
+    "B82498650"
+   ],
+   "description-lot": {
+    "spa": [
+     "Contratación de los servicios de oficina técnica, de análisis estrategia, despliegue y de apoyo a la contratación para el seguimiento del plan estratégico 2024-2030 del Instituto Municipal Barcelona Innovación y Tecnología del Ayuntamiento de Barcelona con medidas de contratación pública sostenible."
+    ]
+   },
+   "classification-cpv": [
+    "72000000",
+    "72000000"
+   ],
+   "publication-date": "2026-08-03+02:00",
+   "buyer-name": {
+    "spa": [
+     "Instituto Municipal Barcelona Innovación y Tecnología"
+    ]
+   },
+   "winner-name": {
+    "spa": [
+     "KPMG ASESORES, S.L."
+    ]
+   },
+   "title-lot": {
+    "spa": [
+     "25000141"
+    ]
+   },
+   "buyer-identifier": [
+    "P5801908D",
+    "P5801908D"
+   ]
+  },
+  {
+   "place-of-performance": [
+    "ES511",
+    "ESP",
+    "ES511",
+    "ES511",
+    "ES511",
+    "ES511",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP"
+   ],
+   "title-proc": {
+    "spa": "25000093"
+   },
+   "notice-type": "can-standard",
+   "publication-number": "539696-2026",
+   "contract-conclusion-date": [
+    "2026-04-27+02:00",
+    "2026-05-05+02:00",
+    "2026-05-13+02:00",
+    "2026-07-24+02:00"
+   ],
+   "winner-country": [
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP"
+   ],
+   "duration-period-value-lot": [
+    "10",
+    "10",
+    "3",
+    "3"
+   ],
+   "dispatch-date": "2026-08-03Z",
+   "total-value-cur": [
+    "EUR"
+   ],
+   "framework-agreement-lot": [
+    "none",
+    "none",
+    "none",
+    "none"
+   ],
+   "total-value": 2273704.05,
+   "buyer-country": [
+    "ESP"
+   ],
+   "received-submissions-type-val": [
+    "0",
+    "0",
+    "0",
+    "1",
+    "1",
+    "8",
+    "3",
+    "0",
+    "0",
+    "8",
+    "5",
+    "5",
+    "2",
+    "0",
+    "0",
+    "6",
+    "6",
+    "2",
+    "0",
+    "0"
+   ],
+   "duration-period-unit-lot": [
+    "MONTH",
+    "MONTH",
+    "MONTH",
+    "MONTH"
+   ],
+   "winner-identifier": [
+    "B61172219",
+    "A28634046",
+    "B82080177",
+    "B92200591"
+   ],
+   "description-lot": {
+    "spa": [
+     "Suministro de equipos portátiles, instalación y retirada de equipos antiguos del entorno del lugar de trabajo.",
+     "Suministro de equipos de sobremesa, instalación y retirada de equipos antiguos del entorno del lugar de trabajo.",
+     "Suministro de auriculares",
+     "Suministro de portátiles desmontables"
+    ]
+   },
+   "classification-cpv": [
+    "30200000",
+    "51611000",
+    "72510000",
+    "30200000",
+    "30200000",
+    "30200000",
+    "30200000",
+    "72510000",
+    "51611000",
+    "72510000",
+    "51611000",
+    "72510000",
+    "72510000"
+   ],
+   "publication-date": "2026-08-04+02:00",
+   "buyer-name": {
+    "spa": [
+     "Instituto Municipal de Informática de Barcelona"
+    ]
+   },
+   "winner-decision-date": [
+    "2026-03-28+01:00",
+    "2026-03-28+01:00",
+    "2026-04-12+02:00",
+    "2026-07-01+02:00"
+   ],
+   "winner-name": {
+    "spa": [
+     "Seidor Solutions, S.L.",
+     "Algoritmos Procesos y Diseños, S.A.",
+     "HERBECON SYSTEMS, S.L.",
+     "RICOH ESPAÑA, S.L."
+    ]
+   },
+   "title-lot": {
+    "spa": [
+     "Lote 1",
+     "Lote 2",
+     "Lote 3",
+     "Lote 4"
+    ]
+   },
+   "buyer-identifier": [
+    "P5801908D"
+   ]
+  }
+ ],
+ "totalNoticeCount": 135
+}

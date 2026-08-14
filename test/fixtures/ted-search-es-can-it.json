@@ -1,0 +1,455 @@
+{
+ "notices": [
+  {
+   "place-of-performance": [
+    "ES300",
+    "ESP",
+    "ES300",
+    "ESP"
+   ],
+   "title-proc": {
+    "spa": "Servicio de desarrollo de aplicaciones en el ámbito de vigilancia del Ministerio de Sanidad"
+   },
+   "notice-type": "can-standard",
+   "publication-number": "449218-2026",
+   "contract-conclusion-date": [
+    "2026-06-26+02:00"
+   ],
+   "winner-country": [
+    "ESP"
+   ],
+   "dispatch-date": "2026-06-30+02:00",
+   "total-value-cur": [
+    "EUR"
+   ],
+   "framework-agreement-lot": [
+    "none"
+   ],
+   "total-value": 433.58,
+   "buyer-country": [
+    "ESP"
+   ],
+   "received-submissions-type-val": [
+    "1",
+    "1"
+   ],
+   "winner-identifier": [
+    "A28963767"
+   ],
+   "description-lot": {
+    "spa": [
+     "Lote 2. Serela. Apartado 5 CR."
+    ]
+   },
+   "classification-cpv": [
+    "72000000",
+    "72000000"
+   ],
+   "publication-date": "2026-07-01+02:00",
+   "buyer-name": {
+    "spa": [
+     "Junta de Contratación del Ministerio de Sanidad"
+    ]
+   },
+   "winner-decision-date": [
+    "2026-05-14+02:00"
+   ],
+   "winner-name": {
+    "spa": [
+     "Tecnilógica Ecosistemas, S.A.U."
+    ]
+   },
+   "title-lot": {
+    "spa": [
+     "Lote 2. Serela"
+    ]
+   },
+   "buyer-identifier": [
+    "11716830215443",
+    "S2827001E"
+   ]
+  },
+  {
+   "place-of-performance": [
+    "ES111",
+    "ES112",
+    "ES113",
+    "ES114",
+    "ES120",
+    "ES130",
+    "ES211",
+    "ES212",
+    "ES213",
+    "ES220",
+    "ES230",
+    "ES241",
+    "ES242",
+    "ES243",
+    "ES300",
+    "ES411",
+    "ES412",
+    "ES413",
+    "ES414",
+    "ES415",
+    "ES416",
+    "ES417",
+    "ES418",
+    "ES419",
+    "ES421",
+    "ES422",
+    "ES423",
+    "ES424",
+    "ES425",
+    "ES431",
+    "ES432",
+    "ES511",
+    "ES512",
+    "ES513",
+    "ES514",
+    "ES521",
+    "ES522",
+    "ES523",
+    "ES531",
+    "ES532",
+    "ES533",
+    "ES611",
+    "ES612",
+    "ES613",
+    "ES614",
+    "ES615",
+    "ES616",
+    "ES617",
+    "ES618",
+    "ES620",
+    "ES630",
+    "ES640",
+    "ES703",
+    "ES704",
+    "ES705",
+    "ES706",
+    "ES707",
+    "ES708",
+    "ES709",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ES111",
+    "ES112",
+    "ES113",
+    "ES114",
+    "ES120",
+    "ES130",
+    "ES211",
+    "ES212",
+    "ES213",
+    "ES220",
+    "ES230",
+    "ES241",
+    "ES242",
+    "ES243",
+    "ES300",
+    "ES411",
+    "ES412",
+    "ES413",
+    "ES414",
+    "ES415",
+    "ES416",
+    "ES417",
+    "ES418",
+    "ES419",
+    "ES421",
+    "ES422",
+    "ES423",
+    "ES424",
+    "ES425",
+    "ES431",
+    "ES432",
+    "ES511",
+    "ES512",
+    "ES513",
+    "ES514",
+    "ES521",
+    "ES522",
+    "ES523",
+    "ES531",
+    "ES532",
+    "ES533",
+    "ES611",
+    "ES612",
+    "ES613",
+    "ES614",
+    "ES615",
+    "ES616",
+    "ES617",
+    "ES618",
+    "ES620",
+    "ES630",
+    "ES640",
+    "ES703",
+    "ES704",
+    "ES705",
+    "ES706",
+    "ES707",
+    "ES708",
+    "ES709",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP",
+    "ESP"
+   ],
+   "title-proc": {
+    "spa": "Adquisición de licencias de Office 365 e implantación y configuración de los Tenant donde se alojarán dichas licencias y migración desde la actual plataforma de Zimbra ,al nuevo entorno. Igualmente, y como un segundo lote, implantación de un sistema de backup específico, tanto de todos los buzones de correo, como de todo el sistema de archivos que sustenta la citada plataforma de Office 365."
+   },
+   "notice-type": "can-standard",
+   "publication-number": "449409-2026",
+   "contract-conclusion-date": [
+    "2026-02-23+01:00"
+   ],
+   "winner-country": [
+    "ESP"
+   ],
+   "dispatch-date": "2026-06-30+02:00",
+   "total-value-cur": [
+    "EUR"
+   ],
+   "framework-agreement-lot": [
+    "none"
+   ],
+   "total-value": 177956,
+   "buyer-country": [
+    "ESP"
+   ],
+   "received-submissions-type-val": [
+    "0",
+    "4"
+   ],
+   "winner-identifier": [
+    "B33490426"
+   ],
+   "description-lot": {
+    "spa": [
+     "Implantación sistema de Backup específico para esta nueva infraestructura."
+    ]
+   },
+   "classification-cpv": [
+    "48000000",
+    "48000000"
+   ],
+   "publication-date": "2026-07-01+02:00",
+   "buyer-name": {
+    "spa": [
+     "Presidencia de la Diputación Provincial de Cáceres"
+    ]
+   },
+   "winner-decision-date": [
+    "2026-01-21+01:00"
+   ],
+   "winner-name": {
+    "spa": [
+     "ASAC COMUNICACIONES, SL"
+    ]
+   },
+   "title-lot": {
+    "spa": [
+     "Lote 2: Implantación sistema de Bac kup específico para esta nueva infraestructura."
+    ]
+   },
+   "buyer-identifier": [
+    "30988970142657",
+    "P1000000H"
+   ]
+  },
+  {
+   "place-of-performance": [
+    "ES243",
+    "ESP",
+    "ES243",
+    "ESP"
+   ],
+   "title-proc": {
+    "spa": "Prestación de Servicios Integrales de Ciberseguridad para las Cortes de Aragón."
+   },
+   "notice-type": "can-standard",
+   "publication-number": "449950-2026",
+   "contract-conclusion-date": [
+    "2026-06-29+02:00"
+   ],
+   "winner-country": [
+    "ESP"
+   ],
+   "dispatch-date": "2026-06-30+02:00",
+   "total-value-cur": [
+    "EUR"
+   ],
+   "framework-agreement-lot": [
+    "none"
+   ],
+   "total-value": 950460,
+   "buyer-country": [
+    "ESP"
+   ],
+   "received-submissions-type-val": [
+    "12",
+    "0",
+    "0",
+    "2",
+    "12"
+   ],
+   "winner-identifier": [
+    "B83603191"
+   ],
+   "description-lot": {
+    "spa": [
+     "Prestación de Servicios Integrales de Ciberseguridad para las Cortes de Aragón."
+    ]
+   },
+   "classification-cpv": [
+    "79417000",
+    "48732000",
+    "72315200",
+    "79140000",
+    "79417000",
+    "48732000",
+    "72315200",
+    "79140000"
+   ],
+   "publication-date": "2026-07-01+02:00",
+   "buyer-name": {
+    "spa": [
+     "Mesa de las Cortes de Aragón"
+    ]
+   },
+   "winner-decision-date": [
+    "2026-06-03+02:00"
+   ],
+   "winner-name": {
+    "spa": [
+     "Babel Sistemas de Información, S.L.U."
+    ]
+   },
+   "title-lot": {
+    "spa": [
+     "Prestación de Servicios Integrales de Ciberseguridad para las Cortes de Aragón."
+    ]
+   },
+   "buyer-identifier": [
+    "51073110151071",
+    "S5033001H"
+   ]
+  }
+ ],
+ "totalNoticeCount": 530,
+ "iterationNextToken": null,
+ "timedOut": false
+}
