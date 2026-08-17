@@ -1,0 +1,21 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.gastonrey/licita-app",
+  "title": "EUTenders Procurement",
+  "description": "EU tender search and analysis for agents; x402 pay-per-call.",
+  "version": "0.1.0",
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://eutenders.duckdns.org/mcp",
+      "headers": [
+        {
+          "name": "PAYMENT-SIGNATURE",
+          "description": "x402 base64 payment payload for priced tool calls (free discovery calls work without it)",
+          "isRequired": false,
+          "isSecret": true
+        }
+      ]
+    }
+  ]
+}
