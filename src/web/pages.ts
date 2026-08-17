@@ -295,5 +295,29 @@ export function registerWeb(app: FastifyInstance, config: AppConfig): void {
   app.get('/robots.txt', async (_req, reply) =>
     reply.type('text/plain; charset=utf-8').send('User-agent: *\nAllow: /\n'),
   );
+  // MCP server card (SEP-1649 style) for directory crawlers that prefer a
+  // static card over a live scan (Smithery, Glama, others). Static JSON.
+  app.get('/.well-known/mcp/server-card.json', async (_req, reply) => {
+    const tools = [
+      'search_tenders',
+      'get_tender',
+      'get_company',
+      'get_company_awards',
+      'get_company_opportunities',
+      'get_buyer_history',
+      'get_renewals',
+      'get_pricing',
+    ];
+    return reply
+      .type('application/json; charset=utf-8')
+      .send({
+        serverInfo: { name: 'licita-agent', version: '0.1.0' },
+        authentication: {
+          required: false,
+          schemes: [],
+        },
+        tools: tools.map((name) => ({ name, description: `MCP tool ${name} (x402 pay-per-call)`, inputSchema: { type: 'object', properties: {}, additionalProperties: true } })),
+      });
+  });
   registerDevFaucet(app, config);
 }
