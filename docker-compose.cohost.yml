@@ -1,0 +1,18 @@
+# CO-HOSTING override: run licita next to another app that already owns the
+# host ports (e.g. the bookmark-bot's Caddy on 80/443 and its API on :3000).
+#
+# Usage:  docker compose -f docker-compose.prod.yml -f docker-compose.cohost.yml up -d
+#
+# What changes vs. docker-compose.prod.yml:
+#   - The app does NOT publish a host port. It only exposes :3000 on the
+#     compose network. An external reverse proxy that is attached to this
+#     project's default network (docker network connect <proxy> <project>_default)
+#     can reach it as `app:3000`.
+#   - Postgres still publishes 127.0.0.1:5432 (host-side ops: psql, backups,
+#     backfill scripts) — that port must be free on the host. It is for the
+#     bookmark-bot co-host because that stack keeps its own postgres internal.
+services:
+  app:
+    ports: !reset []
+    expose:
+      - "3000"
