@@ -6,12 +6,14 @@
 # non-placeholder secrets.
 # The dev faucet route does not exist in this profile.
 #
-# Deployment note: the app binds to 127.0.0.1 — a reverse proxy (Caddy,
-# nginx, Cloudflare Tunnel, ...) must terminate TLS in front of it.
-# TRUST_PROXY=true lets Fastify read the client IP from X-Forwarded-For set
-# by that proxy. Postgres also binds to 127.0.0.1:5432 so host-side ops can
-# reach it locally (pg_dump cron, host checkout scripts like
-# scripts/backfill-identity.ts, psql). Never expose it beyond the loopback.
+# Deployment note: the app publishes no host ports — a reverse proxy (Caddy,
+# nginx, Cloudflare Tunnel, ...) must terminate TLS in front of it and reach
+# it over the Docker network via the `app` service name (see the shared
+# network in the reverse-proxy compose). TRUST_PROXY=true lets Fastify read
+# the client IP from X-Forwarded-For set by that proxy. Postgres binds to
+# 127.0.0.1:5432 so host-side ops can reach it locally (pg_dump cron, host
+# checkout scripts like scripts/backfill-identity.ts, psql). Never expose it
+# beyond the loopback.
 #
 # Migrations are an explicit deploy step: the `migrate` one-shot service
 # applies DDL on the admin connection (DATABASE_URL) and exits; the `app`
@@ -97,8 +99,8 @@ services:
       PLACSP_MAX_PAGES: ${PLACSP_MAX_PAGES:-5}
       PLACSP_DELAY_MS: ${PLACSP_DELAY_MS:-1000}
       PLACSP_SCHEDULE: ${PLACSP_SCHEDULE:-true}
-    ports:
-      - "127.0.0.1:3000:3000"
+    # No host port mapping: the reverse proxy (Caddy) reaches this service by
+    # its DNS name (`app`) over the shared Docker network.
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3000/health || exit 1"]
       interval: 30s
