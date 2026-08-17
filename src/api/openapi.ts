@@ -315,6 +315,27 @@ const statsData = {
   },
 } as const;
 
+/** GET /v1/stats/recent row — one request_logs entry (operator dashboard feed). */
+const recentStatsRow = {
+  type: 'object',
+  properties: {
+    ts: { type: 'string', format: 'date-time' },
+    client_key: { type: ['string', 'null'] },
+    endpoint: { type: ['string', 'null'] },
+    method: { type: ['string', 'null'] },
+    status: { type: ['integer', 'null'] },
+    latency_ms: { type: ['integer', 'null'] },
+    paid: { type: 'boolean' },
+    source: { type: ['string', 'null'], enum: ['rest', 'mcp'] },
+    user_agent: { type: ['string', 'null'] },
+    q: { type: ['string', 'null'] },
+    cpv: { type: ['string', 'null'] },
+    buyer: { type: ['string', 'null'] },
+    company: { type: ['string', 'null'] },
+    error: { type: ['string', 'null'] },
+  },
+} as const;
+
 // --- parameter schemas ------------------------------------------------------------
 
 const qParam = (name: string, description: string, schema: Record<string, unknown>) => ({
@@ -697,6 +718,38 @@ function paths(): Record<string, unknown> {
           '200': {
             description: 'Observability envelope',
             content: { 'application/json': { schema: envelopeOf(statsData) } },
+          },
+          '401': errResp('Missing/invalid operator key'),
+        },
+      },
+    },
+    '/v1/stats/recent': {
+      get: {
+        operationId: 'getRecentStats',
+        summary: 'Recent request-log rows (operator only)',
+        description:
+          'Free, operator-only. Requires header x-operator-key. Raw request_logs rows (ts, client_key, endpoint, method, status, latency_ms, paid, source, user_agent, q, cpv, buyer, company, error) ordered by ts DESC, newest first. Feeds the operator dashboard; not part of the public price ladder.',
+        parameters: [
+          {
+            name: 'x-operator-key',
+            in: 'header',
+            required: true,
+            schema: { type: 'string' },
+          },
+          {
+            name: 'limit',
+            in: 'query',
+            required: false,
+            description: 'Max rows to return (default 50, clamped to 200).',
+            schema: { type: 'integer', minimum: 1, maximum: 200, default: 50 },
+          },
+        ],
+        responses: {
+          '200': {
+            description: 'Observability envelope',
+            content: {
+              'application/json': { schema: envelopeOf({ type: 'array', items: recentStatsRow }) },
+            },
           },
           '401': errResp('Missing/invalid operator key'),
         },

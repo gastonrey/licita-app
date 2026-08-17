@@ -25,7 +25,7 @@ import {
 import { buyerHistoryHandler, buyerIdValidation } from './routes/buyers.js';
 import { renewalsHandler, renewalsValidation } from './routes/renewals.js';
 import { pricingHandler } from './routes/pricing.js';
-import { statsAuth, statsHandler } from './routes/stats.js';
+import { recentStatsHandler, statsAuth, statsHandler } from './routes/stats.js';
 
 /** Rate-limit identity: X-PAYMENT-derived (proof hash) when present, else client IP. */
 export function rateLimitKey(req: FastifyRequest): string {
@@ -186,6 +186,7 @@ export async function buildServer(config: AppConfig, db: Db): Promise<FastifyIns
   // free endpoints
   app.get('/v1/pricing', pricingHandler(ctx));
   app.get('/v1/stats', { preHandler: [statsAuth(config.operatorKey)] }, statsHandler(ctx));
+  app.get('/v1/stats/recent', { preHandler: [statsAuth(config.operatorKey)] }, recentStatsHandler(ctx));
   app.get('/openapi.json', async (_req, reply) => reply.send(buildOpenApi()));
 
   // Liveness/readiness: 200 when `SELECT 1` succeeds within a short timeout,

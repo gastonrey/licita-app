@@ -4,6 +4,7 @@ import { createDb } from './db/client.js';
 import { runMigrations } from './db/migrate.js';
 import { buildServer } from './api/server.js';
 import { registerWeb } from './web/pages.js';
+import { registerDashboard } from './web/dashboard.js';
 import { mountMcp } from './mcp/server.js';
 import { startScheduler } from './ingest/scheduler.js';
 
@@ -21,6 +22,7 @@ async function main(): Promise<void> {
 
   const app = await buildServer(config, db);
   registerWeb(app, config);
+  registerDashboard(app, config);
   mountMcp(app, config, db);
 
   if (config.ingestOnBoot) {

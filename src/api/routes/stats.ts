@@ -99,8 +99,25 @@ SELECT
 FROM awards
 `;
 
+// GET /v1/stats/recent — operator-only raw request-log feed for the operator
+// dashboard. Returns the newest rows first; the dashboard re-polls it on a timer.
+const RECENT_SQL = `
+SELECT ts, client_key, endpoint, method, status, latency_ms, paid, source,
+       user_agent, q, cpv, buyer, company, error
+FROM request_logs
+ORDER BY ts DESC
+LIMIT $1
+`;
+
 function rate(part: number, whole: number): number | null {
   return whole > 0 ? Math.round((part / whole) * 10000) / 10000 : null;
+}
+
+/** ?limit= — default 50, clamped to [1, 200]; anything invalid falls back to 50. */
+export function parseRecentLimit(v: unknown): number {
+  const n = Number(v);
+  if (!Number.isInteger(n) || n < 1) return 50;
+  return Math.min(n, 200);
 }
 
 export function statsHandler(ctx: RouteCtx) {
@@ -240,5 +257,14 @@ export function statsHandler(ctx: RouteCtx) {
     };
 
     return reply.send(envelope(req, data));
+  };
+}
+
+/** GET /v1/stats/recent — newest request_logs rows (free, operator-only auth). */
+export function recentStatsHandler(ctx: RouteCtx) {
+  return async (req: FastifyRequest, reply: FastifyReply) => {
+    const limit = parseRecentLimit((req.query as Record<string, unknown> | undefined)?.limit);
+    const { rows } = await ctx.db.query(RECENT_SQL, [limit]);
+    return reply.send(envelope(req, rows));
   };
 }
