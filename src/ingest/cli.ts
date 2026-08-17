@@ -75,7 +75,11 @@ export async function runIngestOnce(
     waf_blocks: 0,
   };
 
-  await runMigrations(db);
+  // DDL (schema_migrations bootstrap) runs on the admin connection; the app
+  // pool may use APP_DATABASE_URL (low-privilege licita_app) in production.
+  const adminDb = createDb(config, { admin: true });
+  await runMigrations(adminDb);
+  await adminDb.end();
 
   for (const source of resolveSources(config, opts.source)) {
     if (source === 'placsp' && !config.placsp.enabled) {
