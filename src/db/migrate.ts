@@ -37,7 +37,7 @@ export async function runMigrations(db: Db): Promise<string[]> {
   return done;
 }
 
-// CLI entry: tsx src/db/migrate.ts  (or compiled: node dist/db/migrate.js)
+// CLI entry: tsx src/db/migrate.ts  (or compiled: node dist/src/db/migrate.js)
 if (process.argv[1] && /migrate\.(ts|js)$/.test(process.argv[1])) {
   const config = loadConfig();
   // Migrations are DDL: always run on the admin connection, never the

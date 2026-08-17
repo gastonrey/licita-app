@@ -4,6 +4,7 @@ COPY package.json package-lock.json ./
 RUN npm ci --no-audit --no-fund
 COPY tsconfig.json ./
 COPY src ./src
+COPY scripts ./scripts
 RUN npx tsc -p tsconfig.json
 
 FROM node:20-alpine AS runtime
@@ -19,4 +20,4 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
   CMD wget -q -O /dev/null http://127.0.0.1:3000/health || exit 1
 # Migrations are idempotent and run on the admin connection (DATABASE_URL);
 # the app pool uses APP_DATABASE_URL when set. Run migrations, then start.
-CMD ["sh", "-c", "node dist/db/migrate.js && node dist/index.js"]
+CMD ["sh", "-c", "node dist/src/db/migrate.js && node dist/src/index.js"]

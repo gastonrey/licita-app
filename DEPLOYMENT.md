@@ -153,7 +153,7 @@ cd /opt/licita
 
 # 4a. TED full window + PLACSP (both sources). Idempotent and resumable.
 docker compose -f docker-compose.prod.yml run --rm app \
-  node dist/ingest/cli.js --once --source all
+  node dist/src/ingest/cli.js --once --source all
 #     Expect the final line: {"level":"info","msg":"ingest summary",
 #     "notices_seen":..., "upserted":..., ..., "errors":0}
 #     Any errors is exit code 1 (see §8, "ingest partial failures").
@@ -275,7 +275,7 @@ failure takes the VM *and* its backups otherwise.
 | `migrate` fails with `database "licita" does not exist` / connection refused | `db` not healthy yet, or `POSTGRES_PASSWORD` mismatch with the existing volume. Never change `POSTGRES_PASSWORD` after first init |
 | App logs `facilitator_unavailable` | the x402 facilitator is down or unreachable. The app fails closed (paid calls get a 402). Check egress/HTTPS from the VM; verify `curl https://www.x402.org/facilitator`. No data is at risk — retry when it returns |
 | App logs `insufficient_funds` on smoke | client wallet ran out of Sepolia USDC/ETH — fund and re-run; nothing to clean up |
-| App logs `scheduled ingest failed` | TED/PLACSP endpoint hiccup or a partial harvest. Re-run `docker compose -f docker-compose.prod.yml run --rm app node dist/ingest/cli.js --once --source all` — ingests are idempotent upserts |
+| App logs `scheduled ingest failed` | TED/PLACSP endpoint hiccup or a partial harvest. Re-run `docker compose -f docker-compose.prod.yml run --rm app node dist/src/ingest/cli.js --once --source all` — ingests are idempotent upserts |
 | **Ingest partial failures** | per-notice errors are counted in the summary (`errors`) and logged with `source_ref`; the harvest continues. Rows already written are kept. Re-running only touches the missing/updated ones. Exit code 1 on any error is the signal to re-run |
 | `permission denied for sequence ..._id_seq` | DB initialized with an old role script. Apply the grants (idempotent) and re-run migrate: `docker compose -f docker-compose.prod.yml run --rm migrate`, or run the SQL from `migrations/005_sequence_grants.sql` manually |
 | **Migration rollback** | there is no down-migration. Migrations are append-only and idempotent; to roll back a bad release, deploy the previous app image (it never *needs* newer schema to boot) and, if schema must be undone, take a `pg_dump` first and consult the migration SQL to reverse specific DDL manually. Never `DROP` a table from memory |

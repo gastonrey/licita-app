@@ -152,20 +152,31 @@ export function pickNif(identifiers: unknown): string | null {
   return null;
 }
 
-/** Add `months` to an ISO date, clamping to month end (2026-01-31 +1 → 2026-02-28). */
+/**
+ * Add `months` to an ISO date, clamping to month end (2026-01-31 +1 → 2026-02-28).
+ * Fractional months are supported: the fractional part is converted to days
+ * (1 month = 30.4375 days) and applied via addDaysIso. This matters because
+ * duration measures like "P207D" come in as ~6.8 months (monthsFromDuration);
+ * feeding a raw fraction into month arithmetic produced invalid dates like
+ * "2027-12.83-09".
+ */
 export function addMonthsIso(iso: string, months: number): string {
+  const whole = Math.floor(months);
+  const fracDays = Math.round((months - whole) * 30.4375);
   const [y, m, d] = iso.split('-').map(Number);
-  const total = (m - 1) + months;
+  const total = m - 1 + whole;
   const ny = y + Math.floor(total / 12);
   const nm = ((total % 12) + 12) % 12 + 1;
   const lastDay = new Date(Date.UTC(ny, nm, 0)).getUTCDate();
   const nd = Math.min(d, lastDay);
-  return `${ny}-${String(nm).padStart(2, '0')}-${String(nd).padStart(2, '0')}`;
+  const base = `${ny}-${String(nm).padStart(2, '0')}-${String(nd).padStart(2, '0')}`;
+  return fracDays === 0 ? base : addDaysIso(base, fracDays);
 }
 
 export function addDaysIso(iso: string, days: number): string {
-  const t = Date.parse(`${iso}T00:00:00Z`) + days * 86_400_000;
-  return new Date(t).toISOString().slice(0, 10);
+  const t = Date.parse(`${iso}T00:00:00Z`);
+  if (Number.isNaN(t)) return iso; // never throw on upstream garbage
+  return new Date(t + days * 86_400_000).toISOString().slice(0, 10);
 }
 
 /** First NUTS code more granular than the country (ES300 over ESP). */

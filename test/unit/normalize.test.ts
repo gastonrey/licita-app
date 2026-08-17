@@ -89,6 +89,20 @@ describe('scalar helpers', () => {
     expect(addMonthsIso('2026-07-01', 48)).toBe('2030-07-01');
     expect(addDaysIso('2026-12-31', 90)).toBe('2027-03-31');
   });
+
+  it('addMonthsIso accepts fractional months (duration measures like P207D)', () => {
+    // Regression: monthsFromDuration('207','DAY') ≈ 6.8. Month arithmetic on a
+    // raw fraction produced "2027-12.83-09" and broke production PLACSP ingest.
+    expect(addMonthsIso('2026-07-01', 6.83)).toBe('2027-01-26');
+    expect(addMonthsIso('2026-07-01', 0.5)).toBe('2026-07-16');
+    expect(addMonthsIso('2026-07-01', 0)).toBe('2026-07-01');
+    expect(addMonthsIso('2026-01-31', 1.5)).toBe('2026-03-15');
+  });
+
+  it('addDaysIso never throws on garbage input (upstream defect tolerance)', () => {
+    expect(addDaysIso('2027-12.83-09', -90)).toBe('2027-12.83-09');
+    expect(addDaysIso('not-a-date', 90)).toBe('not-a-date');
+  });
 });
 
 describe('parseTedNotice — fixture: recent ES IT award notices', () => {

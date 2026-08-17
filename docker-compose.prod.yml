@@ -50,7 +50,7 @@ services:
   # One-shot: applies pending migrations on the admin connection, then exits.
   migrate:
     build: .
-    command: ["node", "dist/db/migrate.js"]
+    command: ["node", "dist/src/db/migrate.js"]
     depends_on:
       db:
         condition: service_healthy

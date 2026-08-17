@@ -54,7 +54,7 @@ docker compose up --build -d  # db (postgres:16-alpine) + app (migrate → start
 docker compose logs -f app
 ```
 
-The app container runs `node dist/db/migrate.js && node dist/index.js` on boot;
+The app container runs `node dist/src/db/migrate.js && node dist/src/index.js` on boot;
 migrations are idempotent. The API is then at `http://localhost:3000`.
 
 ### Without Docker (local dev)
@@ -115,7 +115,7 @@ Either trigger one harvest manually:
 
 ```bash
 # docker (prod profile): docker compose -f docker-compose.prod.yml run --rm app \
-#   node dist/ingest/cli.js --once --source all   # compiled CLI, no tsx in the image
+#   node dist/src/ingest/cli.js --once --source all   # compiled CLI, no tsx in the image
 npm run ingest -- --once                 # full window (INGEST_MONTHS), TED only
 npm run ingest -- --once --max-notices 25   # small slice
 npm run ingest -- --once --source placsp --max-notices 25   # PLACSP slice (needs PLACSP_ENABLED=true)

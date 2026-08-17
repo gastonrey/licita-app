@@ -126,11 +126,13 @@ interface X402PayClient {
 /** The x402 v2 payment client; initialized at startup in x402 mode only. */
 let payClient: X402PayClient | null = null;
 
+type PayloadRequired = Parameters<x402Client['createPaymentPayload']>[0];
+
 /**
  * Validate an x402 v2 402 response: reads the base64 PAYMENT-REQUIRED header,
  * decodes it and confirms it is a valid x402 requirement.
  */
-function assert402(res: Response, what: string): PaymentRequired {
+function assert402(res: Response, what: string): PayloadRequired {
   assert(res.status === 402, `${what}: expected HTTP 402 to get payment requirements, got ${res.status}`);
   const raw = res.headers.get('payment-required');
   assert(raw && raw.length > 0, `${what}: 402 missing the PAYMENT-REQUIRED header (x402 v2)`);
@@ -143,7 +145,11 @@ function assert402(res: Response, what: string): PaymentRequired {
     );
   }
   assert(isPaymentRequired(decoded), `${what}: PAYMENT-REQUIRED header is not a valid x402 requirement`);
-  return decoded;
+  // The decoder emits a lenient merged V1/V2 shape; isPaymentRequired already
+  // narrowed it at runtime. The client defines its own PaymentRequired shape
+  // (top-level `resource`, `x402Version: number`), so cast to the exact type
+  // createPaymentPayload accepts instead of the schemas union.
+  return decoded as PayloadRequired;
 }
 
 /**
@@ -201,7 +207,7 @@ async function checkUsdcBalance(network: string, asset: string, address: `0x${st
   const chain = CHAIN_BY_NETWORK[network] ?? baseSepolia;
   let decimals = 6;
   try {
-    decimals = getDefaultAsset(network).decimals;
+    decimals = getDefaultAsset(network as `${string}:${string}`).decimals;
   } catch {
     // custom network: assume USDC 6 decimals
   }
@@ -384,7 +390,7 @@ async function main(): Promise<number> {
       const err = body?.error as Json | undefined;
       assert(err?.code === 'payment_required', `error.code=${err?.code}`);
       await checkUsdcBalance(a0.network, a0.asset, payClient.account.address);
-      console.log(`     402 v2: pay ${a0.amount} base units of USDC on ${a0.network} to ${a0.payTo} for "${a0.resource?.url}"`);
+      console.log(`     402 v2: pay ${a0.amount} base units of USDC on ${a0.network} to ${a0.payTo}`);
     } else {
       const body = (await res.json().catch(() => null)) as Json | null;
       assert(body?.x402Version === 1, '402 body missing x402Version=1');
