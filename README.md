@@ -15,6 +15,27 @@ Questions it answers: who bought, who won, for how much, under which CPV codes,
 when contracts start/end, which active tenders look similar to a company's
 track record, and which contracts are likely to be re-tendered soon.
 
+## Live instance
+
+A public production instance is live — agents can connect right now:
+
+- **MCP (streamable-HTTP):** `https://eutenders.duckdns.org/mcp`
+- **Discovery:** `https://eutenders.duckdns.org/llms.txt` · `/openapi.json` · `/v1/pricing` · `/docs`
+- **Payments:** x402 v2 (USDC on Base), pay-per-call, free discovery calls.
+  Unpaid tool calls return `{"payment_required": true, ...}` with `how_to_pay`
+  steps; create the payment with an x402 client from the `PAYMENT-REQUIRED`
+  requirement and retry with `payment_token`.
+
+Client config snippet for the live instance:
+
+```json
+{
+  "mcpServers": {
+    "eutenders": { "type": "streamable-http", "url": "https://eutenders.duckdns.org/mcp" }
+  }
+}
+```
+
 ## Architecture
 
 ```
@@ -338,9 +359,10 @@ shape:
   `service_completed_successfully`**.
 - App traffic runs as the low-privilege `licita_app` role
   (`APP_DATABASE_URL`); migrations/DDL always run as the admin user.
-- The app binds **127.0.0.1:3000 only**: a reverse proxy (Caddy/nginx/
-  Cloudflare) must terminate TLS in front. Keep `TRUST_PROXY=true` (default in
-  the prod file) so rate limiting keys on the real client IP.
+- The app publishes **no host port** (compose `app` has no `ports:`): a
+  reverse proxy (Caddy/nginx/Cloudflare) reaches it by DNS name over the
+  Docker network and terminates TLS in front. Keep `TRUST_PROXY=true`
+  (default in the prod file) so rate limiting keys on the real client IP.
 - PLACSP and the daily ingest scheduler are **on by default** in prod
   (`PLACSP_ENABLED=true`, `PLACSP_SCHEDULE=true`, `INGEST_ON_BOOT=true`), each
   overridable from `.env`.
@@ -373,7 +395,7 @@ shape:
 ## Testing
 
 ```bash
-npm test                 # 124 unit tests (vitest, pg-mem + fixtures)
+npm test                 # 256 unit tests (vitest, pg-mem + fixtures)
 npm run test:api-smoke   # server wiring smoke (payment middleware stubbed)
 npm run test:integration # REAL app + REAL embedded postgres + live TED slice
 npm run smoke            # autonomous-agent acceptance test (needs a running,
