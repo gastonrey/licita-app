@@ -445,7 +445,9 @@ async function main(): Promise<number> {
     assert(Number(d.id) === tenderId, 'tender id mismatch');
     assert(Array.isArray(d.awards), 'tender.awards not an array');
     const prov = meta.provenance as Array<Json>;
-    assert(prov.length > 0 && prov[0].source === 'ted', 'tender provenance missing ted source');
+    const src = prov[0]?.source as string | undefined;
+    assert(prov.length > 0, 'tender provenance empty');
+    assert(src === 'ted' || src === 'placsp', `tender provenance source=${src}, expected ted or placsp`);
     console.log(
       `     tender #${tenderId} "${String(d.title ?? '').slice(0, 80)}" awards=${(d.awards as unknown[]).length} ref=${d.source_ref}`,
     );
