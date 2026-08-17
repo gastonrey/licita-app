@@ -1,10 +1,31 @@
 import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadConfig } from '../config.js';
 import { createDb, type Db } from './client.js';
 
-const MIGRATIONS_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'migrations');
+/**
+ * Locate the migrations directory across layouts:
+ * - source/tsx:   src/db/migrate.ts            -> <root>/migrations
+ * - compiled old: dist/db/migrate.js           -> <root>/migrations
+ * - compiled new: dist/src/db/migrate.js       -> <root>/migrations (via cwd)
+ * Prefer cwd (container WORKDIR /app) so migrations ship next to package.json.
+ */
+function findMigrationsDir(): string {
+  const here = dirname(fileURLToPath(import.meta.url));
+  const candidates = [
+    join(here, '..', '..', 'migrations'),
+    join(here, '..', '..', '..', 'migrations'),
+    join(process.cwd(), 'migrations'),
+  ];
+  for (const c of candidates) {
+    if (existsSync(c)) return c;
+  }
+  return candidates[0];
+}
+
+const MIGRATIONS_DIR = findMigrationsDir();
 
 export async function runMigrations(db: Db): Promise<string[]> {
   await db.query(
