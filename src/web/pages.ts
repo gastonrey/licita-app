@@ -42,7 +42,7 @@ ${body}
 </html>`;
 }
 
-const NAV = `<nav class="muted"><a href="/">home</a><a href="/docs">docs</a><a href="/pricing">pricing</a><a href="/openapi.json">openapi.json</a><a href="/llms.txt">llms.txt</a><a href="/mcp">/mcp (MCP)</a></nav>`;
+const NAV = `<nav class="muted"><a href="/">home</a><a href="/docs">docs</a><a href="/use-cases">use cases</a><a href="/data">data</a><a href="/pricing">pricing</a><a href="/openapi.json">openapi.json</a><a href="/llms.txt">llms.txt</a><a href="/mcp">/mcp (MCP)</a></nav>`;
 
 /** ENDPOINT_PRICES rows (Research is config-owned and rendered separately). */
 const ENDPOINT_ROWS = Object.entries(ENDPOINT_PRICES)
@@ -156,12 +156,24 @@ An unpaid request returns <code>HTTP 402</code> with the exact payment requireme
 
 <h2>What questions it answers</h2>
 <ul>
-<li>Who bought what, who won, for how much, under which CPV codes.</li>
-<li>Company track record: wins, total awarded value, top CPVs and buyers.</li>
-<li>Buyer history: award history, supplier concentration, re-tender recurrence.</li>
-<li>Upcoming renewals: contracts and frameworks likely to be re-tendered soon
-(deterministic heuristic with per-signal evidence — not a probability model).</li>
+<li><strong>Who bought what, who won, for how much, under which CPV codes.</strong></li>
+<li><strong>Company track record: wins, total awarded value, top CPVs and buyers.</strong></li>
+<li><strong>Buyer history: award history, supplier concentration, re-tender recurrence.</strong></li>
+<li><strong>Upcoming renewals: contracts and frameworks likely to be re-tendered soon
+(deterministic heuristic with per-signal evidence — not a probability model).</strong></li>
 </ul>
+
+<h2>Use cases</h2>
+<p>Concrete agent missions with the exact endpoints and costs:
+<a href="/use-cases/tender-intelligence">tender intelligence</a>,
+<a href="/use-cases/company-research">company research</a>,
+<a href="/use-cases/buyer-intelligence">buyer intelligence</a>,
+<a href="/use-cases/renewals-forecasting">renewals forecasting</a>.</p>
+
+<h2>Data</h2>
+<p>What Licita indexes and where it comes from:
+<a href="/data">data overview</a>, <a href="/data/spain">Spain (PLACSP)</a>,
+<a href="/data/eu">EU (TED)</a>.</p>
 
 <h2>Payment mode</h2>
 <p>Payments mode: <code>${config.paymentsMode}</code>. Priced endpoints return
@@ -398,6 +410,10 @@ ${lines}
   payment flow), /docs (human docs), /pricing (price table), /mcp (MCP endpoint),
   /.well-known/mcp/server-card.json (MCP server card)
 - Paid 402s carry extensions.bazaar (x402 Bazaar discovery extension) so facilitators catalog Licita.
+- Use cases: /use-cases (index) and /use-cases/tender-intelligence, /use-cases/company-research,
+  /use-cases/buyer-intelligence, /use-cases/renewals-forecasting — agent missions with the exact
+  endpoints, costs and real response shapes.
+- Data: /data (overview), /data/spain (PLACSP Spain), /data/eu (TED EU) — sources, coverage, examples.
 
 ## Response envelope
 - Success: {"data": ..., "meta": {"request_id", "price_usd", "paid", "provenance": [...]}}.
@@ -549,6 +565,167 @@ const SERVER_CARD_TOOLS: Array<{
   },
 ];
 
+// --- P1: static use-case and data pages (agent-first discovery/SEO) ---------
+// Plain semantic HTML like the rest of the site; every example is a REAL row
+// shape (labeled example) so crawlers and agents see honest outputs.
+
+interface UseCase {
+  slug: string;
+  title: string;
+  problem: string;
+  tools: string; // prose: which endpoints/MCP tools + price
+  example: string; // pre block, labeled example
+  honestNote: string;
+}
+
+const USECASES: UseCase[] = [
+  {
+    slug: 'tender-intelligence',
+    title: 'Tender intelligence — find recent tenders and who won',
+    problem:
+      'An agent needs recent procurement activity on a topic: which tenders were published or awarded, by whom, for how much, with provenance.',
+    tools:
+      '<code>GET /v1/search</code> ($0.02/call) for compact rows, <code>GET /v1/tenders/:id</code> ($0.02/call) for full tender + award detail. MCP: <code>search_tenders</code>, <code>get_tender</code>.',
+    example: `# GET /v1/search?q=proteccion+de+datos&type=award  ($0.02 USDC)
+→ {"data":[{ "id": 8684, "source": "placsp", "source_ref": "2026/CONTRAT/000064",
+   "buyer": "Alcaldía del Ayuntamiento de Oleiros", "type": "award",
+   "title": "Servizo de desenvolvemento de funcións e obrigas do delegado de protección de datos..." }],
+   "meta": {"paid": true, "price_usd": "0.02", "provenance": [{"source":"placsp","source_ref":"2026/CONTRAT/000064"}]}}`,
+    honestNote: 'Every row exposes meta.provenance (source + source_ref + upstream url). Nulls are never fabricated.',
+  },
+  {
+    slug: 'company-research',
+    title: 'Company research — track record and live opportunities',
+    problem:
+      'An agent evaluating a supplier needs wins, total awarded value, top CPVs and buyers, plus tenders matching that company profile right now.',
+    tools:
+      '<code>GET /v1/companies/:id</code> ($0.05), <code>GET /v1/companies/:id/awards</code> ($0.05), <code>GET /v1/companies/:id/opportunities</code> ($0.10). MCP: <code>get_company</code>, <code>get_company_awards</code>, <code>get_company_opportunities</code>.',
+    example: `# GET /v1/companies/:id  ($0.05 USDC)
+→ {"data": {"name": "APDTIC PROFESIONALES S.L.", "country": "ES", "nif": "...",
+   "wins": 1, "total_awarded_eur": 18000, "top_cpvs": [{"cpv": "79000000", "count": 1}],
+   "top_buyers": [{"buyer": "Alcaldía del Ayuntamiento de Oleiros", "count": 1}]},
+   "meta": {"paid": true, "price_usd": "0.05"}}`,
+    honestNote: 'Company identity is cross-source (NIF + aliases + source identifiers); aggregates are computed over the indexed history only and every response exposes meta.provenance.',
+  },
+  {
+    slug: 'buyer-intelligence',
+    title: 'Buyer intelligence — activity, concentration, recurrence',
+    problem:
+      'An agent needs a buyer profile: award history, supplier concentration (top-supplier share) and per-CPV recurrence so it can time outreach.',
+    tools:
+      '<code>GET /v1/buyers/:id/history</code> ($0.05/call). MCP: <code>get_buyer_history</code>.',
+    example: `# GET /v1/buyers/:id/history  ($0.05 USDC)
+→ {"data": {"id": 1680, "name": "Alcaldía del Ayuntamiento de Oleiros", "awards_total": 1,
+   "supplier_concentration": 1.0, "recurrence": [{"cpv": "79000000", "median_months": null}]},
+   "meta": {"paid": true, "price_usd": "0.05"}}`,
+    honestNote: 'Concentration/recurrence are derived from indexed awards; small histories can show 1.0 concentration — read counts alongside ratios. Every response exposes meta.provenance.',
+  },
+  {
+    slug: 'renewals-forecasting',
+    title: 'Renewals forecasting — which contracts will be re-tendered',
+    problem:
+      'An agent hunting pipeline wants contracts and frameworks likely to be re-tendered in a window, with per-signal evidence.',
+    tools:
+      '<code>GET /v1/renewals?window_months=12</code> ($0.25/call) or <code>POST /v1/research</code> ($0.50/call) for a full brief. MCP: <code>get_renewals</code>, <code>research</code>.',
+    example: `# GET /v1/renewals?window_months=12&cpv=72  ($0.25 USDC)
+→ {"data": {"signals": [{"id": 1, "signal_type": "duration_expiry", "cpv": "72000000",
+   "buyer": {"name": "Consorci Hospital Clínic de Barcelona"},
+   "window_start": "2022-09-18", "window_end": "2023-03-17", "confidence": "low",
+   "basis": {"signal_type": "duration_expiry", "tender_ref": "..."}}],
+   "meta": {"paid": true, "price_usd": "0.25",
+   "methodology": "Deterministic heuristic — NOT calibrated probabilities."}}`,
+    honestNote:
+      'Signals are a deterministic heuristic over historical awards and dates with confidence low|medium|high — never a probability estimate. Every signal exposes its full evidence in basis, and the envelope carries meta.provenance.',
+  },
+];
+
+const USECASE_INDEX = `
+<h1>Use cases</h1>
+<p class="muted">Concrete agent missions, the exact endpoints and MCP tools that solve them, their cost,
+and what a real response looks like. Every example is a labeled sample — agents get the same shapes
+after paying per call.</p>
+${USECASES.map(
+  (uc) => `<h2><a href="/use-cases/${uc.slug}">${uc.title}</a></h2>
+<p>${uc.problem}</p>
+<p class="muted">${uc.tools}</p>`,
+).join('\n')}
+<h2>Free first look</h2>
+<p>Validate the data before paying: <a href="/v1/demo">GET /v1/demo</a> returns a labeled sample of the
+most recent tender + renewal signal at no cost.</p>`;
+
+function useCasePage(slug: string): string | null {
+  const uc = USECASES.find((u) => u.slug === slug);
+  if (!uc) return null;
+  return page(
+    `Use case: ${uc.title}`,
+    `${NAV}
+<h1>${uc.title}</h1>
+<p>${uc.problem}</p>
+<h2>Tools</h2>
+<p>${uc.tools}</p>
+<h2>Example response (labeled sample)</h2>
+<pre>${uc.example}</pre>
+<h2>Honesty note</h2>
+<p class="muted">${uc.honestNote}</p>
+<p class="muted"><a href="/use-cases">all use cases</a></p>`,
+  );
+}
+
+const DATA_OVERVIEW = `
+<h1>Data</h1>
+<p class="muted">What Licita indexes, where it comes from, and how agents can validate it before paying.
+Counts are updated on ingestion — they are operational facts, not projections.</p>
+<ul>
+<li><strong>12,718 procurement records</strong> across two public sources (see below).</li>
+<li><strong>TED</strong> (Tenders Electronic Daily) — EU award notices, live by default:
+<a href="/data/eu">EU data page</a>.</li>
+<li><strong>PLACSP</strong> — Spanish public-sector contracts (<code>2026/CONTRAT/…</code> refs) when PLACSP
+ingestion is enabled: <a href="/data/spain">Spain data page</a>.</li>
+</ul>
+<h2>Access</h2>
+<p>Free: <a href="/v1/demo">GET /v1/demo</a> (labeled sample), <a href="/v1/pricing">price ladder</a>,
+<a href="/llms.txt">/llms.txt</a>, <a href="/openapi.json">OpenAPI</a>. Paid: every row returns
+<code>meta.provenance</code> (source + source_ref + upstream url); nulls are never fabricated.</p>`;
+
+const DATA_SPAIN = `
+<h1>Data — Spain (PLACSP)</h1>
+<p class="muted">Spanish public-sector procurement contracts ingested from PLACSP when enabled.
+Publication references look like <code>2026/CONTRAT/000064</code>.</p>
+<ul>
+<li><strong>Coverage</strong> — awards with buyer, winner, CPV codes, values and publication refs;
+Spanish public-sector entities (city councils, regional governments, agencies).</li>
+<li><strong>Example rows</strong> — award by Alcaldía del Ayuntamiento de Oleiros to
+APDTIC PROFESIONALES S.L. (ref <code>2026/CONTRAT/000064</code>); award by Dirección General de
+IBERMUTUA to Mnemo Evolution &amp; Integration Services, S.A.</li>
+<li><strong>Query</strong> — <code>GET /v1/search?q=…&amp;type=award</code>, <code>GET /v1/companies/:id</code>,
+<code>GET /v1/buyers/:id/history</code>, <code>GET /v1/renewals</code>.</li>
+</ul>
+<p class="muted"><a href="/data">data overview</a></p>`;
+
+const DATA_EU = `
+<h1>Data — EU (TED)</h1>
+<p class="muted">EU public procurement award notices ingested from TED (Tenders Electronic Daily).
+Provenance links to the original notice (<code>ted.europa.eu/udl?uri=TED:NOTICE:…</code>).</p>
+<ul>
+<li><strong>Coverage</strong> — notices with publication-number, buyer, winner, CPV, values,
+submissions and framework-agreement flags across EU member states.</li>
+<li><strong>Renewal signals</strong> — duration-expiry, framework-expiry and recurrence signals are
+derived from historical awards (deterministic heuristic, confidence low|medium|high).</li>
+<li><strong>Query</strong> — <code>GET /v1/search</code>, <code>GET /v1/tenders/:id</code>,
+<code>POST /v1/research</code> (topic brief), <code>GET /v1/renewals</code>.</li>
+</ul>
+<p class="muted"><a href="/data">data overview</a></p>`;
+
+function dataPage(kind: 'overview' | 'spain' | 'eu'): string {
+  const map = {
+    overview: ['Data', DATA_OVERVIEW],
+    spain: ['Data — Spain (PLACSP)', DATA_SPAIN],
+    eu: ['Data — EU (TED)', DATA_EU],
+  } as const;
+  const [title, body] = map[kind];
+  return page(title, `${NAV}\n${body}`);
+}
+
 function serverCard(config: AppConfig): Record<string, unknown> {
   return {
     schemaVersion: '2025-12-11',
@@ -569,6 +746,20 @@ function serverCard(config: AppConfig): Record<string, unknown> {
 export function registerWeb(app: FastifyInstance, config: AppConfig): void {
   app.get('/', async (_req, reply) => reply.type('text/html; charset=utf-8').send(homePage(config)));
   app.get('/docs', async (_req, reply) => reply.type('text/html; charset=utf-8').send(docsPage(config)));
+  app.get('/use-cases', async (_req, reply) =>
+    reply.type('text/html; charset=utf-8').send(page('Use cases', `${NAV}\n${USECASE_INDEX}`)),
+  );
+  app.get('/use-cases/:slug', async (req, reply) => {
+    const slug = (req.params as { slug: string }).slug;
+    const html = useCasePage(slug);
+    if (!html) return reply.code(404).type('text/html; charset=utf-8').send(page('Not found', `${NAV}\n<h1>Not found</h1>`));
+    return reply.type('text/html; charset=utf-8').send(html);
+  });
+  app.get('/data', async (_req, reply) =>
+    reply.type('text/html; charset=utf-8').send(dataPage('overview')),
+  );
+  app.get('/data/spain', async (_req, reply) => reply.type('text/html; charset=utf-8').send(dataPage('spain')));
+  app.get('/data/eu', async (_req, reply) => reply.type('text/html; charset=utf-8').send(dataPage('eu')));
   app.get('/pricing', async (_req, reply) => reply.type('text/html; charset=utf-8').send(pricingPage(config)));
   app.get('/llms.txt', async (_req, reply) => reply.type('text/plain; charset=utf-8').send(llmsTxt(config)));
   app.get('/robots.txt', async (_req, reply) =>
