@@ -94,3 +94,69 @@ describe('discovery surfaces teach the x402 v2 flow', () => {
     expect(p.payment_flow.signature_header).toBe('PAYMENT-SIGNATURE');
   });
 });
+
+describe('P1 use-case and data pages (agent-first discovery)', () => {
+  it('indexes the four use cases with their endpoints and costs', async () => {
+    const app = await webApp();
+    const res = await app.inject({ method: 'GET', url: '/use-cases' });
+    expect(res.statusCode).toBe(200);
+    for (const needle of [
+      '/use-cases/tender-intelligence',
+      '/use-cases/company-research',
+      '/use-cases/buyer-intelligence',
+      '/use-cases/renewals-forecasting',
+      'GET /v1/demo',
+    ]) {
+      expect(res.body, `/use-cases missing "${needle}"`).toContain(needle);
+    }
+    await app.close();
+  });
+
+  it('each use case teaches the mission, tools, cost and an honest labeled example', async () => {
+    const app = await webApp();
+    const cases: Array<[string, string]> = [
+      ['tender-intelligence', 'GET /v1/search'],
+      ['company-research', 'GET /v1/companies/:id'],
+      ['buyer-intelligence', 'GET /v1/buyers/:id/history'],
+      ['renewals-forecasting', 'GET /v1/renewals'],
+    ];
+    for (const [slug, endpoint] of cases) {
+      const res = await app.inject({ method: 'GET', url: `/use-cases/${slug}` });
+      expect(res.statusCode, `use-case ${slug} status`).toBe(200);
+      for (const needle of [endpoint, 'labeled sample', 'Honesty note', 'provenance']) {
+        expect(res.body, `${slug} missing "${needle}"`).toContain(needle);
+      }
+    }
+    const missing = await app.inject({ method: 'GET', url: '/use-cases/nope' });
+    expect(missing.statusCode).toBe(404);
+    await app.close();
+  });
+
+  it('data pages describe sources, coverage and provenance honestly', async () => {
+    const app = await webApp();
+    const data: Array<[string, string[]]> = [
+      ['/data', ['12,718', 'TED', 'PLACSP', '/data/spain', '/data/eu']],
+      ['/data/spain', ['PLACSP', '2026/CONTRAT/000064', 'Oleiros', 'GET /v1/search']],
+      ['/data/eu', ['TED', 'ted.europa.eu', 'GET /v1/tenders/:id']],
+    ];
+    for (const [url, needles] of data) {
+      const res = await app.inject({ method: 'GET', url });
+      expect(res.statusCode, `${url} status`).toBe(200);
+      for (const needle of needles) {
+        expect(res.body, `${url} missing "${needle}"`).toContain(needle);
+      }
+    }
+    await app.close();
+  });
+
+  it('homepage and llms.txt link the new discovery surfaces', async () => {
+    const app = await webApp();
+    const home = await app.inject({ method: 'GET', url: '/' });
+    expect(home.body).toContain('/use-cases/tender-intelligence');
+    expect(home.body).toContain('/data/spain');
+    const llms = await app.inject({ method: 'GET', url: '/llms.txt' });
+    expect(llms.body).toContain('/use-cases/renewals-forecasting');
+    expect(llms.body).toContain('/data/eu');
+    await app.close();
+  });
+});

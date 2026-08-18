@@ -53,7 +53,7 @@ async function payResearch(query: string) {
     headers: { 'content-type': 'application/json', 'payment-signature': proof },
     body: JSON.stringify({ query }),
   });
-  const body = await paid.json();
+  const body = (await paid.json()) as { meta?: Record<string, unknown>; data?: { topic?: unknown; confidence?: unknown; findings?: unknown[] } };
   console.log('step 5  paid status:', paid.status);
   if (!paid.ok) {
     console.log('         error:', JSON.stringify(body).slice(0, 400));
