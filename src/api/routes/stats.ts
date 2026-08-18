@@ -85,6 +85,25 @@ SELECT user_agent, count(*)::int AS n
 FROM request_logs WHERE user_agent IS NOT NULL
 GROUP BY user_agent ORDER BY n DESC, user_agent LIMIT 10
 `;
+// MCP discovery: handshake rows (mcp:initialize / mcp:tools/list) written by
+// logMcpHandshake, plus tool-call rows (mcp:<tool>). Distinct client_key per
+// source answers "how many agents discovered the server" vs "how many paid".
+// CASE WHEN (not FILTER) keeps the query pg-mem-compatible in tests.
+const MCP_DISCOVERY_SQL = `
+SELECT
+  sum(CASE WHEN source = 'mcp' AND endpoint = 'mcp:initialize' THEN 1 ELSE 0 END)::int AS initialize_count,
+  sum(CASE WHEN source = 'mcp' AND endpoint = 'mcp:tools/list' THEN 1 ELSE 0 END)::int AS tools_list_count,
+  count(DISTINCT CASE WHEN source = 'mcp' THEN client_key END)::int AS mcp_clients,
+  count(DISTINCT CASE WHEN source = 'mcp' AND endpoint IN ('mcp:initialize', 'mcp:tools/list')
+                      AND status = 200 AND paid = false THEN client_key END)::int AS discovered_clients
+FROM request_logs
+`;
+const MCP_HANDSHAKES_BY_UA_SQL = `
+SELECT user_agent, count(*)::int AS n
+FROM request_logs
+WHERE source = 'mcp' AND (endpoint = 'mcp:initialize' OR endpoint = 'mcp:tools/list')
+GROUP BY user_agent ORDER BY n DESC, user_agent LIMIT 10
+`;
 const FAILED_SQL = `SELECT count(*)::int AS n FROM request_logs WHERE status >= 400 OR error IS NOT NULL`;
 const FAILED_RATE_SQL = `
 SELECT sum(CASE WHEN status >= 400 OR error IS NOT NULL THEN 1 ELSE 0 END)::int AS failed,
@@ -138,6 +157,8 @@ export function statsHandler(ctx: RouteCtx) {
       topSearches,
       uniqueUserAgents,
       topUserAgents,
+      mcpDiscovery,
+      mcpHandshakesByUa,
       failed,
       failedRate,
       nullRates,
@@ -156,6 +177,8 @@ export function statsHandler(ctx: RouteCtx) {
       db.query(TOP_SEARCHES_SQL),
       db.query(UNIQUE_USER_AGENTS_SQL),
       db.query(TOP_USER_AGENTS_SQL),
+      db.query(MCP_DISCOVERY_SQL),
+      db.query(MCP_HANDSHAKES_BY_UA_SQL),
       db.query(FAILED_SQL),
       db.query(FAILED_RATE_SQL),
       db.query(NULL_RATES_SQL),
@@ -233,6 +256,16 @@ export function statsHandler(ctx: RouteCtx) {
       unique_user_agents: {
         count: Number(uniqueUserAgents.rows[0]?.n ?? 0),
         top: topUserAgents.rows.map((r) => ({
+          user_agent: String(r.user_agent),
+          requests: Number(r.n),
+        })),
+      },
+      mcp_discovery: {
+        initialize_count: Number(mcpDiscovery.rows[0]?.initialize_count ?? 0),
+        tools_list_count: Number(mcpDiscovery.rows[0]?.tools_list_count ?? 0),
+        mcp_clients: Number(mcpDiscovery.rows[0]?.mcp_clients ?? 0),
+        discovered_clients: Number(mcpDiscovery.rows[0]?.discovered_clients ?? 0),
+        top_handshake_user_agents: mcpHandshakesByUa.rows.map((r) => ({
           user_agent: String(r.user_agent),
           requests: Number(r.n),
         })),

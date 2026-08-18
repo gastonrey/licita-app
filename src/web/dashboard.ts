@@ -76,6 +76,9 @@ button { cursor: pointer; }
   <h2>Recent activity</h2>
   <div id="recent"></div>
 
+  <h2>MCP discovery</h2>
+  <div id="mcp-discovery"></div>
+
   <h2>Who accessed</h2>
   <div class="grid2">
     <div><h3 class="h3">Repeat paid clients</h3><div id="repeat-clients"></div></div>
@@ -201,6 +204,25 @@ function render(stats, recent) {
     : '<table><thead><tr><th>User agent</th><th class="num">Requests</th></tr></thead><tbody>' +
       uaTop.map((r) => '<tr><td title="' + esc(r.user_agent) + '">' + esc(short(r.user_agent, 40)) + '</td><td class="num">' + esc(r.requests) + '</td></tr>').join('') +
       '</tbody></table>';
+
+  const md = stats.mcp_discovery || {};
+  const mdKpis = [
+    ['Handshakes', esc(md.initialize_count ?? 0)],
+    ['tools/list', esc(md.tools_list_count ?? 0)],
+    ['MCP clients', esc(md.mcp_clients ?? 0)],
+    ['Discovered clients', esc(md.discovered_clients ?? 0)],
+  ];
+  const mdTopUa = md.top_handshake_user_agents || [];
+  $('mcp-discovery').innerHTML =
+    '<div class="kpis">' + mdKpis
+      .map((p) => '<div class="kpi"><div class="kpi-label">' + p[0] + '</div><div class="kpi-val">' + p[1] + '</div></div>')
+      .join('') + '</div>' +
+    (mdTopUa.length === 0
+      ? '<p class="muted">No MCP handshakes recorded yet.</p>'
+      : '<h3 class="h3">Handshake user agents</h3>' +
+        '<table><thead><tr><th>User agent</th><th class="num">Handshakes</th></tr></thead><tbody>' +
+        mdTopUa.map((r) => '<tr><td title="' + esc(r.user_agent) + '">' + esc(short(r.user_agent, 40)) + '</td><td class="num">' + esc(r.requests) + '</td></tr>').join('') +
+        '</tbody></table>');
 
   const topReq = stats.top_requested || {};
   $('top-cpvs').innerHTML = kvTable(topReq.cpvs, 'CPV', true);

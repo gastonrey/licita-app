@@ -8,9 +8,9 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import type { Db } from '../../src/db/client.js';
 import type { AppConfig } from '../../src/config.js';
-import { buildMcpServer } from '../../src/mcp/server.js';
+import { buildMcpServer, mountMcp } from '../../src/mcp/server.js';
 import { DevPaymentProvider } from '../../src/pay/devProvider.js';
-import { resetPayments } from '../../src/pay/middleware.js';
+import { initPayments, resetPayments } from '../../src/pay/middleware.js';
 import { buildServer } from '../../src/api/server.js';
 import { statsHandler } from '../../src/api/routes/stats.js';
 import { createMetrics } from '../../src/obs/metrics.js';
@@ -214,6 +214,79 @@ describe('REST request logging (P0.7)', () => {
   });
 });
 
+describe('MCP handshake discovery logging', () => {
+  let app: ReturnType<typeof Fastify>;
+  let logs: Db;
+  const MCP_HEADERS = {
+    'content-type': 'application/json',
+    accept: 'application/json, text/event-stream',
+    'user-agent': 'discovery-agent/1.0',
+  };
+
+  beforeEach(async () => {
+    const made = await makeObsDb();
+    logs = made.logs;
+    initPayments(config, made.db); // mountMcp consumes the runtime owned by buildServer
+    app = Fastify({ logger: false });
+    mountMcp(app, config, made.db);
+  });
+
+  afterEach(async () => {
+    await app.close();
+    resetPayments();
+  });
+
+  it('logs an initialize handshake with source mcp, UA and IP-hashed client key', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/mcp',
+      headers: MCP_HEADERS,
+      payload: {
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'initialize',
+        params: {
+          protocolVersion: '2025-03-26',
+          capabilities: {},
+          clientInfo: { name: 'discovery-agent', version: '1.0.0' },
+        },
+      },
+    });
+    expect(res.statusCode).toBe(200);
+    await waitForRows(logs, 1);
+    const { rows } = await logs.query('SELECT * FROM request_logs ORDER BY id');
+    expect(rows).toHaveLength(1);
+    const row = rows[0];
+    expect(row.source).toBe('mcp');
+    expect(row.endpoint).toBe('mcp:initialize');
+    expect(row.method).toBe('POST');
+    expect(row.paid).toBe(false);
+    expect(row.user_agent).toBe('discovery-agent/1.0');
+    expect(row.client_key).toBe(hashIp('127.0.0.1', config.operatorKey));
+    expect(String(row.client_key)).not.toContain('127.0.0.1');
+  });
+
+  it('logs tools/list but ignores noise methods (ping, notifications)', async () => {
+    await app.inject({
+      method: 'POST',
+      url: '/mcp',
+      headers: MCP_HEADERS,
+      payload: { jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} },
+    });
+    await app.inject({
+      method: 'POST',
+      url: '/mcp',
+      headers: MCP_HEADERS,
+      payload: { jsonrpc: '2.0', id: 2, method: 'ping', params: {} },
+    });
+    await waitForRows(logs, 1);
+    const { rows } = await logs.query('SELECT * FROM request_logs ORDER BY id');
+    expect(rows).toHaveLength(1); // only tools/list; ping is not a discovery signal
+    expect(rows[0].endpoint).toBe('mcp:tools/list');
+    expect(rows[0].user_agent).toBe('discovery-agent/1.0');
+  });
+});
+
 describe('IP hashing and field truncation (P0.7)', () => {
   it('hashIp is deterministic, secret-dependent and never reveals the raw IP', () => {
     const a = hashIp('203.0.113.42', 'secret-a');
@@ -263,6 +336,16 @@ describe('stats aggregation (P0.7)', () => {
     await db.query(
       `INSERT INTO request_logs (client_key, endpoint, method, status, latency_ms, q, zero_result, user_agent, source, paid, error)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+      ['ip_z', 'mcp:initialize', 'POST', 200, 4, null, false, 'probe-agent/1.0', 'mcp', false, null],
+    );
+    await db.query(
+      `INSERT INTO request_logs (client_key, endpoint, method, status, latency_ms, q, zero_result, user_agent, source, paid, error)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+      ['ip_z', 'mcp:tools/list', 'POST', 200, 3, null, false, 'probe-agent/1.0', 'mcp', false, null],
+    );
+    await db.query(
+      `INSERT INTO request_logs (client_key, endpoint, method, status, latency_ms, q, zero_result, user_agent, source, paid, error)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
       ['ip_y', 'GET /v1/search', 'GET', 402, 3, 'tenders', false, 'curl/8.2', 'rest', false, 'payment_required'],
     );
     await db.query(
@@ -300,15 +383,15 @@ describe('stats aggregation (P0.7)', () => {
     )) as { data: Record<string, unknown> };
 
     const data = body.data;
-    expect(data.unique_clients).toBe(3);
+    expect(data.unique_clients).toBe(4);
     expect(data.requests_by_source).toEqual([
       { source: 'rest', requests: 4 },
-      { source: 'mcp', requests: 1 },
+      { source: 'mcp', requests: 3 },
     ]);
-    expect(data.zero_result_queries).toEqual({ count: 1, rate: 0.2 });
+    expect(data.zero_result_queries).toEqual({ count: 1, rate: 0.1429 });
     expect(data.payment_required_responses).toBe(2);
     expect(data.failed_queries).toBe(3);
-    expect(data.failed_requests_rate).toEqual({ count: 3, total: 5, rate: 0.6 });
+    expect(data.failed_requests_rate).toEqual({ count: 3, total: 7, rate: 0.4286 });
     expect(data.top_searches).toEqual([
       { q: 'software', requests: 2 },
       { q: 'boom', requests: 1 },
@@ -316,11 +399,19 @@ describe('stats aggregation (P0.7)', () => {
       { q: 'tenders', requests: 1 },
     ]);
     expect(data.unique_user_agents).toMatchObject({
-      count: 2,
+      count: 3,
       top: [
         { user_agent: 'curl/8.1', requests: 2 },
         { user_agent: 'curl/8.2', requests: 2 },
+        { user_agent: 'probe-agent/1.0', requests: 2 },
       ],
+    });
+    expect(data.mcp_discovery).toEqual({
+      initialize_count: 1,
+      tools_list_count: 1,
+      mcp_clients: 2,
+      discovered_clients: 1,
+      top_handshake_user_agents: [{ user_agent: 'probe-agent/1.0', requests: 2 }],
     });
     expect(data.repeat_clients).toEqual({
       count: 1,

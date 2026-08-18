@@ -5,7 +5,7 @@
 // the REST routes: all SQL lives in src/api/routes/* and is imported here.
 
 import { z } from 'zod';
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import type { AppConfig } from '../config.js';
@@ -594,6 +594,12 @@ export function mountMcp(app: FastifyInstance, config: AppConfig, db: Db): void 
     method: ['GET', 'POST', 'DELETE'],
     url: '/mcp',
     handler: async (req, reply) => {
+      // Discovery handshake observability: initialize + tools/list are the
+      // "an agent discovered this server" signals (the transport itself is
+      // free; tool calls are already logged by toolCallLog). Logged with the
+      // same pseudonymous client_key (sha256(ip + OPERATOR_KEY)) and source
+      // 'mcp' as tool calls, so discovery is countable without storing IPs.
+      logMcpHandshake(req, db, log, config);
       reply.hijack();
       const server = buildMcpServer(provider, db, config, { clientIp: req.ip, log });
       const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
@@ -620,4 +626,38 @@ export function mountMcp(app: FastifyInstance, config: AppConfig, db: Db): void 
       }
     },
   });
+}
+
+/**
+ * Log an MCP handshake (initialize / tools/list) as a request_logs row with
+ * source='mcp', so discovery signals are countable per pseudonymous client.
+ * The MCP JSON-RPC body may be a single object or a batch array; only the
+ * session-establishing methods are logged (they are cheap and agent-driven;
+ * ping/notifications would add noise). Fire-and-forget via logRequest.
+ */
+function logMcpHandshake(
+  req: FastifyRequest,
+  db: Db,
+  log: Logger,
+  config: AppConfig,
+): void {
+  const body = req.body as unknown;
+  const methods = Array.isArray(body)
+    ? body.map((m) => (m && typeof m === 'object' ? (m as { method?: unknown }).method : undefined))
+    : body && typeof body === 'object'
+      ? [(body as { method?: unknown }).method]
+      : [];
+  for (const method of methods) {
+    if (method !== 'initialize' && method !== 'tools/list') continue;
+    logRequest(db, log, {
+      client_key: hashIp(req.ip, config.operatorKey),
+      endpoint: `mcp:${String(method)}`,
+      method: req.method === 'GET' ? 'GET' : 'POST',
+      status: 200,
+      latency_ms: 0, // handshake is fire-and-forget; the row marks the attempt
+      paid: false,
+      user_agent: strField(req.headers['user-agent']),
+      source: 'mcp',
+    });
+  }
 }
