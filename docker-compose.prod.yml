@@ -83,6 +83,12 @@ services:
       X402_FACILITATOR_URL: ${X402_FACILITATOR_URL:?set X402_FACILITATOR_URL}
       X402_PAY_TO: ${X402_PAY_TO:?set X402_PAY_TO}
       X402_NETWORK: ${X402_NETWORK:?set X402_NETWORK}
+      # Bounded retries for transient facilitator/RPC failures (default 3; 0 disables).
+      X402_FACILITATOR_RETRIES: ${X402_FACILITATOR_RETRIES:-3}
+      # Stable RPC for the settle-retry on-chain guard. Set it (e.g.
+      # https://mainnet.base.org) or a flaky settle is attempted exactly once
+      # and fails closed (never double-charges, but retries do not recover).
+      X402_RPC_URL: ${X402_RPC_URL:-}
       OPERATOR_KEY: ${OPERATOR_KEY:?set OPERATOR_KEY}
       # Admin connection: migrations only (also re-run idempotently on boot).
       DATABASE_URL: postgres://licita:${POSTGRES_PASSWORD}@db:5432/licita
