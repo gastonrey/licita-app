@@ -118,6 +118,63 @@ SELECT
 FROM awards
 `;
 
+// --- growth (P0.8): agent-funnel + North Star metric ---------------------------
+// x402 payments are the only rows with payer_address (status 'settled'); dev rows
+// carry status 'success' and no payer, so every payer metric is scoped to x402.
+// CASE WHEN (not FILTER) keeps the queries pg-mem-portable in tests, and "last 7
+// days" uses now() - interval '7 days' because pg-mem cannot cast `date` to
+// `timestamptz` (CURRENT_DATE - 7 would throw there). LIKE avoids backslash
+// escapes (pg-mem does not honor `\_`).
+const GROWTH_PAYERS_SQL = `
+SELECT
+  count(DISTINCT payer_address)::int AS paid_agents,
+  count(DISTINCT CASE WHEN created_at >= (now() - interval '7 days') THEN payer_address END)::int AS weekly_active,
+  coalesce(sum(CASE WHEN status = 'settled' THEN amount_usd ELSE 0 END), 0) AS settled_revenue
+FROM payments
+WHERE payer_address IS NOT NULL
+`;
+// Per-payer payment timestamps (ascending). First/second-payment milestones,
+// repeat detection (>=2 payments) and the 1st->2nd gap are derived from this
+// grouped fetch in TS: pg-mem ignores `HAVING count(*) >= 2`, and the pure-SQL
+// "min over payments after the payer's first" self-join adds portability risk
+// for no gain. The aggregates above stay in SQL.
+const GROWTH_PAYER_TIMELINE_SQL = `
+SELECT payer_address, created_at
+FROM payments
+WHERE payer_address IS NOT NULL
+ORDER BY payer_address, created_at
+`;
+// Paid-agent call volume: match request_logs.client_key = 'x402_' || payer_address.
+// An IN subquery (not a join) so a payer with N payments never multiplies the
+// call count, and no outer-alias reference (pg-mem cannot see correlated
+// EXISTS/join aliases). CASE WHEN (not FILTER) keeps it pg-mem-portable.
+const GROWTH_CALLS_SQL = `
+SELECT
+  count(*)::int AS calls,
+  count(DISTINCT client_key)::int AS agents
+FROM request_logs
+WHERE client_key IN (
+  SELECT 'x402_' || payer_address
+  FROM payments
+  WHERE payer_address IS NOT NULL
+)
+`;
+// REST endpoints are logged with a method prefix ('GET /v1/demo',
+// 'POST /v1/research'); the suffix match also covers the bare '/v1/demo'
+// spelling. discovered/queried are both distinct client_key per the spec's own
+// definitions; the funnel stages are kept as numbers only (the dashboard
+// renders them via source_labels).
+const GROWTH_FUNNEL_SQL = `
+SELECT
+  count(DISTINCT client_key)::int AS discovered,
+  count(DISTINCT client_key)::int AS queried,
+  sum(CASE WHEN endpoint LIKE '%/v1/demo' AND source = 'rest' THEN 1 ELSE 0 END)::int AS demo,
+  sum(CASE WHEN endpoint LIKE '%/v1/research' THEN 1 ELSE 0 END)::int AS research_calls,
+  sum(CASE WHEN endpoint LIKE '%/v1/research' AND paid THEN 1 ELSE 0 END)::int AS research_paid
+FROM request_logs
+`;
+const GROWTH_FUNNEL_LABELS = ['discovered', 'initialized', 'queried', 'demo', 'paid', 'repeated', 'revenue'] as const;
+
 // GET /v1/stats/recent — operator-only raw request-log feed for the operator
 // dashboard. Returns the newest rows first; the dashboard re-polls it on a timer.
 const RECENT_SQL = `
@@ -162,6 +219,10 @@ export function statsHandler(ctx: RouteCtx) {
       failed,
       failedRate,
       nullRates,
+      growthPayers,
+      growthTimeline,
+      growthCalls,
+      growthFunnel,
     ] = await Promise.all([
       db.query(UNIQUE_CLIENTS_SQL),
       db.query(BY_ENDPOINT_SQL),
@@ -182,6 +243,10 @@ export function statsHandler(ctx: RouteCtx) {
       db.query(FAILED_SQL),
       db.query(FAILED_RATE_SQL),
       db.query(NULL_RATES_SQL),
+      db.query(GROWTH_PAYERS_SQL),
+      db.query(GROWTH_PAYER_TIMELINE_SQL),
+      db.query(GROWTH_CALLS_SQL),
+      db.query(GROWTH_FUNNEL_SQL),
     ]);
 
     const paymentsByStatus: Record<string, { count: number; amount_usd: number }> = {};
@@ -220,6 +285,72 @@ export function statsHandler(ctx: RouteCtx) {
     const fr = failedRate.rows[0] ?? { failed: 0, total: 0 };
     const failedCount = Number(fr.failed);
     const requestTotal = Number(fr.total);
+
+    // --- growth (P0.8): derive the agent funnel + North Star --------------------
+    const gp = growthPayers.rows[0] ?? { paid_agents: 0, weekly_active: 0, settled_revenue: 0 };
+    const paidAgents = Number(gp.paid_agents);
+    const weeklyActivePayingAgents = Number(gp.weekly_active);
+    const settledRevenue = Math.round(Number(gp.settled_revenue) * 100) / 100;
+
+    // First/second payment milestones, repeat detection and the average 1st->2nd
+    // gap, from the grouped timeline fetch (rows arrive sorted by payer,
+    // created_at ascending). Repeat needs >=2 payments per payer — derived here
+    // because pg-mem ignores `HAVING count(*) >= 2`.
+    const timeline = new Map<string, Date[]>();
+    for (const r of growthTimeline.rows) {
+      const times = timeline.get(String(r.payer_address)) ?? [];
+      times.push(r.created_at instanceof Date ? r.created_at : new Date(String(r.created_at)));
+      timeline.set(String(r.payer_address), times);
+    }
+    let repeatAgents = 0;
+    let firstPayment: string | null = null;
+    let secondPayment: string | null = null;
+    let secondGapSum = 0;
+    let secondGapCount = 0;
+    for (const times of timeline.values()) {
+      if (times.length === 0) continue;
+      const firstMs = times[0].getTime();
+      if (firstPayment === null || firstMs < Date.parse(firstPayment)) firstPayment = times[0].toISOString();
+      if (times.length >= 2) {
+        repeatAgents += 1;
+        const secondMs = times[1].getTime();
+        if (secondPayment === null || secondMs < Date.parse(secondPayment)) secondPayment = times[1].toISOString();
+        secondGapSum += (secondMs - firstMs) / 86400000;
+        secondGapCount += 1;
+      }
+    }
+    const timeToSecondPurchaseDays = secondGapCount > 0 ? Math.round((secondGapSum / secondGapCount) * 10) / 10 : 0;
+
+    const gfc = growthFunnel.rows[0] ?? { discovered: 0, queried: 0, demo: 0, research_calls: 0, research_paid: 0 };
+    const researchCalls = Number(gfc.research_calls);
+    const researchPaidCalls = Number(gfc.research_paid);
+    const freeDemoCalls = Number(gfc.demo);
+    const gc = growthCalls.rows[0] ?? { calls: 0, agents: 0 };
+
+    const growth = {
+      weekly_active_paying_agents: weeklyActivePayingAgents,
+      paid_agents: paidAgents,
+      repeat_paid_agents: repeatAgents,
+      first_payment: firstPayment,
+      second_payment: secondPayment,
+      time_to_second_purchase_days: timeToSecondPurchaseDays,
+      revenue_per_agent: paidAgents > 0 ? Math.round((settledRevenue / paidAgents) * 100) / 100 : 0,
+      calls_per_agent: paidAgents > 0 ? Math.round((Number(gc.calls) / paidAgents) * 10) / 10 : 0,
+      free_demo_calls: freeDemoCalls,
+      research_calls: researchCalls,
+      research_paid_calls: researchPaidCalls,
+      research_conversion: researchCalls > 0 ? Math.round((researchPaidCalls / researchCalls) * 10000) / 10000 : 0,
+      funnel: {
+        discovered: Number(gfc.discovered),
+        initialized: Number(mcpDiscovery.rows[0]?.initialize_count ?? 0),
+        queried: Number(gfc.queried),
+        demo: freeDemoCalls,
+        paid: paidAgents,
+        repeated: repeatAgents,
+        revenue: settledRevenue,
+      },
+      source_labels: [...GROWTH_FUNNEL_LABELS],
+    };
 
     const data = {
       unique_clients: Number(clients.rows[0]?.n ?? 0),
@@ -286,6 +417,7 @@ export function statsHandler(ctx: RouteCtx) {
         award_value_null_rate: rate(Number(nr.value_null), awardsTotal),
         award_winner_null_rate: rate(Number(nr.winner_null), awardsTotal),
       },
+      growth,
       in_memory_metrics: ctx.metrics.snapshot(),
     };
 

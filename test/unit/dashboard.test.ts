@@ -25,13 +25,17 @@ describe('GET /dashboard', () => {
     const app = buildApp();
     const res = await app.inject({ method: 'GET', url: '/dashboard' });
     const html = res.body;
-    expect(html).toContain('<title>Dashboard — licita-agent (operator)</title>');
+    expect(html).toContain('<title>Dashboard — Licita (operator)</title>');
     expect(html).toContain('licita_operator_key');
     expect(html).toContain('x-operator-key');
     expect(html).toContain('/v1/stats/recent?limit=50');
     expect(html).toContain('Auto-refresh 15s');
     expect(html).toContain('MCP discovery');
     expect(html).toContain('mcp_discovery');
+    expect(html).toContain('Growth funnel');
+    expect(html).toContain('Weekly active paying agents');
+    expect(html).toContain('growth-funnel');
+    expect(html).toContain('growth-rows');
     expect(html).toContain('<style>');
     expect(html).toContain('<script>');
     await app.close();
