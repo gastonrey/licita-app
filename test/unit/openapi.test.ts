@@ -10,14 +10,18 @@ describe('openapi document', () => {
     components: { schemas: Record<string, unknown> };
   };
 
+  // Every ENDPOINT_PRICES key is documented, including the free GET /v1/demo;
+  // POST /v1/research is covered by its own test below.
+  const documentedKeys = Object.keys(ENDPOINT_PRICES);
+
   it('is OpenAPI 3.1 with info', () => {
     expect(doc.openapi).toBe('3.1.0');
-    expect(doc.info.title).toBe('licita-agent');
+    expect(doc.info.title).toBe('Licita');
   });
 
   it('documents every endpoint from ENDPOINT_PRICES', () => {
     const pathFor = (key: string) => key.split(' ')[1].replace(':id', '{id}');
-    for (const key of Object.keys(ENDPOINT_PRICES)) {
+    for (const key of documentedKeys) {
       const p = pathFor(key);
       expect(doc.paths[p], `path ${p}`).toBeDefined();
       const method = key.split(' ')[0].toLowerCase();
@@ -33,6 +37,38 @@ describe('openapi document', () => {
       if (price === '0.00') expect(responses['402'], key).toBeUndefined();
       else expect(responses['402'], key).toBeDefined();
     }
+  });
+
+  it('documents POST /v1/research (paid, config-driven price) with a request body', () => {
+    const op = doc.paths['/v1/research'].post as {
+      operationId?: string;
+      security?: unknown[];
+      requestBody?: { required?: boolean; content?: Record<string, { schema?: { required?: string[]; properties?: Record<string, unknown> } }> };
+      responses?: Record<string, unknown>;
+    };
+    expect(op.operationId).toBe('research');
+    expect(op.security).toEqual([{ paymentSignature: [] }]);
+    expect(op.requestBody?.required).toBe(true);
+    expect(op.requestBody?.content?.['application/json']?.schema?.required).toEqual(['query']);
+    expect(op.responses?.['402']).toBeDefined();
+    const r200 = op.responses?.['200'] as {
+      content?: { 'application/json'?: { schema?: { properties?: { data?: { properties?: Record<string, unknown> } } } } };
+    };
+    const props = r200.content?.['application/json']?.schema?.properties?.data?.properties ?? {};
+    for (const k of ['topic', 'confidence', 'summary', 'findings', 'windows']) {
+      expect(props[k], `research data ${k}`).toBeDefined();
+    }
+  });
+
+  it('documents GET /v1/demo as a free endpoint with the sample data shape', () => {
+    const op = doc.paths['/v1/demo'].get as {
+      operationId?: string;
+      security?: unknown[];
+      responses?: Record<string, unknown>;
+    };
+    expect(op.operationId).toBe('getDemo');
+    expect(op.security).toBeUndefined();
+    expect(op.responses?.['402']).toBeUndefined();
   });
 
   it('error schema enum matches the SPEC §5 error codes', () => {

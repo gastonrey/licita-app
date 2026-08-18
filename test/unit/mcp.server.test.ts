@@ -104,14 +104,18 @@ describe('MCP tools (in-process client)', () => {
   beforeAll(async () => {
     const { db, payments } = makeDb();
     await payments.query(PAYMENTS_DDL);
-    provider = new DevPaymentProvider({ secret: SECRET, db });
+    provider = new DevPaymentProvider({
+      secret: SECRET,
+      db,
+      prices: { 'POST /v1/research': '0.50' },
+    });
     const server = buildMcpServer(provider, db, config);
     const [clientT, serverT] = InMemoryTransport.createLinkedPair();
     client = new Client({ name: 'test-client', version: '0.0.1' });
     await Promise.all([client.connect(clientT), server.connect(serverT)]);
   });
 
-  it('lists exactly the 8 SPEC tools', async () => {
+  it('lists exactly the 9 SPEC tools', async () => {
     const { tools } = await client.listTools();
     expect(tools.map((t) => t.name).sort()).toEqual([
       'get_buyer_history',
@@ -121,6 +125,7 @@ describe('MCP tools (in-process client)', () => {
       'get_pricing',
       'get_renewals',
       'get_tender',
+      'research',
       'search_tenders',
     ]);
     for (const t of tools) {
@@ -136,6 +141,51 @@ describe('MCP tools (in-process client)', () => {
     expect(body.meta).toMatchObject({ price_usd: '0.00', paid: false });
     const data = body.data as { endpoints: Array<{ endpoint: string; price_usd: string }> };
     expect(data.endpoints.length).toBe(Object.keys(ENDPOINT_PRICES).length);
+  });
+
+  it('research tool declares the query/limit schema with the config-driven price', async () => {
+    const { tools } = await client.listTools();
+    const t = tools.find((x) => x.name === 'research');
+    expect(t).toBeDefined();
+    const props = t!.inputSchema.properties as Record<string, { type?: string }>;
+    expect(props.query).toMatchObject({ type: 'string' });
+    expect(props.limit).toMatchObject({ type: 'integer' });
+    expect(props.payment_token).toBeDefined();
+    expect(t!.description).toContain('$0.50');
+  });
+
+  it('research without token → payment_required at the config-driven price', async () => {
+    const res = (await client.callTool({
+      name: 'research',
+      arguments: { query: 'cybersecurity' },
+    })) as ToolCallResult;
+    expect(res.isError).toBeFalsy();
+    const body = parseText(res);
+    expect(body.payment_required).toBe(true);
+    expect(body.price_usd).toBe('0.50');
+  });
+
+  it('research with a valid token → research brief envelope', async () => {
+    const { token } = provider.createToken('POST /v1/research');
+    const res = (await client.callTool({
+      name: 'research',
+      arguments: { query: 'software', payment_token: token },
+    })) as ToolCallResult;
+    expect(res.isError).toBeFalsy();
+    const body = parseText(res);
+    expect(body.meta).toMatchObject({ price_usd: '0.50', paid: true });
+    const data = body.data as {
+      topic: string;
+      confidence: string;
+      summary: string;
+      findings: unknown[];
+      windows: { tenders_days: number; renewals_days: number };
+    };
+    expect(data.topic).toBe('software');
+    expect(data.confidence).toBe('low');
+    expect(data.findings).toEqual([]);
+    expect(data.summary).toContain('No recent matches');
+    expect(data.windows).toMatchObject({ tenders_days: 90, renewals_days: 365 });
   });
 
   it('paid tool without token → payment_required payload with isError=false', async () => {
@@ -284,7 +334,7 @@ describe('mountMcp HTTP transport', () => {
     const body = parseSse(res.body);
     expect(body.jsonrpc).toBe('2.0');
     expect(body.id).toBe(1);
-    expect(body.result.serverInfo).toEqual({ name: 'licita-agent', version: '0.1.0' });
+    expect(body.result.serverInfo).toEqual({ name: 'licita', version: '0.1.0' });
   });
 
   it('serves tools/call over HTTP (stateless: fresh transport per request)', async () => {

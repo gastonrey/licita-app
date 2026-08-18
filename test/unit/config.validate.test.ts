@@ -46,6 +46,26 @@ describe('validateConfig (dev mode)', () => {
   });
 });
 
+describe('validateConfig (research price)', () => {
+  it('accepts a positive decimal RESEARCH_PRICE_USD', () => {
+    for (const good of ['0.50', '1', '0.01', '99.99']) {
+      expect(() => validateConfig(makeTestConfig({ researchPriceUsd: good }))).not.toThrow();
+    }
+  });
+
+  it('rejects RESEARCH_PRICE_USD that is zero or non-positive', () => {
+    for (const bad of ['0.00', '0', '0.0', '-0.5']) {
+      expect(() => validateConfig(makeTestConfig({ researchPriceUsd: bad }))).toThrow(/RESEARCH_PRICE_USD/);
+    }
+  });
+
+  it('rejects malformed decimal RESEARCH_PRICE_USD', () => {
+    for (const bad of ['', 'free', '0.5.1', '1.234', 'NaN']) {
+      expect(() => validateConfig(makeTestConfig({ researchPriceUsd: bad }))).toThrow(/RESEARCH_PRICE_USD/);
+    }
+  });
+});
+
 describe('validateConfig (production)', () => {
   it('passes with a valid production config', () => {
     expect(() => validateConfig(prodConfig())).not.toThrow();

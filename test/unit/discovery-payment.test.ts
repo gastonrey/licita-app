@@ -25,7 +25,7 @@ describe('discovery surfaces teach the x402 v2 flow', () => {
     const res = await app.inject({ method: 'GET', url: '/llms.txt' });
     expect(res.statusCode).toBe(200);
     for (const needle of [
-      '# licita-agent',
+      '# Licita',
       'payment_required',
       'GET /v1/search',
       'search_tenders',

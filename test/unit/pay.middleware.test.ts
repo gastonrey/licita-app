@@ -303,7 +303,7 @@ describe('registerWeb discovery surfaces', () => {
     const llms = await app.inject({ method: 'GET', url: '/llms.txt' });
     expect(llms.statusCode).toBe(200);
     expect(llms.headers['content-type']).toContain('text/plain');
-    expect(llms.body).toContain('# licita-agent');
+    expect(llms.body).toContain('# Licita');
     expect(llms.body).toContain('payment_required');
     expect(llms.body).toContain('GET /v1/search');
     expect(llms.body).toContain('search_tenders');

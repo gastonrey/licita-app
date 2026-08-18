@@ -214,6 +214,140 @@ const stdResponses = (dataSchema: Record<string, unknown>, priced: boolean) => (
   '500': errResp('Internal error (internal)'),
 });
 
+/** POST /v1/research request body (matches researchBodySchema in research.ts). */
+const researchBody = {
+  type: 'object',
+  required: ['query'],
+  properties: {
+    query: {
+      type: 'string',
+      minLength: 1,
+      maxLength: 200,
+      description: 'Topic to research: matched against tender full-text, company/buyer names and renewal signals.',
+      example: 'health sector IT services',
+    },
+    limit: {
+      type: 'integer',
+      minimum: 1,
+      maximum: 10,
+      default: 5,
+      description: 'Max findings to return (counts in the summary always cover the full set).',
+    },
+  },
+} as const;
+
+/** POST /v1/research data payload (researchData in research.ts). */
+const researchData = {
+  type: 'object',
+  required: ['topic', 'confidence', 'summary', 'findings', 'windows'],
+  properties: {
+    topic: { type: 'string' },
+    confidence: {
+      type: 'string',
+      enum: ['low', 'medium', 'high'],
+      description:
+        'Evidence-strength heuristic over distinct finding types with a finding within the last 90 days (>=2 → high, 1 → medium, else low). NOT a probability estimate.',
+    },
+    summary: { type: 'string' },
+    findings: {
+      type: 'array',
+      items: {
+        type: 'object',
+        required: ['type', 'title', 'detail', 'source', 'source_ref', 'timestamp', 'evidence'],
+        properties: {
+          type: { type: 'string', enum: ['tender', 'renewal', 'opportunity', 'buyer'] },
+          title: { type: 'string' },
+          detail: { type: 'string' },
+          source: { type: 'string', example: 'ted' },
+          source_ref: { type: ['string', 'null'], example: '130001-2026' },
+          timestamp: { type: 'string', format: 'date' },
+          evidence: { type: 'array', items: { type: 'string' } },
+        },
+      },
+    },
+    windows: {
+      type: 'object',
+      properties: {
+        tenders_days: { type: 'integer', example: 90 },
+        renewals_days: { type: 'integer', example: 365 },
+      },
+    },
+  },
+} as const;
+
+/** GET /v1/demo data payload (demoData in demo.ts) — free labeled samples. */
+const demoData = {
+  type: 'object',
+  properties: {
+    note: { type: 'string' },
+    priced_endpoints: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: { endpoint: { type: 'string' }, price_usd: { type: 'string' } },
+      },
+    },
+    tender: {
+      anyOf: [
+        {
+          type: 'object',
+          required: ['sample'],
+          properties: {
+            sample: { type: 'boolean', const: true },
+            title: { type: ['string', 'null'] },
+            buyer: {
+              anyOf: [
+                {
+                  type: 'object',
+                  properties: { name: { type: 'string' }, country: { type: ['string', 'null'] } },
+                },
+                { type: 'null' },
+              ],
+            },
+            cpv_main: { type: ['string', 'null'] },
+            estimated_value: { type: ['number', 'null'] },
+            currency: { type: ['string', 'null'] },
+            published_at: { type: ['string', 'null'], format: 'date' },
+            source: { type: 'string' },
+            source_ref: { type: ['string', 'null'] },
+          },
+        },
+        { type: 'null' },
+      ],
+    },
+    renewal: {
+      anyOf: [
+        {
+          type: 'object',
+          required: ['sample'],
+          properties: {
+            sample: { type: 'boolean', const: true },
+            signal_type: { type: 'string' },
+            incumbent: { type: ['string', 'null'] },
+            contract: {
+              anyOf: [
+                {
+                  type: 'object',
+                  properties: {
+                    title: { type: ['string', 'null'] },
+                    end_date: { type: ['string', 'null'], format: 'date' },
+                  },
+                },
+                { type: 'null' },
+              ],
+            },
+            confidence: { type: ['string', 'null'], enum: ['low', 'medium', 'high', null] },
+            basis: {},
+            source: { type: 'string' },
+            source_ref: { type: ['string', 'null'] },
+          },
+        },
+        { type: 'null' },
+      ],
+    },
+  },
+} as const;
+
 /** GET /v1/stats data payload — P0.7 observability aggregates (kept loose). */
 const statsData = {
   type: 'object',
@@ -700,6 +834,29 @@ function paths(): Record<string, unknown> {
         ),
       },
     },
+    '/v1/research': {
+      post: {
+        operationId: 'research',
+        security: [{ paymentSignature: [] }],
+        summary: 'Research a topic across EU procurement',
+        description:
+          'Deterministic high-level EU procurement intelligence for a topic: recent tenders (full-text match, 90-day window), renewal signals (12-month window), company opportunities and active buyers. Confidence is an evidence-strength heuristic over distinct finding types with recent data (>=2 types with a finding in the last 90 days → high; 1 → medium; else low) — NOT a probability estimate. Price is config-driven (RESEARCH_PRICE_USD, default $0.50 per call) and always paid.',
+        requestBody: {
+          required: true,
+          content: { 'application/json': { schema: researchBody } },
+        },
+        responses: stdResponses(researchData, true),
+      },
+    },
+    '/v1/demo': {
+      get: {
+        operationId: 'getDemo',
+        summary: 'Free labeled sample of the paid data',
+        description:
+          'Free, zero-cost sample of what the paid API returns: the single most recent tender and the single most recent renewal signal (each under an explicit sample: true marker) plus the list of currently priced endpoints. Values are real rows — never fabricated.',
+        responses: stdResponses(demoData, false),
+      },
+    },
     '/v1/stats': {
       get: {
         operationId: 'getStats',
@@ -781,14 +938,16 @@ export function buildOpenApi(): Record<string, unknown> {
   return {
     openapi: '3.1.0',
     info: {
-      title: 'licita-agent',
+      title: 'Licita',
       version: '0.1.0',
       description:
         'Agent-native procurement intelligence API for the Spanish public sector (TED data, IT/software/cyber CPV vertical). ' +
         'All data endpoints return the envelope { data, meta: { request_id, price_usd, paid, provenance[] } }. ' +
         'Errors return { error: { code, message, hint } }. Paid endpoints use x402 v2: an unpaid request gets 402 with a ' +
         'base64 PAYMENT-REQUIRED header; sign the EIP-3009 transferWithAuthorization and retry with the PAYMENT-SIGNATURE ' +
-        'header (legacy v1 X-PAYMENT still accepted). See /v1/pricing for the full flow.',
+        'header (legacy v1 X-PAYMENT still accepted). See /v1/pricing for the full flow. ' +
+        'Discovery: paid 402s carry extensions.bazaar (x402 Bazaar extension) so facilitators can catalog this service, ' +
+        'and the MCP surface is described statically at /.well-known/mcp/server-card.json (SEP-1649 server card).',
     },
     servers: [{ url: '/' }],
     paths: paths(),

@@ -12,7 +12,7 @@ const PAGE = `<!doctype html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Dashboard — licita-agent (operator)</title>
+<title>Dashboard — Licita (operator)</title>
 <style>
 :root { color-scheme: light; }
 body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -48,7 +48,7 @@ button { cursor: pointer; }
 </head>
 <body>
 <main>
-<h1>Dashboard — licita-agent <span class="muted">(operator)</span></h1>
+<h1>Dashboard — Licita <span class="muted">(operator)</span></h1>
 <p class="muted">Who accessed the API, which endpoints, when, paid vs unpaid, KPIs, revenue and failures. Data is raw <code>request_logs</code> + <code>payments</code> aggregates.</p>
 
 <div id="login" hidden>
@@ -69,6 +69,13 @@ button { cursor: pointer; }
 
   <h2>KPIs</h2>
   <div id="kpis" class="kpis"></div>
+
+  <h2>Growth funnel</h2>
+  <div class="kpis">
+    <div class="kpi"><div class="kpi-label">Weekly active paying agents</div><div class="kpi-val" id="nsm"></div></div>
+  </div>
+  <div id="growth-funnel"></div>
+  <div id="growth-rows"></div>
 
   <h2>Traffic by endpoint</h2>
   <div id="by-endpoint"></div>
@@ -155,6 +162,36 @@ function render(stats, recent) {
   $('kpis').innerHTML = kpis
     .map((p) => '<div class="kpi"><div class="kpi-label">' + p[0] + '</div><div class="kpi-val">' + p[1] + '</div></div>')
     .join('');
+
+  const g = stats.growth || {};
+  $('nsm').textContent = esc(g.weekly_active_paying_agents ?? 0);
+  const gLabels = g.source_labels || ['discovered', 'initialized', 'queried', 'demo', 'paid', 'repeated', 'revenue'];
+  const gFunnel = g.funnel || {};
+  const fRows = gLabels.map((l) => {
+    const disp = l === 'revenue' ? money(gFunnel[l]) : esc(gFunnel[l] ?? 0);
+    return '<tr><td>' + esc(l) + '</td><td class="num">' + disp + '</td></tr>';
+  });
+  $('growth-funnel').innerHTML = '<h3 class="h3">Funnel stages</h3>' +
+    '<table><thead><tr><th>Stage</th><th class="num">Count</th></tr></thead><tbody>' +
+    fRows.join('') +
+    '</tbody></table>';
+  const gRows = [
+    ['Free demo calls', esc(g.free_demo_calls ?? 0)],
+    ['Research calls', esc(g.research_calls ?? 0)],
+    ['Research paid calls', esc(g.research_paid_calls ?? 0)],
+    ['Research conversion', pct(g.research_conversion)],
+    ['Paid agents', esc(g.paid_agents ?? 0)],
+    ['Repeat paid agents', esc(g.repeat_paid_agents ?? 0)],
+    ['Calls per agent', esc(g.calls_per_agent ?? 0)],
+    ['Revenue per agent', money(g.revenue_per_agent)],
+    ['Time to second purchase (days)', esc(g.time_to_second_purchase_days ?? 0)],
+    ['First payment', esc(g.first_payment ? new Date(g.first_payment).toLocaleString() : '—')],
+    ['First repeat purchase', esc(g.second_payment ? new Date(g.second_payment).toLocaleString() : '—')],
+  ];
+  $('growth-rows').innerHTML = '<h3 class="h3">Detail</h3>' +
+    '<table><tbody>' +
+    gRows.map((r) => '<tr><td>' + r[0] + '</td><td class="num">' + r[1] + '</td></tr>').join('') +
+    '</tbody></table>';
 
   const byEp = stats.requests_by_endpoint || [];
   const maxEp = byEp.reduce((m, r) => Math.max(m, Number(r.requests)), 0) || 1;

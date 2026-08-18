@@ -56,6 +56,13 @@ export function validateConfig(config: AppConfig): void {
     );
   }
 
+  const PRICE_RE = /^\d+(\.\d{1,2})?$/;
+  if (!PRICE_RE.test(config.researchPriceUsd) || Number(config.researchPriceUsd) <= 0) {
+    violations.push(
+      'RESEARCH_PRICE_USD must be a positive decimal price string like "0.50" and may not be "0.00" — POST /v1/research is always paid.',
+    );
+  }
+
   if (config.nodeEnv === 'production') {
     if (config.paymentsMode !== 'x402') {
       violations.push(

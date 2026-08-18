@@ -90,9 +90,12 @@ export function envelope<T>(req: FastifyRequest, data: T, opts: EnvelopeOpts = {
  * replaces it with the parsed (coerced/defaulted) value. Throws HttpError
  * (400 invalid_query) on failure, mapped by the global error handler.
  */
-export function validate<S extends ZodType>(schema: S, source: 'query' | 'params'): preHandlerHookHandler {
+export function validate<S extends ZodType>(
+  schema: S,
+  source: 'query' | 'params' | 'body',
+): preHandlerHookHandler {
   return async (req) => {
-    const raw = source === 'query' ? req.query : req.params;
+    const raw = source === 'query' ? req.query : source === 'params' ? req.params : req.body;
     const parsed = schema.safeParse(raw ?? {});
     if (!parsed.success) {
       const issues = parsed.error.issues
@@ -106,7 +109,8 @@ export function validate<S extends ZodType>(schema: S, source: 'query' | 'params
       );
     }
     if (source === 'query') req.query = parsed.data as FastifyRequest['query'];
-    else req.params = parsed.data as FastifyRequest['params'];
+    else if (source === 'params') req.params = parsed.data as FastifyRequest['params'];
+    else req.body = parsed.data as FastifyRequest['body'];
   };
 }
 

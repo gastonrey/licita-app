@@ -16,6 +16,7 @@ import {
 import type { AppConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import { errorEnvelope } from '../api/routes/common.js';
+import { priceOverrides, resolvePrice } from './prices.js';
 
 export const DEV_TOKEN_TTL_SEC = 300; // 5 minutes
 
@@ -33,6 +34,8 @@ export interface DevProviderOpts {
   db?: Db;
   /** clock override for tests (unix seconds) */
   now?: () => number;
+  /** config-driven price overrides (see src/pay/prices.ts) */
+  prices?: Record<string, string>;
 }
 
 const b64u = (buf: Buffer | string): string => Buffer.from(buf).toString('base64url');
@@ -42,15 +45,17 @@ export class DevPaymentProvider implements PaymentProvider {
   private readonly secret: string;
   private readonly db?: Db;
   private readonly now: () => number;
+  private readonly prices?: Record<string, string>;
 
   constructor(opts: DevProviderOpts) {
     this.secret = opts.secret;
     this.db = opts.db;
     this.now = opts.now ?? (() => Math.floor(Date.now() / 1000));
+    this.prices = opts.prices;
   }
 
   price(endpoint: string): string {
-    return ENDPOINT_PRICES[endpoint] ?? '0.00';
+    return resolvePrice(this.prices, endpoint);
   }
 
   requiredResponse(endpoint: string): PaymentRequirement {
@@ -200,18 +205,19 @@ export function registerDevFaucet(app: FastifyInstance, config: AppConfig): void
         );
     }
     const { endpoint } = parsed.data;
-    const price = ENDPOINT_PRICES[endpoint];
-    if (price === undefined) {
+    const known = Object.keys({ ...ENDPOINT_PRICES, ...priceOverrides(config) });
+    if (!known.includes(endpoint)) {
       return reply
         .code(400)
         .send(
           errorEnvelope(
             'invalid_query',
             `Unknown endpoint "${endpoint}".`,
-            `Known endpoint keys: ${Object.keys(ENDPOINT_PRICES).join(' | ')}`,
+            `Known endpoint keys: ${known.join(' | ')}`,
           ),
         );
     }
+    const price = resolvePrice(priceOverrides(config), endpoint);
     if (price === '0.00') {
       return reply
         .code(400)

@@ -9,6 +9,10 @@ export interface AppConfig {
   pg: { host: string; port: number; user: string; password: string; database: string };
   paymentsMode: 'dev' | 'x402';
   payHmacSecret: string;
+  /** POST /v1/research price (env RESEARCH_PRICE_USD). Always paid — validated
+   *  as a positive decimal string, never "0.00". Flows into the payment
+   *  providers as a config-driven price override (see src/pay/prices.ts). */
+  researchPriceUsd: string;
   /**
    * x402 facilitator seam. facilitatorUrl and network have safe defaults
    * (Coinbase CDP facilitator, Base Sepolia testnet); payTo has NO default —
@@ -69,6 +73,7 @@ export function loadConfig(): AppConfig {
     },
     paymentsMode: mode === 'x402' ? 'x402' : 'dev',
     payHmacSecret: env('PAY_HMAC_SECRET'),
+    researchPriceUsd: env('RESEARCH_PRICE_USD', '0.50'),
     x402: {
       facilitatorUrl: env('X402_FACILITATOR_URL', 'https://www.x402.org/facilitator'),
       payTo: env('X402_PAY_TO') || undefined,

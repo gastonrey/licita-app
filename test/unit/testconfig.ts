@@ -10,6 +10,7 @@ export function makeTestConfig(overrides: Partial<AppConfig> = {}): AppConfig {
     pg: { host: '', port: 0, user: '', password: '', database: '' },
     paymentsMode: 'dev',
     payHmacSecret: 'test-secret',
+    researchPriceUsd: '0.50',
     x402: { facilitatorUrl: 'https://facilitator.test', network: 'eip155:84532' },
     operatorKey: 'test-operator-key',
     trustProxy: false,

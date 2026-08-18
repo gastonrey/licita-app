@@ -98,6 +98,8 @@ export interface PaymentRequirementV1 {
  * be base64-encoded straight into the PAYMENT-REQUIRED response header;
  * `hint` is our operator-facing addition and is stripped from the header.
  * accepts[].amount is in asset base units (USDC = 6 decimals).
+ * `extensions` carries protocol extensions (e.g. the bazaar discovery
+ * extension) and `resource` carries sanitized Bazaar service metadata.
  */
 export interface PaymentRequirementV2 {
   x402Version: 2;
@@ -105,6 +107,8 @@ export interface PaymentRequirementV2 {
     url: string;
     description?: string;
     mimeType?: string;
+    serviceName?: string;
+    tags?: string[];
   };
   accepts: Array<{
     scheme: string;
@@ -116,6 +120,7 @@ export interface PaymentRequirementV2 {
     extra: Record<string, unknown>; // EIP-3009 domain: { name, version }
   }>;
   hint: string;
+  extensions?: Record<string, unknown>;
 }
 
 export type PaymentRequirement = PaymentRequirementV1 | PaymentRequirementV2;
@@ -131,6 +136,8 @@ export interface PaymentVerification {
   txHash?: string;
   /** Number of facilitator attempts used (verify + settle). 1 = no retries. */
   attempts?: number;
+  /** Facilitator EXTENSION-RESPONSES (e.g. bazaar.status) echoed back on settle, when present. */
+  bazaar?: unknown;
 }
 
 export interface PaymentProvider {
@@ -151,4 +158,8 @@ export const ENDPOINT_PRICES: Record<string, string> = {
   'GET /v1/renewals': '0.25',
   'GET /v1/pricing': '0.00',
   'GET /v1/stats': '0.00',
+  'GET /v1/demo': '0.00',
 };
+
+// POST /v1/research is deliberately NOT in ENDPOINT_PRICES: its price is
+// config-owned (RESEARCH_PRICE_USD via src/pay/prices.ts) and always paid.

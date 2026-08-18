@@ -1,5 +1,5 @@
 // mountMcp(app, config, db) — streamable-HTTP MCP endpoint at /mcp (SPEC §6).
-// 8 tools mirroring the REST endpoints, each with an optional `payment_token`
+// 9 tools mirroring the REST endpoints, each with an optional `payment_token`
 // arg. Unpaid calls return a structured `payment_required` payload with
 // isError=false so agents read it as data. Paid calls run the SAME queries as
 // the REST routes: all SQL lives in src/api/routes/* and is imported here.
@@ -38,6 +38,7 @@ import {
   companyProfileData,
   loadCompany,
 } from '../api/routes/companies.js';
+import { researchBodySchema, researchData } from '../api/routes/research.js';
 import {
   BUYER_AWARD_DATES_SQL,
   BUYER_AWARDS_SQL,
@@ -367,6 +368,26 @@ const TOOLS: Record<string, ToolDef> = {
     schema: {},
     run: async (_db, _args, config) => buildPricing(config.paymentsMode),
   },
+
+  research: {
+    endpointKey: 'POST /v1/research',
+    description:
+      'High-level EU public procurement intelligence for a topic: recent tenders, relevant renewal signals, company opportunities and active buyers, each with evidence and an evidence-strength confidence label. ' +
+      'Deterministic over the licita database (no LLM). Costs $0.50 USDC per call (x402). ' +
+      'Use when an agent needs a research brief on a topic rather than raw rows from search_tenders/get_renewals.',
+    schema: {
+      query: z
+        .string()
+        .min(1)
+        .max(200)
+        .describe('topic to research (matches tender full-text, company/buyer names, renewal signals)'),
+      limit: z.number().int().min(1).max(10).default(5).describe('max findings to return'),
+    },
+    run: async (db, args) => {
+      const { query, limit } = researchBodySchema.parse(args);
+      return researchData(db, query, limit);
+    },
+  },
 };
 
 // --- P0.7 tool-call observability ------------------------------------------------
@@ -378,6 +399,7 @@ const TOOLS: Record<string, ToolDef> = {
 const TOOL_ARG_FIELDS: Record<string, { q?: string; cpv?: string; buyer?: string; company?: string }> = {
   search_tenders: { q: 'q', cpv: 'cpv', buyer: 'buyer', company: 'company' },
   get_renewals: { cpv: 'cpv', buyer: 'buyer' },
+  research: { q: 'query' },
   get_company: { company: 'id' },
   get_company_awards: { company: 'id' },
   get_company_opportunities: { company: 'id' },
@@ -398,7 +420,7 @@ function extractToolFields(
 function isEmptyResult(data: unknown): boolean {
   if (data === null || typeof data !== 'object') return false;
   const obj = data as Record<string, unknown>;
-  for (const key of ['results', 'awards', 'opportunities', 'renewals']) {
+  for (const key of ['results', 'awards', 'opportunities', 'renewals', 'findings']) {
     if (Array.isArray(obj[key])) return obj[key].length === 0;
   }
   return false;
@@ -453,7 +475,7 @@ export interface McpServerOpts {
   log?: Logger;
 }
 
-/** Build the MCP server with all 8 tools registered. Exported for tests. */
+/** Build the MCP server with all 9 tools registered. Exported for tests. */
 export function buildMcpServer(
   provider: PaymentProvider,
   db: Db,
@@ -463,7 +485,7 @@ export function buildMcpServer(
   const log = opts.log ?? createLogger(config.logLevel);
   const clientIp = opts.clientIp;
   const server = new McpServer(
-    { name: 'licita-agent', version: '0.1.0' },
+    { name: 'licita', version: '0.1.0' },
     {
       instructions:
         'Spanish public procurement intelligence (TED award notices, IT/software/cyber CPV 72*/48*). ' +
