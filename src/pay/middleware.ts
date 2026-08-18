@@ -9,7 +9,7 @@
 import type { FastifyReply, FastifyRequest, preHandlerHookHandler } from 'fastify';
 import { encodePaymentRequiredHeader } from '@x402/core/http';
 import type { PaymentRequired } from '@x402/core/types';
-import { ENDPOINT_PRICES, type PaymentProvider, type PaymentRequirement } from '../domain/types.js';
+import type { PaymentProvider, PaymentRequirement } from '../domain/types.js';
 import type { AppConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import { createLogger, type Logger } from '../obs/log.js';
@@ -107,8 +107,9 @@ function paymentRequiredHeaders(
  * verify fails with reason 'replay').
  */
 export function paymentPreHandler(endpointKey: string): preHandlerHookHandler {
-  const price = ENDPOINT_PRICES[endpointKey] ?? '0.00';
   return async (req: FastifyRequest, reply: FastifyReply) => {
+    const provider = getPaymentProvider();
+    const price = provider.price(endpointKey);
     if (price === '0.00') {
       req.payment = { paid: true, priceUsd: '0.00' };
       return;
@@ -117,7 +118,6 @@ export function paymentPreHandler(endpointKey: string): preHandlerHookHandler {
     const proofHeader = req.headers['payment-signature'] ?? req.headers['x-payment'];
     const proof = Array.isArray(proofHeader) ? proofHeader[0] : proofHeader;
     if (typeof proof !== 'string' || proof.length === 0) {
-      const provider = getPaymentProvider();
       const requirement = provider.requiredResponse(endpointKey);
       req.errorCode = 'payment_required';
       const message = `Payment required: ${endpointKey} costs $${price} per call.`;
@@ -153,6 +153,7 @@ export function paymentPreHandler(endpointKey: string): preHandlerHookHandler {
       provider: rt.provider.name,
       ...(verification.attempts ? { attempts: verification.attempts } : {}),
       ...(verification.txHash ? { tx_hash: verification.txHash } : {}),
+      ...(verification.bazaar !== undefined ? { bazaar: verification.bazaar } : {}),
     });
     req.payment = {
       paid: true,

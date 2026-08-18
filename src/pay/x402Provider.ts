@@ -44,13 +44,14 @@ import { convertToTokenAmount } from '@x402/core/utils';
 import { getDefaultAsset } from '@x402/evm';
 import { ExactEvmScheme } from '@x402/evm/exact/server';
 import {
-  ENDPOINT_PRICES,
   type PaymentProvider,
   type PaymentRequirement,
   type PaymentVerification,
 } from '../domain/types.js';
 import type { AppConfig } from '../config.js';
 import type { Db } from '../db/client.js';
+import { resolvePrice } from './prices.js';
+import { BAZAAR_SERVICE_METADATA, bazaarExtension } from './bazaar.js';
 
 /** Bounded facilitator call deadline (headers + body). */
 const FACILITATOR_TIMEOUT_MS = 10_000;
@@ -61,7 +62,13 @@ const MAX_PROOF_LENGTH = 16 * 1024;
 
 /** Settle result shape used by the retry loop (transaction may be absent when
  *  the on-chain guard confirmed a landed transfer after a flaky response). */
-type SettleAttemptResult = { success: boolean; transaction?: string; payer?: string };
+type SettleAttemptResult = {
+  success: boolean;
+  transaction?: string;
+  payer?: string;
+  /** Facilitator EXTENSION-RESPONSES echoed from the settle (e.g. bazaar.status). */
+  extensions?: Record<string, unknown>;
+};
 
 /** Reasons that indicate a transient facilitator/RPC failure worth retrying.
  *  These are NOT client-caused: the payload may be perfectly valid but the
@@ -120,6 +127,8 @@ export interface X402ProviderDeps {
   /** Stable RPC for the settle-retry nonce guard. Optional; when absent the
    *  nonce guard is skipped (settle is only retried after verify succeeded). */
   rpcUrl?: string;
+  /** Config-driven price overrides (see src/pay/prices.ts). */
+  prices?: Record<string, string>;
 }
 
 function sha256Hex(input: string): string {
@@ -144,6 +153,7 @@ export class X402PaymentProvider implements PaymentProvider {
   private readonly server: x402ResourceServer;
   private readonly retries: number;
   private readonly rpcUrl?: string;
+  private readonly prices?: Record<string, string>;
 
   constructor(x402: AppConfig['x402'], db?: Db, deps: X402ProviderDeps = {}) {
     if (!x402.payTo) {
@@ -157,6 +167,7 @@ export class X402PaymentProvider implements PaymentProvider {
     this.db = db;
     this.retries = deps.retries ?? x402.facilitatorRetries ?? 3;
     this.rpcUrl = deps.rpcUrl ?? x402.rpcUrl;
+    this.prices = deps.prices;
     // Validates the network's asset table entry eagerly (throws on unknown network).
     getDefaultAsset(this.network);
     const facilitator =
@@ -172,7 +183,7 @@ export class X402PaymentProvider implements PaymentProvider {
   }
 
   price(endpoint: string): string {
-    return ENDPOINT_PRICES[endpoint] ?? '0.00';
+    return resolvePrice(this.prices, endpoint);
   }
 
   /**
@@ -204,12 +215,16 @@ export class X402PaymentProvider implements PaymentProvider {
 
   requiredResponse(endpoint: string): PaymentRequirement {
     const price = this.price(endpoint);
+    const bazaar = bazaarExtension(endpoint);
     return {
       x402Version: 2,
       resource: {
         url: endpoint,
-        description: `licita-agent ${endpoint}`,
+        description: `Licita — EU public procurement intelligence for AI agents (${endpoint})`,
         mimeType: 'application/json',
+        // sanitized Bazaar service metadata (serviceName + tags) so facilitators
+        // can catalog Licita in Bazaar search; iconUrl is intentionally omitted.
+        ...BAZAAR_SERVICE_METADATA,
       },
       accepts: [this.requirementsFor(endpoint)],
       hint:
@@ -217,6 +232,7 @@ export class X402PaymentProvider implements PaymentProvider {
         `to ${this.payTo} using an x402 client, then retry with the base64 payment payload in the ` +
         `PAYMENT-SIGNATURE header (v2) or X-PAYMENT header (v1). Settlement via the configured ` +
         `facilitator (X402_FACILITATOR_URL).`,
+      ...(bazaar ? { extensions: { bazaar } } : {}),
     };
   }
 
@@ -293,6 +309,7 @@ export class X402PaymentProvider implements PaymentProvider {
     //    (double charge). Without the guard, settle is a single attempt that
     //    fails closed.
     let txHash: string | undefined;
+    let bazaar: unknown;
     let settleAttempts = 1;
     const settleRetries = this.rpcUrl ? this.retries : 0;
     const settleOutcome = await withFacilitatorRetry(
@@ -319,6 +336,9 @@ export class X402PaymentProvider implements PaymentProvider {
           }
           payer = settleResult.payer ?? payer;
           txHash = settleResult.transaction || undefined;
+          if (settleResult.extensions?.bazaar !== undefined) {
+            bazaar = settleResult.extensions.bazaar;
+          }
           return { ok: true, result: settleResult };
         } catch (err) {
           if (err instanceof SettleError) {
@@ -366,6 +386,7 @@ export class X402PaymentProvider implements PaymentProvider {
       attempts: verifyAttempts + settleAttempts,
       ...(payer ? { payer } : {}),
       ...(txHash ? { txHash } : {}),
+      ...(bazaar !== undefined ? { bazaar } : {}),
     };
   }
 
