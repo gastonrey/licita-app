@@ -15,7 +15,13 @@ export interface AppConfig {
    * production boot fails without it (see config.validate.ts).
    * network is CAIP-2: 'eip155:84532' (Base Sepolia) or 'eip155:8453' (Base).
    */
-  x402: { facilitatorUrl: string; payTo?: string; network: string };
+  x402: {
+    facilitatorUrl: string;
+    payTo?: string;
+    network: string;
+    facilitatorRetries: number;
+    rpcUrl?: string;
+  };
   operatorKey: string;
   /** Fastify trustProxy setting: false (default), true, or a hop count */
   trustProxy: boolean | number;
@@ -67,6 +73,14 @@ export function loadConfig(): AppConfig {
       facilitatorUrl: env('X402_FACILITATOR_URL', 'https://www.x402.org/facilitator'),
       payTo: env('X402_PAY_TO') || undefined,
       network: env('X402_NETWORK', 'eip155:84532'),
+      /** Retries for transient facilitator/RPC failures (e.g. flaky public
+       *  facilitator RPCs on mainnet). verify does not consume the nonce, so
+       *  retrying it is safe; settle retries consult the on-chain nonce first
+       *  to avoid double-settlement. 0 disables retries. */
+      facilitatorRetries: parseInt(env('X402_FACILITATOR_RETRIES', '3'), 10),
+      /** RPC used for the settle-retry nonce guard. Must be a stable public RPC
+       *  for the configured network (NOT the flaky facilitator RPC). */
+      rpcUrl: env('X402_RPC_URL'),
     },
     operatorKey: env('OPERATOR_KEY'),
     trustProxy: parseTrustProxy(env('TRUST_PROXY', 'false')),

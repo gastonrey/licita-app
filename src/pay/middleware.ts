@@ -135,6 +135,7 @@ export function paymentPreHandler(endpointKey: string): preHandlerHookHandler {
       rt.log.info('payment_attempt_failed', {
         endpoint: endpointKey,
         reason: verification.reason ?? 'invalid',
+        ...(verification.attempts ? { attempts: verification.attempts } : {}),
       });
       const requirement = rt.provider.requiredResponse(endpointKey);
       const message = `Payment proof rejected (${verification.reason ?? 'invalid'}). Proofs are single-use and expire after 5 minutes.`;
@@ -150,6 +151,7 @@ export function paymentPreHandler(endpointKey: string): preHandlerHookHandler {
       amount: verification.amount ?? price,
       client_key: verification.clientKey,
       provider: rt.provider.name,
+      ...(verification.attempts ? { attempts: verification.attempts } : {}),
       ...(verification.txHash ? { tx_hash: verification.txHash } : {}),
     });
     req.payment = {

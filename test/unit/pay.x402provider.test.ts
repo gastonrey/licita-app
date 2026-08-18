@@ -187,6 +187,7 @@ describe('X402PaymentProvider.verify', () => {
       ok: true,
       clientKey: `x402_${PAYER}`,
       amount: '0.02',
+      attempts: 2,
       payer: PAYER,
       txHash: '0xtxhash',
     });
@@ -253,11 +254,13 @@ describe('X402PaymentProvider.verify', () => {
     expect(rows.rows[0].n).toBe(0); // no audit row without a settlement
   });
 
-  it('fails closed with facilitator_unavailable when the facilitator is unreachable', async () => {
+  it('fails closed with facilitator_unavailable when the facilitator is unreachable (after retries)', async () => {
     const facilitator = mockFacilitator({ verifyError: new TypeError('fetch failed') });
     const provider = makeProvider(facilitator, db);
     const res = await provider.verify(v2Proof(provider, 'GET /v1/search'), 'GET /v1/search');
-    expect(res).toEqual({ ok: false, reason: 'facilitator_unavailable' });
+    // facilitator_unavailable is transient → retried (default retries=3 → 4 attempts)
+    expect(res).toEqual({ ok: false, reason: 'facilitator_unavailable', attempts: 4 });
+    expect(facilitator.calls).toEqual(['verify', 'verify', 'verify', 'verify']);
   });
 
   it('fails closed with facilitator_unavailable on settle timeout (indeterminate)', async () => {
@@ -294,5 +297,135 @@ describe('X402PaymentProvider.verify', () => {
       reason: 'network_mismatch',
     });
     expect(facilitator.calls).toEqual([]);
+  });
+
+  it('retries a transient verify failure (facilitator RPC flake) and succeeds', async () => {
+    let flakeLeft = 2;
+    const facilitator = mockFacilitator({
+      verify: () => {
+        if (flakeLeft > 0) {
+          flakeLeft -= 1;
+          return { isValid: false, invalidReason: 'simulation_reverted' };
+        }
+        return { isValid: true, payer: PAYER };
+      },
+    });
+    // default retries=3: 2 transient failures then success
+    const provider = new X402PaymentProvider(
+      { facilitatorUrl: 'https://facilitator.test', payTo: PAY_TO, network: 'eip155:84532', facilitatorRetries: 3 },
+      db,
+      { facilitator, retries: 3 },
+    );
+    const res = await provider.verify(v2Proof(provider, 'GET /v1/search'), 'GET /v1/search');
+    expect(res.ok).toBe(true);
+    expect(res.attempts).toBe(4); // verify 2 failures + 1 success + settle
+    expect(facilitator.calls).toEqual(['verify', 'verify', 'verify', 'settle']);
+    const rows = await db.query(`SELECT count(*)::int AS n FROM payments`);
+    expect(rows.rows[0].n).toBe(1);
+  });
+
+  it('does NOT retry a deterministic verify rejection (insufficient_funds)', async () => {
+    const facilitator = mockFacilitator({
+      verify: { isValid: false, invalidReason: 'insufficient_funds' },
+    });
+    const provider = new X402PaymentProvider(
+      { facilitatorUrl: 'https://facilitator.test', payTo: PAY_TO, network: 'eip155:84532', facilitatorRetries: 3 },
+      db,
+      { facilitator, retries: 3 },
+    );
+    const res = await provider.verify(v2Proof(provider, 'GET /v1/search'), 'GET /v1/search');
+    expect(res).toEqual({ ok: false, reason: 'insufficient_funds' });
+    expect(facilitator.calls).toEqual(['verify']); // single call, no retry
+  });
+
+  it('settle: single attempt, fails closed when no on-chain guard (no rpcUrl)', async () => {
+    const facilitator = mockFacilitator({ settleError: new Error('Facilitator request timed out') });
+    const provider = makeProvider(facilitator, db); // no rpcUrl → no settle retries
+    const res = await provider.verify(v2Proof(provider, 'GET /v1/search'), 'GET /v1/search');
+    expect(res).toEqual({ ok: false, reason: 'facilitator_unavailable' });
+    expect(facilitator.calls).toEqual(['verify', 'settle']); // settle tried exactly once
+    const rows = await db.query(`SELECT count(*)::int AS n FROM payments`);
+    expect(rows.rows[0].n).toBe(0);
+  });
+
+  it('settle: with the on-chain guard, a landed transfer short-circuits retries to success', async () => {
+    // After a flaky first settle (timeout), the stable-RPC log lookup finds the
+    // Transfer(payer -> payTo, amount) already landed → the payment is treated as
+    // settled and the facilitator settle is NOT retried (prevents double charge).
+    const facilitator = mockFacilitator({ settleError: new Error('Facilitator request timed out') });
+    const provider = new X402PaymentProvider(
+      { facilitatorUrl: 'https://facilitator.test', payTo: PAY_TO, network: 'eip155:84532', facilitatorRetries: 3 },
+      db,
+      { facilitator, retries: 3, rpcUrl: 'https://rpc.test' },
+    );
+    const proof = v2Proof(provider, 'GET /v1/search');
+    const amountBase = provider.requirementsFor('GET /v1/search').amount; // '20000'
+
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body ?? '{}'));
+      if (body.method === 'eth_blockNumber') {
+        return new Response(JSON.stringify({ jsonrpc: '2.0', id: 1, result: '0x100' }));
+      }
+      if (body.method === 'eth_getLogs') {
+        // A Transfer log with data = amount base units (32-byte padded hex).
+        const amountHex = BigInt(amountBase).toString(16).padStart(64, '0');
+        return new Response(
+          JSON.stringify({
+            jsonrpc: '2.0',
+            id: 1,
+            result: [{ data: `0x${amountHex}` }],
+          }),
+        );
+      }
+      return new Response(JSON.stringify({ jsonrpc: '2.0', id: 1, error: { message: 'unhandled' } }));
+    }) as typeof fetch;
+
+    try {
+      const res = await provider.verify(proof, 'GET /v1/search');
+      expect(res.ok).toBe(true);
+      expect(res.attempts).toBe(3); // verify 1 + settle 1 flake + guard-short-circuited attempt
+      // The guard runs before the retry settle: settle called exactly once.
+      expect(facilitator.calls).toEqual(['verify', 'settle']);
+      const rows = await db.query(`SELECT count(*)::int AS n FROM payments`);
+      expect(rows.rows[0].n).toBe(1);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('settle: with the guard but NO matching transfer, retries then fails closed', async () => {
+    const facilitator = mockFacilitator({ settleError: new Error('Facilitator request timed out') });
+    const provider = new X402PaymentProvider(
+      { facilitatorUrl: 'https://facilitator.test', payTo: PAY_TO, network: 'eip155:84532', facilitatorRetries: 2 },
+      db,
+      { facilitator, retries: 2, rpcUrl: 'https://rpc.test' },
+    );
+    const proof = v2Proof(provider, 'GET /v1/search');
+
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body ?? '{}'));
+      if (body.method === 'eth_blockNumber') {
+        return new Response(JSON.stringify({ jsonrpc: '2.0', id: 1, result: '0x100' }));
+      }
+      if (body.method === 'eth_getLogs') {
+        return new Response(JSON.stringify({ jsonrpc: '2.0', id: 1, result: [] })); // no transfer
+      }
+      return new Response(JSON.stringify({ jsonrpc: '2.0', id: 1, error: { message: 'unhandled' } }));
+    }) as typeof fetch;
+
+    try {
+      const res = await provider.verify(proof, 'GET /v1/search');
+      expect(res.ok).toBe(false);
+      expect(res.reason).toBe('facilitator_unavailable');
+      // attempts: verify 1 + settle 1 + 2 retries (each preceded by guard)
+      expect(res.attempts).toBe(4);
+      expect(facilitator.calls).toEqual(['verify', 'settle', 'settle', 'settle']);
+      const rows = await db.query(`SELECT count(*)::int AS n FROM payments`);
+      expect(rows.rows[0].n).toBe(0);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 });

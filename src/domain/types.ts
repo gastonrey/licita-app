@@ -129,6 +129,8 @@ export interface PaymentVerification {
   payer?: string;
   /** x402: on-chain settlement transaction hash. */
   txHash?: string;
+  /** Number of facilitator attempts used (verify + settle). 1 = no retries. */
+  attempts?: number;
 }
 
 export interface PaymentProvider {
