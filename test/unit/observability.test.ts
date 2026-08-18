@@ -388,7 +388,8 @@ describe('stats aggregation (P0.7)', () => {
       { source: 'rest', requests: 4 },
       { source: 'mcp', requests: 3 },
     ]);
-    expect(data.zero_result_queries).toEqual({ count: 1, rate: 0.1429 });
+    expect(data.zero_result_queries).toEqual({ count: 1, rate: 0.1429, top: [{ q: 'software', requests: 1 }] });
+    expect(data.total_requests).toBe(7);
     expect(data.payment_required_responses).toBe(2);
     expect(data.failed_queries).toBe(3);
     expect(data.failed_requests_rate).toEqual({ count: 3, total: 7, rate: 0.4286 });

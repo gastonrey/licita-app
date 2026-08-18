@@ -77,6 +77,13 @@ SELECT q, count(*)::int AS n
 FROM request_logs WHERE q IS NOT NULL
 GROUP BY q ORDER BY n DESC, q LIMIT 10
 `;
+// Zero-result queries: what clients search that the index cannot answer. These
+// are the concrete data gaps the crawler should fill next, surfaced operator-side.
+const TOP_ZERO_RESULT_SQL = `
+SELECT q, count(*)::int AS n
+FROM request_logs WHERE q IS NOT NULL AND zero_result
+GROUP BY q ORDER BY n DESC, q LIMIT 10
+`;
 const UNIQUE_USER_AGENTS_SQL = `
 SELECT count(DISTINCT user_agent)::int AS n FROM request_logs WHERE user_agent IS NOT NULL
 `;
@@ -212,6 +219,7 @@ export function statsHandler(ctx: RouteCtx) {
       topBuyer,
       topCompany,
       topSearches,
+      topZeroQueries,
       uniqueUserAgents,
       topUserAgents,
       mcpDiscovery,
@@ -236,6 +244,7 @@ export function statsHandler(ctx: RouteCtx) {
       db.query(TOP_FIELD_SQL('buyer')),
       db.query(TOP_FIELD_SQL('company')),
       db.query(TOP_SEARCHES_SQL),
+      db.query(TOP_ZERO_RESULT_SQL),
       db.query(UNIQUE_USER_AGENTS_SQL),
       db.query(TOP_USER_AGENTS_SQL),
       db.query(MCP_DISCOVERY_SQL),
@@ -354,6 +363,7 @@ export function statsHandler(ctx: RouteCtx) {
 
     const data = {
       unique_clients: Number(clients.rows[0]?.n ?? 0),
+      total_requests: requestTotal,
       requests_by_endpoint: byEndpoint.rows.map((r) => ({
         endpoint: String(r.endpoint),
         requests: Number(r.requests),
@@ -366,6 +376,7 @@ export function statsHandler(ctx: RouteCtx) {
       zero_result_queries: {
         count: zeroCount,
         rate: rate(zeroCount, zeroTotal),
+        top: topZeroQueries.rows.map((r) => ({ q: String(r.q), requests: Number(r.n) })),
       },
       payment_required_responses: Number(paymentRequired.rows[0]?.n ?? 0),
       payments: {

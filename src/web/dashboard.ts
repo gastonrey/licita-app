@@ -153,7 +153,7 @@ function render(stats, recent) {
   const paidTotal = (stats.requests_by_endpoint || []).reduce((s, r) => s + Number(r.paid_requests || 0), 0);
   const kpis = [
     ['Unique clients', esc(stats.unique_clients ?? 0)],
-    ['Total requests', esc((stats.failed_requests_rate || {}).total ?? 0)],
+    ['Total requests', esc(stats.total_requests ?? (stats.failed_requests_rate || {}).total ?? 0)],
     ['Paid requests', esc(paidTotal)],
     ['Revenue', esc(money((stats.payments || {}).revenue_usd))],
     ['Payment required', esc(stats.payment_required_responses ?? 0)],
@@ -274,8 +274,15 @@ function render(stats, recent) {
       '</tbody></table>';
 
   const zr = stats.zero_result_queries || {};
+  const zrTop = zr.top || [];
   $('zero-result').innerHTML =
-    '<p>Count: <strong>' + esc(zr.count ?? 0) + '</strong> · Rate: <strong>' + esc(pct(zr.rate)) + '</strong></p>';
+    '<p>Count: <strong>' + esc(zr.count ?? 0) + '</strong> · Rate: <strong>' + esc(pct(zr.rate)) + '</strong></p>' +
+    '<h3 class="h3">Top queries without results — data gaps</h3>' +
+    (zrTop.length === 0
+      ? '<p class="muted">None.</p>'
+      : '<table><thead><tr><th>Query</th><th class="num">Attempts</th></tr></thead><tbody>' +
+        zrTop.map((r) => '<tr><td><code>' + esc(r.q) + '</code></td><td class="num">' + esc(r.requests) + '</td></tr>').join('') +
+        '</tbody></table>');
 }
 
 function setLastUpdated(err) {
