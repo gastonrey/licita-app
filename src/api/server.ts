@@ -24,6 +24,8 @@ import {
 } from './routes/companies.js';
 import { buyerHistoryHandler, buyerIdValidation } from './routes/buyers.js';
 import { renewalsHandler, renewalsValidation } from './routes/renewals.js';
+import { researchHandler, researchBodyValidation } from './routes/research.js';
+import { demoHandler } from './routes/demo.js';
 import { pricingHandler } from './routes/pricing.js';
 import { recentStatsHandler, statsAuth, statsHandler } from './routes/stats.js';
 
@@ -183,7 +185,13 @@ export async function buildServer(config: AppConfig, db: Db): Promise<FastifyIns
     { preHandler: [paymentPreHandler('GET /v1/renewals'), renewalsValidation] },
     renewalsHandler(ctx),
   );
+  app.post(
+    '/v1/research',
+    { preHandler: [paymentPreHandler('POST /v1/research'), researchBodyValidation] },
+    researchHandler(ctx),
+  );
   // free endpoints
+  app.get('/v1/demo', { preHandler: [paymentPreHandler('GET /v1/demo')] }, demoHandler(ctx));
   app.get('/v1/pricing', pricingHandler(ctx));
   app.get('/v1/stats', { preHandler: [statsAuth(config.operatorKey)] }, statsHandler(ctx));
   app.get('/v1/stats/recent', { preHandler: [statsAuth(config.operatorKey)] }, recentStatsHandler(ctx));
