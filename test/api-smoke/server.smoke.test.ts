@@ -100,6 +100,8 @@ function fakeDb(): { db: Db; calls: QueryCall[] } {
           { source: 'rest', requests: 10 },
           { source: 'mcp', requests: 2 },
         ] };
+      if (t.includes('q IS NOT NULL AND zero_result'))
+        return { rows: [{ q: 'cyber', n: 2 }] };
       if (t.includes('zero_result')) return { rows: [{ zero_result_count: 1, total: 12 }] };
       if (t.includes('status = 402 OR error = \'payment_required\''))
         return { rows: [{ n: 3 }] };
@@ -250,7 +252,7 @@ describe('buildServer wiring (stubbed payment, fake db)', () => {
       { source: 'rest', requests: 10 },
       { source: 'mcp', requests: 2 },
     ]);
-    expect(body.data.zero_result_queries).toEqual({ count: 1, rate: 0.0833 });
+    expect(body.data.zero_result_queries).toEqual({ count: 1, rate: 0.0833, top: [{ q: 'cyber', requests: 2 }] });
     expect(body.data.payment_required_responses).toBe(3);
     expect(body.data.repeat_clients).toEqual({
       count: 1,
