@@ -247,7 +247,7 @@ describe.runIf(TED_OK)('integration: real app + real postgres + live TED slice',
     expect(String((body.error as Json).message)).toMatch(/replay/i);
   });
 
-  it('MCP /mcp tools/list exposes the 8 tools; get_pricing is free', async () => {
+  it('MCP /mcp tools/list exposes the tools; get_pricing is free', async () => {
     const rpc = async (id: number, method: string, params: unknown) => {
       const res = await fetch(`${base}/mcp`, {
         method: 'POST',

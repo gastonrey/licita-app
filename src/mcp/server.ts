@@ -1,6 +1,7 @@
 // mountMcp(app, config, db) — streamable-HTTP MCP endpoint at /mcp (SPEC §6).
-// 9 tools mirroring the REST endpoints, each with an optional `payment_token`
-// arg. Unpaid calls return a structured `payment_required` payload with
+// 11 tools mirroring the REST endpoints, each with an optional `payment_token`
+// arg (plus an optional `client_key` arg on paid tools for prepaid-balance
+// payments). Unpaid calls return a structured `payment_required` payload with
 // isError=false so agents read it as data. Paid calls run the SAME queries as
 // the REST routes: all SQL lives in src/api/routes/* and is imported here.
 
@@ -11,7 +12,8 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import type { AppConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import type { PaymentProvider } from '../domain/types.js';
-import { getPaymentProvider } from '../pay/middleware.js';
+import { CREDIT_BUNDLE_ENDPOINTS, CREDIT_BUNDLES } from '../domain/types.js';
+import { getPaymentProvider, tryCreditDebit } from '../pay/middleware.js';
 import { createLogger, type Logger } from '../obs/log.js';
 import { hashIp, logRequest, strField } from '../obs/requestlog.js';
 import { dateStr, num, provenanceFor, tedUrl } from '../api/routes/common.js';
@@ -115,6 +117,9 @@ function paymentRequiredResult(
 
 interface ToolDef {
   endpointKey: string;
+  /** Resolve the actual priced endpoint key from args when it depends on an
+   *  arg (e.g. the billing bundle amount). Falls back to endpointKey. */
+  endpointKeyFor?: (args: Record<string, unknown>) => string;
   description: string;
   /** zod raw shape, WITHOUT payment_token (added centrally). */
   schema: Record<string, z.ZodTypeAny>;
@@ -388,6 +393,95 @@ const TOOLS: Record<string, ToolDef> = {
       return researchData(db, query, limit);
     },
   },
+
+  billing_get_balance: {
+    endpointKey: 'GET /v1/billing',
+    description:
+      'Check the prepaid credit balance for a client key (in cents and USD). Always free. Returns not_found when no account exists yet — buy credits via billing_purchase_credits to create one.',
+    schema: {
+      client_key: z
+        .string()
+        .min(1)
+        .max(200)
+        .describe('prepaid credit account key (must match the key used when buying credits)'),
+    },
+    run: async (db, args) => {
+      const { client_key } = args as { client_key?: string };
+      if (typeof client_key !== 'string' || client_key.length === 0) {
+        return { error: { code: 'invalid_query', message: 'client_key is required' } };
+      }
+      const res = await db.query(
+        'SELECT client_key, balance_cents FROM credit_accounts WHERE client_key = $1',
+        [client_key],
+      );
+      if (res.rows.length === 0) {
+        return {
+          error: {
+            code: 'not_found',
+            message: `No credit account for client key "${client_key}". Buy credits via billing_purchase_credits to create one.`,
+          },
+        };
+      }
+      const balance_cents = Number(res.rows[0].balance_cents);
+      return {
+        client_key,
+        balance_cents,
+        balance_usd: (balance_cents / 100).toFixed(2),
+      };
+    },
+  },
+
+  billing_purchase_credits: {
+    endpointKey: 'POST /v1/billing/credits/5',
+    endpointKeyFor: (args) => {
+      const key = `POST /v1/billing/credits/${String((args as { amount?: unknown }).amount)}`;
+      return CREDIT_BUNDLES[key] !== undefined ? key : 'POST /v1/billing/credits/5';
+    },
+    description:
+      'Buy a prepaid credit bundle (5, 10 or 25 USD) paid per-endpoint via x402 (mirrors REST POST /v1/billing/credits/:amount). ' +
+      'Set amount to the bundle you pay for with payment_token; the proof is verified against that exact bundle, then the account is credited and the balance returned. ' +
+      'Afterwards send client_key on every paid tool to pay from balance instead of per-call proofs.',
+    schema: {
+      client_key: z
+        .string()
+        .min(1)
+        .max(200)
+        .describe('prepaid credit account key to credit'),
+      amount: z
+        .union([z.literal(5), z.literal(10), z.literal(25), z.literal('5'), z.literal('10'), z.literal('25')])
+        .transform((v) => String(v))
+        .describe('bundle amount in USD: 5, 10 or 25'),
+    },
+    run: async (db, args) => {
+      const { client_key, amount } = args as { client_key?: string; amount?: string };
+      const endpointKey = `POST /v1/billing/credits/${String(amount)}`;
+      const amountCents = CREDIT_BUNDLES[endpointKey];
+      if (typeof client_key !== 'string' || client_key.length === 0) {
+        return { error: { code: 'invalid_query', message: 'client_key is required' } };
+      }
+      if (amountCents === undefined) {
+        return {
+          error: { code: 'invalid_query', message: `Unknown bundle amount "${String(amount)}". Use 5, 10 or 25.` },
+        };
+      }
+      const res = await db.query(
+        `INSERT INTO credit_accounts (client_key, balance_cents)
+         VALUES ($1, $2)
+         ON CONFLICT (client_key) DO UPDATE
+           SET balance_cents = credit_accounts.balance_cents + EXCLUDED.balance_cents,
+               updated_at = now()
+         RETURNING balance_cents`,
+        [client_key, amountCents],
+      );
+      const balance_cents = Number(res.rows[0].balance_cents);
+      return {
+        client_key,
+        added_cents: amountCents,
+        balance_cents,
+        balance_usd: (balance_cents / 100).toFixed(2),
+      };
+    },
+  },
 };
 
 // --- P0.7 tool-call observability ------------------------------------------------
@@ -475,7 +569,7 @@ export interface McpServerOpts {
   log?: Logger;
 }
 
-/** Build the MCP server with all 9 tools registered. Exported for tests. */
+/** Build the MCP server with all 11 tools registered. Exported for tests. */
 export function buildMcpServer(
   provider: PaymentProvider,
   db: Db,
@@ -498,6 +592,7 @@ export function buildMcpServer(
   );
 
   for (const [name, def] of Object.entries(TOOLS)) {
+    const paidTool = provider.price(def.endpointKey) !== '0.00';
     server.registerTool(
       name,
       {
@@ -510,18 +605,39 @@ export function buildMcpServer(
             .describe(
               'Payment proof: dev mode → single-use token from POST /v1/dev-faucet; x402 mode → base64 payment payload (the PAYMENT-SIGNATURE / X-PAYMENT header value)',
             ),
+          ...(paidTool && !def.schema.client_key
+            ? {
+                client_key: z
+                  .string()
+                  .optional()
+                  .describe(
+                    'Prepaid credit balance key: when set, paid calls first try to debit this account instead of requiring a per-call proof.',
+                  ),
+              }
+            : {}),
         },
       },
       async (args) => {
         const { payment_token: token, ...rest } = args as Record<string, unknown> & {
           payment_token?: string;
         };
+        const client_key = rest.client_key as string | undefined;
+        const endpointKey = def.endpointKeyFor ? def.endpointKeyFor(rest) : def.endpointKey;
         const started = Date.now();
         let clientKey: string | undefined;
         try {
-          const price = provider.price(def.endpointKey);
+          const price = provider.price(endpointKey);
           const paid = price !== '0.00';
-          if (price !== '0.00') {
+          const hasClientKey = typeof client_key === 'string' && client_key.length > 0;
+          let debited = false;
+          if (paid && hasClientKey) {
+            const debit = await tryCreditDebit(db, endpointKey, price, client_key);
+            if (debit.ok) {
+              clientKey = debit.clientKey;
+              debited = true;
+            }
+          }
+          if (paid && !debited) {
             if (typeof token !== 'string' || token.length === 0) {
               toolCallLog(db, log, config, name, rest, {
                 clientIp,
@@ -531,9 +647,9 @@ export function buildMcpServer(
                 latencyMs: Date.now() - started,
                 paid: false,
               });
-              return paymentRequiredResult(provider, def.endpointKey);
+              return paymentRequiredResult(provider, endpointKey);
             }
-            const v = await provider.verify(token, def.endpointKey);
+            const v = await provider.verify(token, endpointKey);
             if (!v.ok) {
               toolCallLog(db, log, config, name, rest, {
                 clientIp,
@@ -543,7 +659,7 @@ export function buildMcpServer(
                 latencyMs: Date.now() - started,
                 paid: false,
               });
-              return paymentRequiredResult(provider, def.endpointKey, v.reason ?? 'invalid');
+              return paymentRequiredResult(provider, endpointKey, v.reason ?? 'invalid');
             }
             clientKey = v.clientKey;
           }
@@ -583,7 +699,7 @@ export function buildMcpServer(
             error: 'internal',
             zeroResult: false,
             latencyMs: Date.now() - started,
-            paid: provider.price(def.endpointKey) !== '0.00',
+            paid: provider.price(endpointKey) !== '0.00',
           });
           return errorResult(
             'internal',
