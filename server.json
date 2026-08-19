@@ -1,9 +1,9 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.gastonrey/licita-app",
-  "title": "EUTenders Procurement",
-  "description": "EU tender search and analysis for agents; x402 pay-per-call.",
-  "version": "0.1.0",
+  "title": "Licita",
+  "description": "Spanish/EU procurement intelligence for agents; x402 or prepaid credits.",
+  "version": "0.1.1",
   "remotes": [
     {
       "type": "streamable-http",
