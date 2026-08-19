@@ -4,7 +4,7 @@
 // /openapi.json is served by src/api/server.ts (W2); we only link to it.
 
 import type { FastifyInstance } from 'fastify';
-import { ENDPOINT_PRICES } from '../domain/types.js';
+import { CREDIT_BUNDLES, ENDPOINT_PRICES } from '../domain/types.js';
 import type { AppConfig } from '../config.js';
 import { registerDevFaucet } from '../pay/devProvider.js';
 
@@ -119,6 +119,8 @@ const MCP_TOOLS = [
   'get_renewals',
   'get_pricing',
   'research',
+  'billing_get_balance',
+  'billing_purchase_credits',
 ];
 
 function homePage(config: AppConfig): string {
@@ -145,7 +147,7 @@ An unpaid request returns <code>HTTP 402</code> with the exact payment requireme
 
 <h2>How agents use it</h2>
 <ul>
-<li><strong>MCP</strong> — streamable-HTTP server at <code>/mcp</code> with 9 tools
+<li><strong>MCP</strong> — streamable-HTTP server at <code>/mcp</code> with 11 tools
 (<code>${MCP_TOOLS.join('</code>, <code>')}</code>). Static server card:
 <a href="/.well-known/mcp/server-card.json">/.well-known/mcp/server-card.json</a>.</li>
 <li><strong>REST</strong> — priced per call, x402-compatible. Send the base64 payment payload as the
@@ -286,6 +288,10 @@ as normal content (not an error) — parse it, create the payment with an x402 c
 from the <code>PAYMENT-REQUIRED</code> requirement, and retry with
 <code>payment_token</code> set. In dev mode <code>how_to_pay</code> points at the
 faucet instead.</p>
+<p class="muted">Paid tools also accept <code>client_key</code>: when set, the call first tries to pay
+from the prepaid balance (see <a href="/pricing">/pricing</a> → Credits &amp; billing) before requiring
+a per-call proof. Buy credits via <code>billing_purchase_credits</code> and check the balance via
+<code>billing_get_balance</code>.</p>
 <pre># tools/list then e.g.
 {"jsonrpc":"2.0","id":1,"method":"tools/call",
  "params":{"name":"search_tenders",
@@ -298,7 +304,7 @@ discovery info via <code>extensions.bazaar</code> on the 402 <code>PAYMENT-REQUI
 facilitators can catalog Licita in Bazaar search (method, input/output examples, input schema).</li>
 <li><strong>Server card</strong> — static MCP server card at
 <a href="/.well-known/mcp/server-card.json">/.well-known/mcp/server-card.json</a>: identity, SSE
-transport URL and the 9 tools with descriptions and input schemas, for directory crawlers that prefer
+transport URL and the 11 tools with descriptions and input schemas, for directory crawlers that prefer
 a static card over a live scan.</li>
 <li><strong>How a facilitator catalogs Licita</strong> — hit <code>GET /v1/pricing</code> (free) for
 the ladder, then any paid call; the 402 requirement carries <code>extensions.bazaar</code> and the
@@ -330,6 +336,25 @@ function pricingPage(config: AppConfig): string {
 ${priceTable(config)}
 <p class="muted"><code>GET /v1/demo</code> is free: a labeled sample of the paid data (recent tender +
 renewal signal), so agents can validate quality before paying.</p>
+<h2>Credits &amp; billing</h2>
+<p class="muted">Prepaid credit bundles — a one-time x402 purchase, no subscription. Buy a bundle, then
+pay every call from your balance by sending <code>x-client-key: &lt;your key&gt;</code> on the request
+(instead of a per-call payment proof).</p>
+<table>
+<thead><tr><th>Bundle</th><th>Price (USD)</th></tr></thead>
+<tbody>
+${Object.entries(CREDIT_BUNDLES)
+  .map(
+    ([endpoint, cents]) =>
+      `<tr><td><code>${endpoint}</code></td><td class="num">$${(cents / 100).toFixed(2)}</td></tr>`,
+  )
+  .join('\n')}
+</tbody>
+</table>
+<p class="muted">Buy: <code>POST /v1/billing/credits/5</code> (or <code>/10</code> <code>/25</code>) with
+the normal x402 payment flow (402 → <code>PAYMENT-SIGNATURE</code> retry). Check balance:
+<code>GET /v1/billing</code> with header <code>x-client-key: &lt;your key&gt;</code>. MCP:
+<code>billing_purchase_credits</code> / <code>billing_get_balance</code>.</p>
 <h2>How payment works</h2>
 <ol>
 <li>Call a paid endpoint → <code>402</code> with a base64 <code>PAYMENT-REQUIRED</code> header
@@ -383,11 +408,23 @@ ${lines}
 ## MCP
 - Streamable-HTTP at POST /mcp (transport is free; tools priced like their REST equivalents).
   Tools: search_tenders, get_tender, get_company, get_company_awards, get_company_opportunities,
-  get_buyer_history, get_renewals, get_pricing, research.
+  get_buyer_history, get_renewals, get_pricing, research, billing_get_balance, billing_purchase_credits.
 - Static server card: /.well-known/mcp/server-card.json (identity, SSE URL, tool schemas).
 - Every tool accepts optional payment_token — the base64 payment payload (same value a REST client
   sends as PAYMENT-SIGNATURE). Unpaid calls return {"payment_required": true, "price_usd": ...,
   "how_to_pay": {...}} with isError=false (parse as data, then pay + retry with payment_token).
+- Paid tools also accept optional client_key: when set, the call first tries to pay from the prepaid
+  balance instead of requiring a per-call proof.
+
+## Credits (prepaid balance)
+- One-time x402 purchase, no subscription. Buy: POST /v1/billing/credits/5 (or /10 /25) — $5.00 /
+  $10.00 / $25.00. The payment proof is verified and recorded (replay blocked), then the account is
+  credited.
+- Pay from balance: send header x-client-key: <your key> on every priced request (REST) or the
+  client_key argument on paid MCP tools. Insufficient balance falls back to the normal 402 flow.
+- Check balance: GET /v1/billing (free) with header x-client-key; 404 when no account exists yet.
+- MCP: billing_purchase_credits (paid, args: client_key + amount 5|10|25 + payment_token) and
+  billing_get_balance (free, args: client_key).
 
 ## Payment (x402 v2; current mode: ${config.paymentsMode})
 1. Call a paid endpoint without payment → HTTP 402 with a base64 PAYMENT-REQUIRED response header.
@@ -450,11 +487,18 @@ const PAYMENT_TOKEN_SCHEMA = {
     'Payment proof: dev mode → single-use token from POST /v1/dev-faucet; x402 mode → base64 payment payload (the PAYMENT-SIGNATURE / X-PAYMENT header value)',
 } as const;
 
+const CLIENT_KEY_SCHEMA = {
+  type: 'string',
+  description:
+    'Prepaid credit balance key: when set, paid calls first try to debit this account instead of requiring a per-call proof.',
+} as const;
+
 const ID_INPUT_SCHEMA = {
   type: 'object',
   properties: {
     id: { type: 'integer', description: 'numeric id from search results' },
     payment_token: PAYMENT_TOKEN_SCHEMA,
+    client_key: CLIENT_KEY_SCHEMA,
   },
   required: ['id'],
 } as const;
@@ -483,6 +527,7 @@ const SERVER_CARD_TOOLS: Array<{
         type: { type: 'string', enum: ['award', 'tender', 'contract'] },
         ...PAGE_SHAPE,
         payment_token: PAYMENT_TOKEN_SCHEMA,
+        client_key: CLIENT_KEY_SCHEMA,
       },
     },
   },
@@ -536,6 +581,7 @@ const SERVER_CARD_TOOLS: Array<{
         min_confidence: { type: 'string', enum: ['low', 'medium', 'high'] },
         ...PAGE_SHAPE,
         payment_token: PAYMENT_TOKEN_SCHEMA,
+        client_key: CLIENT_KEY_SCHEMA,
       },
     },
   },
@@ -559,8 +605,49 @@ const SERVER_CARD_TOOLS: Array<{
         query: { type: 'string', description: 'topic to research (matches tender full-text, company/buyer names, renewal signals)' },
         limit: { type: 'integer', description: 'max findings to return' },
         payment_token: PAYMENT_TOKEN_SCHEMA,
+        client_key: CLIENT_KEY_SCHEMA,
       },
       required: ['query'],
+    },
+  },
+  {
+    name: 'billing_get_balance',
+    description:
+      'Check the prepaid credit balance for a client key (in cents and USD). Always free. Returns not_found when no account exists yet — buy credits via billing_purchase_credits to create one.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        client_key: {
+          type: 'string',
+          description: 'prepaid credit account key (must match the key used when buying credits)',
+        },
+      },
+      required: ['client_key'],
+    },
+  },
+  {
+    name: 'billing_purchase_credits',
+    description:
+      'Buy a prepaid credit bundle (5, 10 or 25 USD) paid per-endpoint via x402 (mirrors REST POST /v1/billing/credits/:amount). ' +
+      'Set amount to the bundle you pay for with payment_token; the proof is verified against that exact bundle, then the account is credited and the balance returned. ' +
+      'Afterwards send client_key on every paid tool to pay from balance instead of per-call proofs.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        client_key: {
+          type: 'string',
+          description: 'prepaid credit account key to credit',
+        },
+        amount: {
+          anyOf: [
+            { type: 'string', enum: ['5', '10', '25'] },
+            { type: 'integer', enum: [5, 10, 25] },
+          ],
+          description: 'bundle amount in USD: 5, 10 or 25',
+        },
+        payment_token: PAYMENT_TOKEN_SCHEMA,
+      },
+      required: ['client_key', 'amount'],
     },
   },
 ];

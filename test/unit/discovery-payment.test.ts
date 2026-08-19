@@ -34,6 +34,10 @@ describe('discovery surfaces teach the x402 v2 flow', () => {
       '/v1/dev-faucet',
       'X-PAYMENT',
       'NOT available in production',
+      'billing_purchase_credits',
+      'billing_get_balance',
+      'POST /v1/billing/credits/5',
+      'x-client-key',
     ]) {
       expect(res.body, `llms.txt missing "${needle}"`).toContain(needle);
     }
@@ -72,6 +76,26 @@ describe('discovery surfaces teach the x402 v2 flow', () => {
     await app.close();
   });
 
+  it('/pricing page advertises prepaid credit bundles and x-client-key usage', async () => {
+    const app = await webApp();
+    const res = await app.inject({ method: 'GET', url: '/pricing' });
+    expect(res.statusCode).toBe(200);
+    for (const needle of [
+      'Credits',
+      'POST /v1/billing/credits/5',
+      'POST /v1/billing/credits/10',
+      'POST /v1/billing/credits/25',
+      '$5.00',
+      '$10.00',
+      '$25.00',
+      'x-client-key',
+      'no subscription',
+    ]) {
+      expect(res.body, `/pricing missing "${needle}"`).toContain(needle);
+    }
+    await app.close();
+  });
+
   it('buildPricing payment_flow is machine-readable x402 v2 with a dev-only faucet', () => {
     const p = buildPricing('dev');
     expect(p.payment_flow).toMatchObject({
@@ -92,6 +116,21 @@ describe('discovery surfaces teach the x402 v2 flow', () => {
     expect(p.payment_flow.faucet).toBeNull();
     expect(p.payment_flow.protocol).toBe('x402');
     expect(p.payment_flow.signature_header).toBe('PAYMENT-SIGNATURE');
+  });
+
+  it('buildPricing advertises prepaid credit bundles (P2)', () => {
+    const p = buildPricing('dev');
+    expect(p.billing).toMatchObject({
+      mechanism: 'prepaid_credits',
+      balance_endpoint: 'GET /v1/billing',
+    });
+    const bundles = p.billing.bundles as Array<{ amount_usd: string; endpoint: string }>;
+    expect(bundles).toEqual([
+      { amount_usd: '5.00', endpoint: 'POST /v1/billing/credits/5' },
+      { amount_usd: '10.00', endpoint: 'POST /v1/billing/credits/10' },
+      { amount_usd: '25.00', endpoint: 'POST /v1/billing/credits/25' },
+    ]);
+    expect(String(p.billing.usage)).toContain('x-client-key');
   });
 });
 

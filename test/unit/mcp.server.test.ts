@@ -115,9 +115,11 @@ describe('MCP tools (in-process client)', () => {
     await Promise.all([client.connect(clientT), server.connect(serverT)]);
   });
 
-  it('lists exactly the 9 SPEC tools', async () => {
+  it('lists exactly the 11 SPEC tools', async () => {
     const { tools } = await client.listTools();
     expect(tools.map((t) => t.name).sort()).toEqual([
+      'billing_get_balance',
+      'billing_purchase_credits',
       'get_buyer_history',
       'get_company',
       'get_company_awards',

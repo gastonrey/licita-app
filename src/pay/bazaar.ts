@@ -320,6 +320,21 @@ const RESEARCH_INPUT_SCHEMA = {
   required: ['query'],
 } as const;
 
+const BILLING_PURCHASE_INPUT_SCHEMA = {
+  type: 'object',
+  properties: {
+    amount: { type: 'number', description: 'bundle amount in USD: 5, 10 or 25' },
+  },
+  required: ['amount'],
+} as const;
+
+const OUTPUT_BILLING_PURCHASE = {
+  client_key: 'agent-1',
+  added_cents: 500,
+  balance_cents: 500,
+  balance_usd: '5.00',
+};
+
 /** Priced REST endpoint keys (resolvePrice returns != '0.00'); keys are the
  *  ENDPOINT_PRICES / priceOverrides keys from src/domain/types.ts. */
 const PRICED_REST_KEYS = [
@@ -331,6 +346,9 @@ const PRICED_REST_KEYS = [
   'GET /v1/buyers/:id/history',
   'GET /v1/renewals',
   'POST /v1/research',
+  'POST /v1/billing/credits/5',
+  'POST /v1/billing/credits/10',
+  'POST /v1/billing/credits/25',
 ] as const;
 
 /** The 5 dynamic REST routes that get a top-level routeTemplate (':param'
@@ -404,6 +422,33 @@ const REST_EXTENSIONS: Record<string, { info: unknown; schema: unknown }> = {
     inputSchema: RESEARCH_INPUT_SCHEMA,
     output: { example: OUTPUT_RESEARCH },
   }),
+  'POST /v1/billing/credits/5': declareRestExtension({
+    method: 'POST',
+    bodyType: 'json',
+    input: {},
+    inputSchema: { type: 'object', properties: {} },
+    pathParams: { amount: 5 },
+    pathParamsSchema: BILLING_PURCHASE_INPUT_SCHEMA,
+    output: { example: OUTPUT_BILLING_PURCHASE },
+  }),
+  'POST /v1/billing/credits/10': declareRestExtension({
+    method: 'POST',
+    bodyType: 'json',
+    input: {},
+    inputSchema: { type: 'object', properties: {} },
+    pathParams: { amount: 10 },
+    pathParamsSchema: BILLING_PURCHASE_INPUT_SCHEMA,
+    output: { example: OUTPUT_BILLING_PURCHASE },
+  }),
+  'POST /v1/billing/credits/25': declareRestExtension({
+    method: 'POST',
+    bodyType: 'json',
+    input: {},
+    inputSchema: { type: 'object', properties: {} },
+    pathParams: { amount: 25 },
+    pathParamsSchema: BILLING_PURCHASE_INPUT_SCHEMA,
+    output: { example: OUTPUT_BILLING_PURCHASE },
+  }),
 };
 
 // --- MCP discovery extensions (paid tools in src/mcp/server.ts) ---------------
@@ -416,9 +461,10 @@ interface PaidMcpTool {
   output: unknown;
 }
 
-/** The 8 paid MCP tools from src/mcp/server.ts TOOLS (get_pricing is free and
- *  intentionally omitted). Names + descriptions mirror that registry exactly;
- *  inputSchema values are JSON Schema mirrors of the registered zod shapes. */
+/** The 9 paid MCP tools from src/mcp/server.ts TOOLS (get_pricing and
+ *  billing_get_balance are free and intentionally omitted). Names +
+ *  descriptions mirror that registry exactly; inputSchema values are JSON
+ *  Schema mirrors of the registered zod shapes. */
 const PAID_MCP_TOOLS: PaidMcpTool[] = [
   {
     name: 'search_tenders',
@@ -484,6 +530,23 @@ const PAID_MCP_TOOLS: PaidMcpTool[] = [
     inputSchema: RESEARCH_INPUT_SCHEMA,
     example: { query: 'health sector IT services', limit: 5 },
     output: OUTPUT_RESEARCH,
+  },
+  {
+    name: 'billing_purchase_credits',
+    description:
+      'Buy a prepaid credit bundle (5, 10 or 25 USD) paid per-endpoint via x402 (mirrors REST POST /v1/billing/credits/:amount). ' +
+      'Send payment_token for the chosen bundle amount, then credits the account and returns the balance. ' +
+      'Afterwards send client_key on every paid tool to pay from balance.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        client_key: { type: 'string', description: 'prepaid credit account key to credit' },
+        amount: { type: 'number', description: 'bundle amount in USD: 5, 10 or 25' },
+      },
+      required: ['client_key', 'amount'],
+    },
+    example: { client_key: 'agent-1', amount: 5 },
+    output: OUTPUT_BILLING_PURCHASE,
   },
 ];
 

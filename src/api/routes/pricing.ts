@@ -1,7 +1,7 @@
 // GET /v1/pricing — free, machine-readable price ladder + payment flow (SPEC §5/§6).
 
 import type { FastifyReply, FastifyRequest } from 'fastify';
-import { ENDPOINT_PRICES } from '../../domain/types.js';
+import { CREDIT_BUNDLE_ENDPOINTS, CREDIT_BUNDLES, ENDPOINT_PRICES } from '../../domain/types.js';
 import { envelope, type RouteCtx } from './common.js';
 
 export interface PricingEntry {
@@ -16,6 +16,7 @@ export function buildPricing(paymentsMode: string): {
   payments_mode: string;
   endpoints: PricingEntry[];
   payment_flow: Record<string, unknown>;
+  billing: Record<string, unknown>;
 } {
   return {
     currency: 'USD',
@@ -25,6 +26,15 @@ export function buildPricing(paymentsMode: string): {
       price_usd: price,
       free: price === '0.00',
     })),
+    billing: {
+      mechanism: 'prepaid_credits',
+      bundles: CREDIT_BUNDLE_ENDPOINTS.map((endpoint) => ({
+        amount_usd: (CREDIT_BUNDLES[endpoint] / 100).toFixed(2),
+        endpoint,
+      })),
+      balance_endpoint: 'GET /v1/billing',
+      usage: 'Send x-client-key on every priced request to pay from balance.',
+    },
     payment_flow: {
       protocol: 'x402',
       version: 2,

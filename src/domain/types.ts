@@ -159,6 +159,25 @@ export const ENDPOINT_PRICES: Record<string, string> = {
   'GET /v1/pricing': '0.00',
   'GET /v1/stats': '0.00',
   'GET /v1/demo': '0.00',
+  'POST /v1/billing/credits/5': '5.00',
+  'POST /v1/billing/credits/10': '10.00',
+  'POST /v1/billing/credits/25': '25.00',
+  'GET /v1/billing': '0.00',
+};
+
+// Prepaid credit bundles (P2). The bundle endpoints are priced (paid per-call
+// via the normal x402/dev gate) but never debit: they TOP UP the balance.
+export const CREDIT_BUNDLE_ENDPOINTS = [
+  'POST /v1/billing/credits/5',
+  'POST /v1/billing/credits/10',
+  'POST /v1/billing/credits/25',
+] as const;
+
+/** Bundle endpoint key → prepaid amount in cents (500/1000/2500). */
+export const CREDIT_BUNDLES: Record<string, number> = {
+  'POST /v1/billing/credits/5': 500,
+  'POST /v1/billing/credits/10': 1000,
+  'POST /v1/billing/credits/25': 2500,
 };
 
 // POST /v1/research is deliberately NOT in ENDPOINT_PRICES: its price is

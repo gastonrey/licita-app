@@ -74,6 +74,13 @@ CREATE TABLE payments (
   proof text UNIQUE NOT NULL, status text NOT NULL, created_at timestamptz DEFAULT now(),
   payer_address text, tx_hash text, network text
 );
+-- mirrors migrations/006_credits.sql (P2 prepaid credit bundles)
+CREATE TABLE credit_accounts (
+  client_key text PRIMARY KEY,
+  balance_cents integer NOT NULL DEFAULT 0 CHECK (balance_cents >= 0),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
 -- mirrors migrations/004_observability.sql (partial zero_result index kept)
 CREATE TABLE request_logs (
   id bigserial PRIMARY KEY, ts timestamptz DEFAULT now(),

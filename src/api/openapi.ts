@@ -498,6 +498,38 @@ const idPathParam = {
   schema: { type: 'integer', minimum: 1 },
 } as const;
 
+/** x-client-key header shared by the billing paths (P2 prepaid credits). */
+const xClientKeyHeader = {
+  name: 'x-client-key',
+  in: 'header',
+  required: true,
+  description: 'Prepaid credit account key. Buy a bundle at POST /v1/billing/credits/{amount}, then pay from balance.',
+  schema: { type: 'string', minLength: 1, maxLength: 200 },
+} as const;
+
+/** GET /v1/billing data payload (billingGetHandler in billing.ts). */
+const billingBalanceData = {
+  type: 'object',
+  required: ['client_key', 'balance_cents', 'balance_usd'],
+  properties: {
+    client_key: { type: 'string' },
+    balance_cents: { type: 'integer' },
+    balance_usd: { type: 'string', example: '5.00' },
+  },
+} as const;
+
+/** POST /v1/billing/credits/{amount} data payload (billingPurchaseHandler). */
+const billingPurchaseData = {
+  type: 'object',
+  required: ['client_key', 'added_cents', 'balance_cents', 'balance_usd'],
+  properties: {
+    client_key: { type: 'string' },
+    added_cents: { type: 'integer' },
+    balance_cents: { type: 'integer' },
+    balance_usd: { type: 'string', example: '5.00' },
+  },
+} as const;
+
 const desc = (key: string, text: string) =>
   `${text} Price: $${ENDPOINT_PRICES[key]} per call${ENDPOINT_PRICES[key] === '0.00' ? ' (free)' : ''}.`;
 
@@ -808,8 +840,9 @@ function paths(): Record<string, unknown> {
     '/v1/pricing': {
       get: {
         operationId: 'getPricing',
-        summary: 'Machine-readable price ladder and payment flow',
-        description: 'Free endpoint listing all endpoint prices from the fixed price table plus payment instructions.',
+        summary: 'Machine-readable price ladder, payment flow and credit bundles',
+        description:
+          'Free endpoint listing all endpoint prices from the fixed price table, the x402 payment flow, and the prepaid credit bundle ladder (billing.mechanism=prepaid_credits).',
         responses: stdResponses(
           {
             type: 'object',
@@ -825,6 +858,25 @@ function paths(): Record<string, unknown> {
                     price_usd: { type: 'string', example: '0.02' },
                     free: { type: 'boolean' },
                   },
+                },
+              },
+              billing: {
+                type: 'object',
+                description: 'Prepaid credit bundles (P2): one-time x402 purchase, then pay from balance with x-client-key.',
+                properties: {
+                  mechanism: { type: 'string', enum: ['prepaid_credits'] },
+                  bundles: {
+                    type: 'array',
+                    items: {
+                      type: 'object',
+                      properties: {
+                        amount_usd: { type: 'string', example: '5.00' },
+                        endpoint: { type: 'string', example: 'POST /v1/billing/credits/5' },
+                      },
+                    },
+                  },
+                  balance_endpoint: { type: 'string', example: 'GET /v1/billing' },
+                  usage: { type: 'string' },
                 },
               },
               payment_flow: { type: 'object' },
@@ -855,6 +907,36 @@ function paths(): Record<string, unknown> {
         description:
           'Free, zero-cost sample of what the paid API returns: the single most recent tender and the single most recent renewal signal (each under an explicit sample: true marker) plus the list of currently priced endpoints. Values are real rows — never fabricated.',
         responses: stdResponses(demoData, false),
+      },
+    },
+    '/v1/billing': {
+      get: {
+        operationId: 'getBilling',
+        summary: 'Prepaid credit balance for a client key',
+        description:
+          'Free. Requires header x-client-key. Returns the balance in cents and USD for the credit account, or 404 when no account exists yet. Buy credits at POST /v1/billing/credits/{amount} (5, 10 or 25) — a one-time x402 purchase, no subscription.',
+        parameters: [xClientKeyHeader],
+        responses: stdResponses(billingBalanceData, false),
+      },
+    },
+    '/v1/billing/credits/{amount}': {
+      post: {
+        operationId: 'purchaseCredits',
+        security: [{ paymentSignature: [] }],
+        summary: 'Buy a prepaid credit bundle (5/10/25 USD)',
+        description:
+          'Paid (x402 v2, same flow as every priced endpoint): obtain the PAYMENT-REQUIRED requirement for POST /v1/billing/credits/{amount}, pay with an x402 client, retry with PAYMENT-SIGNATURE (legacy v1 X-PAYMENT accepted). The payment row is recorded (unique proof) and the account is credited atomically. Requires header x-client-key. Afterwards send x-client-key on every priced request to pay from balance.',
+        parameters: [
+          {
+            name: 'amount',
+            in: 'path',
+            required: true,
+            description: 'Bundle amount in USD.',
+            schema: { type: 'integer', enum: [5, 10, 25] },
+          },
+          xClientKeyHeader,
+        ],
+        responses: stdResponses(billingPurchaseData, true),
       },
     },
     '/v1/stats': {
