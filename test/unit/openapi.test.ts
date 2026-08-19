@@ -10,9 +10,16 @@ describe('openapi document', () => {
     components: { schemas: Record<string, unknown> };
   };
 
-  // Every ENDPOINT_PRICES key is documented, including the free GET /v1/demo;
-  // POST /v1/research is covered by its own test below.
+  // Every ENDPOINT_PRICES key is documented, including the free GET /v1/billing
+  // and the priced credit bundles; POST /v1/research is covered by its own test.
   const documentedKeys = Object.keys(ENDPOINT_PRICES);
+
+  // ENDPOINT_PRICES key → OpenAPI path (bundle keys share the {amount} template).
+  const pathFor = (key: string) => {
+    const p = key.split(' ')[1].replace(':id', '{id}');
+    return p.startsWith('/v1/billing/credits/') ? '/v1/billing/credits/{amount}' : p;
+  };
+  const methodFor = (key: string) => key.split(' ')[0].toLowerCase() as 'get' | 'post';
 
   it('is OpenAPI 3.1 with info', () => {
     expect(doc.openapi).toBe('3.1.0');
@@ -20,11 +27,10 @@ describe('openapi document', () => {
   });
 
   it('documents every endpoint from ENDPOINT_PRICES', () => {
-    const pathFor = (key: string) => key.split(' ')[1].replace(':id', '{id}');
     for (const key of documentedKeys) {
       const p = pathFor(key);
       expect(doc.paths[p], `path ${p}`).toBeDefined();
-      const method = key.split(' ')[0].toLowerCase();
+      const method = methodFor(key);
       expect(doc.paths[p][method], `${key}`).toBeDefined();
       expect(doc.paths[p][method].operationId).toBeTruthy();
     }
@@ -32,8 +38,8 @@ describe('openapi document', () => {
 
   it('paid endpoints document a 402 response; free ones do not', () => {
     for (const [key, price] of Object.entries(ENDPOINT_PRICES)) {
-      const p = key.split(' ')[1].replace(':id', '{id}');
-      const responses = doc.paths[p].get.responses ?? {};
+      const p = pathFor(key);
+      const responses = doc.paths[p][methodFor(key)].responses ?? {};
       if (price === '0.00') expect(responses['402'], key).toBeUndefined();
       else expect(responses['402'], key).toBeDefined();
     }
@@ -108,8 +114,8 @@ describe('openapi document', () => {
       name: 'PAYMENT-SIGNATURE',
     });
     for (const [key, price] of Object.entries(ENDPOINT_PRICES)) {
-      const p = key.split(' ')[1].replace(':id', '{id}');
-      const op = doc.paths[p].get as { security?: unknown[] };
+      const p = pathFor(key);
+      const op = doc.paths[p][methodFor(key)] as { security?: unknown[] };
       if (price === '0.00') expect(op.security, key).toBeUndefined();
       else expect(op.security, key).toEqual([{ paymentSignature: [] }]);
     }

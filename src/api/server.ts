@@ -2,7 +2,12 @@
 // limiting, error envelope, request logging and all /v1 routes (SPEC §5 + §9).
 
 import { createHash, randomUUID } from 'node:crypto';
-import Fastify, { type FastifyError, type FastifyInstance, type FastifyRequest } from 'fastify';
+import Fastify, {
+  type FastifyError,
+  type FastifyInstance,
+  type FastifyReply,
+  type FastifyRequest,
+} from 'fastify';
 import type { AppConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import { createLogger } from '../obs/log.js';
@@ -11,7 +16,7 @@ import { logRequest, hashIp, strField } from '../obs/requestlog.js';
 import { paymentPreHandler, initPayments } from '../pay/middleware.js';
 import { createRateLimiter } from './ratelimit.js';
 import { buildOpenApi } from './openapi.js';
-import { errorEnvelope, HttpError, type RouteCtx } from './routes/common.js';
+import { errorEnvelope, HttpError, type RouteCtx, validate } from './routes/common.js';
 import { searchHandler, searchValidation } from './routes/search.js';
 import { tenderHandler, tenderIdValidation } from './routes/tenders.js';
 import {
@@ -27,6 +32,7 @@ import { renewalsHandler, renewalsValidation } from './routes/renewals.js';
 import { researchHandler, researchBodyValidation } from './routes/research.js';
 import { demoHandler } from './routes/demo.js';
 import { pricingHandler } from './routes/pricing.js';
+import { billingAmountValidation, billingGetHandler, billingPurchaseHandler } from './routes/billing.js';
 import { recentStatsHandler, statsAuth, statsHandler } from './routes/stats.js';
 
 /** Rate-limit identity: X-PAYMENT-derived (proof hash) when present, else client IP. */
@@ -193,6 +199,29 @@ export async function buildServer(config: AppConfig, db: Db): Promise<FastifyIns
   // free endpoints
   app.get('/v1/demo', { preHandler: [paymentPreHandler('GET /v1/demo')] }, demoHandler(ctx));
   app.get('/v1/pricing', pricingHandler(ctx));
+  app.get('/v1/billing', { preHandler: [paymentPreHandler('GET /v1/billing')] }, billingGetHandler(ctx));
+  app.post(
+    '/v1/billing/credits/:amount',
+    {
+      preHandler: [
+        // The bundle price is keyed by the concrete amount (5|10|25), so the
+        // payment preHandler is resolved from the route param per request.
+        async (req: FastifyRequest, reply: FastifyReply) => {
+          const amount = String((req.params as { amount?: unknown }).amount ?? '');
+          // paymentPreHandler hooks are implemented async (they never call
+          // done); invoke with a no-op done.
+          const hook = paymentPreHandler(`POST /v1/billing/credits/${amount}`) as unknown as (
+            req: FastifyRequest,
+            reply: FastifyReply,
+            done: () => void,
+          ) => Promise<void>;
+          await hook(req, reply, () => undefined);
+        },
+        billingAmountValidation,
+      ],
+    },
+    billingPurchaseHandler(ctx),
+  );
   app.get('/v1/stats', { preHandler: [statsAuth(config.operatorKey)] }, statsHandler(ctx));
   app.get('/v1/stats/recent', { preHandler: [statsAuth(config.operatorKey)] }, recentStatsHandler(ctx));
   app.get('/openapi.json', async (_req, reply) => reply.send(buildOpenApi()));

@@ -38,6 +38,9 @@ const PRICED_REST_KEYS = [
   'GET /v1/buyers/:id/history',
   'GET /v1/renewals',
   'POST /v1/research',
+  'POST /v1/billing/credits/5',
+  'POST /v1/billing/credits/10',
+  'POST /v1/billing/credits/25',
 ];
 
 const DYNAMIC_ROUTES = [
@@ -57,9 +60,10 @@ const PAID_MCP_TOOLS = [
   'get_buyer_history',
   'get_renewals',
   'research',
+  'billing_purchase_credits',
 ];
 
-const FREE_KEYS = ['GET /v1/pricing', 'GET /v1/stats', 'GET /v1/demo'];
+const FREE_KEYS = ['GET /v1/pricing', 'GET /v1/stats', 'GET /v1/demo', 'GET /v1/billing'];
 
 function makeProvider(): X402PaymentProvider {
   return new X402PaymentProvider(
@@ -124,12 +128,12 @@ describe('REST bazaar discovery (http)', () => {
     }
   });
 
-  it('GET keys declare method GET; POST /v1/research declares bodyType json', () => {
+  it('GET keys declare method GET; POST keys declare bodyType json', () => {
     for (const key of PRICED_REST_KEYS) {
       const input = (bazaarExtension(key) as BazaarExtension).info as {
         input: { type: string; method: string; bodyType?: string };
       };
-      if (key === 'POST /v1/research') {
+      if (key.startsWith('POST ')) {
         expect(input.input.method).toBe('POST');
         expect(input.input.bodyType).toBe('json');
       } else {

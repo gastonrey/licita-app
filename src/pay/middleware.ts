@@ -9,7 +9,12 @@
 import type { FastifyReply, FastifyRequest, preHandlerHookHandler } from 'fastify';
 import { encodePaymentRequiredHeader } from '@x402/core/http';
 import type { PaymentRequired } from '@x402/core/types';
-import type { PaymentProvider, PaymentRequirement } from '../domain/types.js';
+import { randomUUID } from 'node:crypto';
+import {
+  CREDIT_BUNDLE_ENDPOINTS,
+  type PaymentProvider,
+  type PaymentRequirement,
+} from '../domain/types.js';
 import type { AppConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import { createLogger, type Logger } from '../obs/log.js';
@@ -66,6 +71,62 @@ export function getPaymentProvider(): PaymentProvider {
   return getRuntime().provider;
 }
 
+export interface CreditDebitResult {
+  ok: boolean;
+  clientKey?: string;
+}
+
+/**
+ * Atomic prepaid-balance debit for a priced call (P2). Succeeds only when the
+ * client account exists AND balance_cents >= cost; the conditional UPDATE
+ * guards against double-spend under concurrency (one winner per balance).
+ * On success the payment row (provider 'credit', fresh UUID proof) is written
+ * in the same transaction. When no row matches (no account / insufficient
+ * funds) the transaction rolls back and { ok: false } is returned so callers
+ * fall through to the per-call proof flow; a DB error rolls back and throws
+ * (fail closed). Bundle purchase endpoints never debit — they top up instead.
+ */
+export async function tryCreditDebit(
+  db: Db,
+  endpointKey: string,
+  price: string,
+  clientKey: string,
+): Promise<CreditDebitResult> {
+  if (CREDIT_BUNDLE_ENDPOINTS.includes(endpointKey as (typeof CREDIT_BUNDLE_ENDPOINTS)[number])) {
+    return { ok: false };
+  }
+  const costCents = Math.round(Number(price) * 100);
+  if (!Number.isFinite(costCents) || costCents <= 0) return { ok: false };
+  const proof = randomUUID();
+  const client = await db.connect();
+  try {
+    await client.query('BEGIN');
+    const updated = await client.query(
+      `UPDATE credit_accounts
+       SET balance_cents = balance_cents - $2::int, updated_at = now()
+       WHERE client_key = $1 AND balance_cents >= $2::int
+       RETURNING balance_cents`,
+      [clientKey, costCents],
+    );
+    if (updated.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return { ok: false };
+    }
+    await client.query(
+      `INSERT INTO payments (client_id, endpoint, amount_usd, provider, proof, status)
+       VALUES (NULL, $1, $2, 'credit', $3, 'success')`,
+      [endpointKey, price, proof],
+    );
+    await client.query('COMMIT');
+    return { ok: true, clientKey };
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
 function paymentRequiredBody(requirement: PaymentRequirement, message: string) {
   return {
     ...requirement,
@@ -108,11 +169,35 @@ function paymentRequiredHeaders(
  */
 export function paymentPreHandler(endpointKey: string): preHandlerHookHandler {
   return async (req: FastifyRequest, reply: FastifyReply) => {
-    const provider = getPaymentProvider();
+    const rt = getRuntime();
+    const provider = rt.provider;
     const price = provider.price(endpointKey);
     if (price === '0.00') {
       req.payment = { paid: true, priceUsd: '0.00' };
       return;
+    }
+
+    // Prepaid balance debit (P2): when the request carries x-client-key and the
+    // endpoint is not a credit bundle, try to pay from balance first. Failure
+    // (no account / insufficient funds) falls through to the per-call proof.
+    const clientKeyHeader = req.headers['x-client-key'];
+    const clientKey = Array.isArray(clientKeyHeader) ? clientKeyHeader[0] : clientKeyHeader;
+    const canDebit =
+      typeof clientKey === 'string' &&
+      clientKey.length > 0 &&
+      !CREDIT_BUNDLE_ENDPOINTS.includes(endpointKey as (typeof CREDIT_BUNDLE_ENDPOINTS)[number]);
+    if (canDebit) {
+      const debit = await tryCreditDebit(rt.db, endpointKey, price, clientKey);
+      if (debit.ok) {
+        rt.log.info('payment_success', {
+          endpoint: endpointKey,
+          amount: price,
+          client_key: debit.clientKey,
+          provider: 'credit',
+        });
+        req.payment = { paid: true, priceUsd: price, clientKey: debit.clientKey };
+        return;
+      }
     }
 
     const proofHeader = req.headers['payment-signature'] ?? req.headers['x-payment'];
@@ -120,7 +205,11 @@ export function paymentPreHandler(endpointKey: string): preHandlerHookHandler {
     if (typeof proof !== 'string' || proof.length === 0) {
       const requirement = provider.requiredResponse(endpointKey);
       req.errorCode = 'payment_required';
-      const message = `Payment required: ${endpointKey} costs $${price} per call.`;
+      const message =
+        `Payment required: ${endpointKey} costs $${price} per call.` +
+        (canDebit
+          ? ' Prepaid balance insufficient — buy credits at POST /v1/billing/credits/5 (or /10 /25).'
+          : '');
       await reply
         .code(402)
         .headers(paymentRequiredHeaders(requirement, message))
@@ -128,7 +217,6 @@ export function paymentPreHandler(endpointKey: string): preHandlerHookHandler {
       return; // halt: response sent
     }
 
-    const rt = getRuntime();
     const verification = await rt.provider.verify(proof, endpointKey);
     if (!verification.ok) {
       req.errorCode = 'payment_required';
