@@ -1,0 +1,84 @@
+name: Deploy
+
+# Deploys to the production VM after every merge to main.
+#
+# Mechanism mirrors DEPLOYMENT.md §11 (co-hosted reverse-proxy deployment):
+#   1. rsync the checkout to /root/licita/app/ on the VM (excluding local
+#      artifacts and secrets).
+#   2. On the VM, rebuild and restart the app container with the co-host
+#      compose override. The app CMD re-runs the idempotent migrations on boot
+#      as a safety net, so no separate `migrate` step is needed for code-only
+#      releases.
+#   3. Verify the public health endpoint.
+#
+# Required repository secret:
+#   VM_SSH_KEY  — private key with access to the production VM (root@<VM_HOST>),
+#                 e.g. the content of ~/.ssh/id_ed25519. Add a passphrase-free
+#                 dedicated deploy key, not your personal key.
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Serialise deploys: never run two deploy jobs against the VM at once.
+concurrency:
+  group: deploy-main
+  cancel-in-progress: false
+
+env:
+  VM_HOST: 2.28.56.131
+  VM_USER: root
+  VM_APP_DIR: /root/licita/app
+  VM_BASE_DIR: /root/licita
+
+jobs:
+  deploy:
+    name: Deploy to production VM
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install SSH key
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.VM_SSH_KEY }}
+
+      - name: Trust VM host key
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H "$VM_HOST" >> ~/.ssh/known_hosts
+
+      - name: Sync code to VM
+        run: |
+          rsync -az --delete \
+            --exclude .git \
+            --exclude .github \
+            --exclude .atl \
+            --exclude node_modules \
+            --exclude dist \
+            --exclude coverage \
+            --exclude '.env*' \
+            --exclude '*.log' \
+            --exclude .DS_Store \
+            --exclude .epg-data \
+            --exclude test \
+            ./ "${VM_USER}@${VM_HOST}:${VM_APP_DIR}/"
+
+      - name: Rebuild and restart app
+        run: |
+          ssh "${VM_USER}@${VM_HOST}" \
+            "cd ${VM_BASE_DIR} && \
+             docker compose --env-file ${VM_BASE_DIR}/.env -p licita \
+               -f app/docker-compose.prod.yml -f app/docker-compose.cohost.yml \
+               up -d --build app"
+
+      - name: Verify health
+        run: |
+          sleep 10
+          curl -sSf https://eutenders.duckdns.org/health
