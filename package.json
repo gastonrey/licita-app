@@ -2,6 +2,7 @@
   "name": "licita-agent",
   "version": "0.1.0",
   "description": "Agent-native public procurement intelligence API (Spain: TED/PLACSP award, buyer, competitor and renewal intelligence)",
+  "license": "MIT",
   "type": "module",
   "engines": {
     "node": ">=20"
@@ -37,6 +38,6 @@
     "tsx": "^4.19.2",
     "typescript": "^5.7.2",
     "viem": "^2.48.11",
-    "vitest": "^2.1.8"
+    "vitest": "^3.2.7"
   }
 }

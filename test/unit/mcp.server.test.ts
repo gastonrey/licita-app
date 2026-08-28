@@ -136,6 +136,25 @@ describe('MCP tools (in-process client)', () => {
     }
   });
 
+  it('declares all four MCP tool annotations (readOnly/destructive/idempotent/openWorld) on every tool', async () => {
+    const { tools } = await client.listTools();
+    expect(tools.length).toBe(11);
+    for (const t of tools) {
+      expect(t.annotations, `${t.name} missing readOnlyHint`).toHaveProperty('readOnlyHint', expect.any(Boolean));
+      expect(t.annotations, `${t.name} missing destructiveHint`).toHaveProperty('destructiveHint', expect.any(Boolean));
+      expect(t.annotations, `${t.name} missing idempotentHint`).toHaveProperty('idempotentHint', expect.any(Boolean));
+      expect(t.annotations, `${t.name} missing openWorldHint`).toHaveProperty('openWorldHint', expect.any(Boolean));
+    }
+    // read-only data tool must be marked readOnly + non-destructive
+    const search = tools.find((x) => x.name === 'search_tenders')!;
+    expect(search.annotations!.readOnlyHint).toBe(true);
+    expect(search.annotations!.destructiveHint).toBe(false);
+    // the only mutating tool marks itself non-readOnly / non-idempotent
+    const purchase = tools.find((x) => x.name === 'billing_purchase_credits')!;
+    expect(purchase.annotations!.readOnlyHint).toBe(false);
+    expect(purchase.annotations!.idempotentHint).toBe(false);
+  });
+
   it('get_pricing is always free', async () => {
     const res = (await client.callTool({ name: 'get_pricing', arguments: {} })) as ToolCallResult;
     expect(res.isError).toBeFalsy();

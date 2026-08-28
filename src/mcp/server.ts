@@ -123,6 +123,23 @@ interface ToolDef {
   description: string;
   /** zod raw shape, WITHOUT payment_token (added centrally). */
   schema: Record<string, z.ZodTypeAny>;
+  /**
+   * MCP tool annotations — every one of the four hints must be present
+   * (OpenAI's directory and other hosts reject tools missing a hint).
+   * Values match the handler's actual behaviour:
+   *  - readOnlyHint: does the call avoid any state mutation?
+   *  - destructiveHint: could it destroy/irreversibly change user data?
+   *  - idempotentHint: can the identical call be replayed safely with the
+   *    same result (no change of side effects)?
+   *  - openWorldHint: does the result depend on external world state (live
+   *    data) rather than only the provided arguments?
+   */
+  hints: {
+    readOnly: boolean;
+    destructive: boolean;
+    idempotent: boolean;
+    openWorld: boolean;
+  };
   run: (db: Db, args: Record<string, unknown>, config: AppConfig) => Promise<unknown>;
 }
 
@@ -137,6 +154,7 @@ const TOOLS: Record<string, ToolDef> = {
     endpointKey: 'GET /v1/search',
     description:
       'Search Spanish public-sector IT/software/cyber procurement: awards, tenders and contracts. Filters: q (full-text), cpv (prefix), buyer, company, region (NUTS), from/to (YYYY-MM-DD), type=award|tender|contract. Returns compact rows with ids for the other tools.',
+    hints: { readOnly: true, destructive: false, idempotent: true, openWorld: true },
     schema: {
       q: z.string().min(1).max(200).optional(),
       cpv: z.string().optional().describe('CPV code or prefix, e.g. "72"'),
@@ -165,6 +183,7 @@ const TOOLS: Record<string, ToolDef> = {
     endpointKey: 'GET /v1/tenders/:id',
     description:
       'Full tender detail by id: buyer, CPVs, deadline, estimated value, all awards/lots with winners, plus provenance (source + TED url).',
+    hints: { readOnly: true, destructive: false, idempotent: true, openWorld: true },
     schema: idShape,
     run: async (db, args) => {
       const { id } = idParamSchema.parse(args);
@@ -211,6 +230,7 @@ const TOOLS: Record<string, ToolDef> = {
     endpointKey: 'GET /v1/companies/:id',
     description:
       'Company profile by id: name, country, NIF, aliases and source identifiers (cross-source identity), plus aggregate stats (wins, total awarded value, top CPVs, top buyers).',
+    hints: { readOnly: true, destructive: false, idempotent: true, openWorld: true },
     schema: idShape,
     run: async (db, args) => {
       const { id } = idParamSchema.parse(args);
@@ -228,6 +248,7 @@ const TOOLS: Record<string, ToolDef> = {
   get_company_awards: {
     endpointKey: 'GET /v1/companies/:id/awards',
     description: 'Paginated award history for a company: dates, lots, values, tender + buyer context.',
+    hints: { readOnly: true, destructive: false, idempotent: true, openWorld: true },
     schema: { ...idShape, ...pageShape },
     run: async (db, args) => {
       const { id } = idParamSchema.parse(args);
@@ -259,6 +280,7 @@ const TOOLS: Record<string, ToolDef> = {
     endpointKey: 'GET /v1/companies/:id/opportunities',
     description:
       'Active/recent tenders matching a company\'s historical CPV/buyer profile, with a deterministic similarity score (explained in score_explanation).',
+    hints: { readOnly: true, destructive: false, idempotent: true, openWorld: true },
     schema: { ...idShape, ...pageShape },
     run: async (db, args) => {
       const { id } = idParamSchema.parse(args);
@@ -296,6 +318,7 @@ const TOOLS: Record<string, ToolDef> = {
     endpointKey: 'GET /v1/buyers/:id/history',
     description:
       'Buyer profile by id: award history, supplier concentration (top-supplier share) and per-CPV-division recurrence (median months between awards).',
+    hints: { readOnly: true, destructive: false, idempotent: true, openWorld: true },
     schema: idShape,
     run: async (db, args) => {
       const { id } = idParamSchema.parse(args);
@@ -345,6 +368,7 @@ const TOOLS: Record<string, ToolDef> = {
     endpointKey: 'GET /v1/renewals',
     description:
       'Forecast signals for likely re-tenders: contracts/frameworks approaching renewal. Filters: cpv (prefix), buyer, window_months (default 12, max 36), min_confidence=low|medium|high.',
+    hints: { readOnly: true, destructive: false, idempotent: true, openWorld: true },
     schema: {
       cpv: z.string().optional(),
       buyer: z.string().min(2).max(200).optional(),
@@ -370,6 +394,7 @@ const TOOLS: Record<string, ToolDef> = {
   get_pricing: {
     endpointKey: 'GET /v1/pricing',
     description: 'Machine-readable price ladder for all endpoints/tools plus the payment flow. Always free.',
+    hints: { readOnly: true, destructive: false, idempotent: true, openWorld: false },
     schema: {},
     run: async (_db, _args, config) => buildPricing(config.paymentsMode),
   },
@@ -380,6 +405,7 @@ const TOOLS: Record<string, ToolDef> = {
       'High-level EU public procurement intelligence for a topic: recent tenders, relevant renewal signals, company opportunities and active buyers, each with evidence and an evidence-strength confidence label. ' +
       'Deterministic over the licita database (no LLM). Costs $0.50 USDC per call (x402). ' +
       'Use when an agent needs a research brief on a topic rather than raw rows from search_tenders/get_renewals.',
+    hints: { readOnly: true, destructive: false, idempotent: true, openWorld: true },
     schema: {
       query: z
         .string()
@@ -398,6 +424,7 @@ const TOOLS: Record<string, ToolDef> = {
     endpointKey: 'GET /v1/billing',
     description:
       'Check the prepaid credit balance for a client key (in cents and USD). Always free. Returns not_found when no account exists yet — buy credits via billing_purchase_credits to create one.',
+    hints: { readOnly: true, destructive: false, idempotent: true, openWorld: false },
     schema: {
       client_key: z
         .string()
@@ -441,6 +468,7 @@ const TOOLS: Record<string, ToolDef> = {
       'Buy a prepaid credit bundle (5, 10 or 25 USD) paid per-endpoint via x402 (mirrors REST POST /v1/billing/credits/:amount). ' +
       'Set amount to the bundle you pay for with payment_token; the proof is verified against that exact bundle, then the account is credited and the balance returned. ' +
       'Afterwards send client_key on every paid tool to pay from balance instead of per-call proofs.',
+    hints: { readOnly: false, destructive: false, idempotent: false, openWorld: false },
     schema: {
       client_key: z
         .string()
@@ -597,6 +625,12 @@ export function buildMcpServer(
       name,
       {
         description: `[${def.endpointKey} — $${provider.price(def.endpointKey)}] ${def.description}`,
+        annotations: {
+          readOnlyHint: def.hints.readOnly,
+          destructiveHint: def.hints.destructive,
+          idempotentHint: def.hints.idempotent,
+          openWorldHint: def.hints.openWorld,
+        },
         inputSchema: {
           ...def.schema,
           payment_token: z

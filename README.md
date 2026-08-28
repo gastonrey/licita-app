@@ -1,5 +1,7 @@
 # licita-agent
 
+[![M8ven Score](https://m8ven.ai/badge/mcp/gastonrey-licita-app-1d0qfs)](https://m8ven.ai/mcp/gastonrey-licita-app-1d0qfs)
+
 Agent-native procurement intelligence API for the Spanish public sector
 (IT / software / cybersecurity vertical, CPV 72*/48*), built from TED
 (Tenders Electronic Daily) award notices.
