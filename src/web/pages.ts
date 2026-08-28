@@ -123,9 +123,8 @@ const MCP_TOOLS = [
   'billing_purchase_credits',
 ];
 
-// Demand-capture CTA: lightweight mailto, no signup/DB/RGPD. Swap for a real
-// inbox before launch (TODO(owner): set the actual mailbox).
-const CONTACT_EMAIL = 'hello@licita.dev';
+// Demand-capture CTA: lightweight mailto, no signup/DB/RGPD.
+const CONTACT_EMAIL = 'gastonrey@gmail.com';
 
 function homePage(config: AppConfig): string {
   return page(

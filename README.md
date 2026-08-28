@@ -48,7 +48,7 @@ Licita is listed in MCP registries and directories for agent and human discovery
 - **mcp.so:** [Licita on mcp.so](https://mcp.so).
 - **x402 Bazaar:** paid 402s carry `extensions.bazaar`, so x402 facilitators catalog Licita automatically.
 
-For a project, white-label data deal or prepaid plan, contact `hello@licita.dev`.
+For a project, white-label data deal or prepaid plan, contact `gastonrey@gmail.com`.
 
 ## Architecture
 
