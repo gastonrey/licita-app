@@ -509,11 +509,18 @@ const SERVER_CARD_TOOLS: Array<{
   name: string;
   description: string;
   inputSchema: Record<string, unknown>;
+  annotations: {
+    readOnlyHint: boolean;
+    destructiveHint: boolean;
+    idempotentHint: boolean;
+    openWorldHint: boolean;
+  };
 }> = [
   {
     name: 'search_tenders',
     description:
       'Search Spanish public-sector IT/software/cyber procurement: awards, tenders and contracts. Filters: q (full-text), cpv (prefix), buyer, company, region (NUTS), from/to (YYYY-MM-DD), type=award|tender|contract. Returns compact rows with ids for the other tools.',
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     inputSchema: {
       type: 'object',
       properties: {
@@ -535,17 +542,20 @@ const SERVER_CARD_TOOLS: Array<{
     name: 'get_tender',
     description:
       'Full tender detail by id: buyer, CPVs, deadline, estimated value, all awards/lots with winners, plus provenance (source + TED url).',
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     inputSchema: ID_INPUT_SCHEMA,
   },
   {
     name: 'get_company',
     description:
       "Company profile by id: name, country, NIF, aliases and source identifiers (cross-source identity), plus aggregate stats (wins, total awarded value, top CPVs, top buyers).",
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     inputSchema: ID_INPUT_SCHEMA,
   },
   {
     name: 'get_company_awards',
     description: 'Paginated award history for a company: dates, lots, values, tender + buyer context.',
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     inputSchema: {
       type: 'object',
       properties: { ...ID_INPUT_SCHEMA.properties, ...PAGE_SHAPE },
@@ -556,6 +566,7 @@ const SERVER_CARD_TOOLS: Array<{
     name: 'get_company_opportunities',
     description:
       "Active/recent tenders matching a company's historical CPV/buyer profile, with a deterministic similarity score (explained in score_explanation).",
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     inputSchema: {
       type: 'object',
       properties: { ...ID_INPUT_SCHEMA.properties, ...PAGE_SHAPE },
@@ -566,12 +577,14 @@ const SERVER_CARD_TOOLS: Array<{
     name: 'get_buyer_history',
     description:
       'Buyer profile by id: award history, supplier concentration (top-supplier share) and per-CPV-division recurrence (median months between awards).',
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     inputSchema: ID_INPUT_SCHEMA,
   },
   {
     name: 'get_renewals',
     description:
       'Forecast signals for likely re-tenders: contracts/frameworks approaching renewal. Filters: cpv (prefix), buyer, window_months (default 12, max 36), min_confidence=low|medium|high.',
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     inputSchema: {
       type: 'object',
       properties: {
@@ -588,6 +601,7 @@ const SERVER_CARD_TOOLS: Array<{
   {
     name: 'get_pricing',
     description: 'Machine-readable price ladder for all endpoints/tools plus the payment flow. Always free.',
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     inputSchema: {
       type: 'object',
       properties: { payment_token: PAYMENT_TOKEN_SCHEMA },
@@ -599,6 +613,7 @@ const SERVER_CARD_TOOLS: Array<{
       'High-level EU public procurement intelligence for a topic: recent tenders, relevant renewal signals, company opportunities and active buyers, each with evidence and an evidence-strength confidence label. ' +
       'Deterministic over the licita database (no LLM). Costs $0.50 USDC per call (x402). ' +
       'Use when an agent needs a research brief on a topic rather than raw rows from search_tenders/get_renewals.',
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     inputSchema: {
       type: 'object',
       properties: {
@@ -614,6 +629,7 @@ const SERVER_CARD_TOOLS: Array<{
     name: 'billing_get_balance',
     description:
       'Check the prepaid credit balance for a client key (in cents and USD). Always free. Returns not_found when no account exists yet — buy credits via billing_purchase_credits to create one.',
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     inputSchema: {
       type: 'object',
       properties: {
@@ -631,6 +647,7 @@ const SERVER_CARD_TOOLS: Array<{
       'Buy a prepaid credit bundle (5, 10 or 25 USD) paid per-endpoint via x402 (mirrors REST POST /v1/billing/credits/:amount). ' +
       'Set amount to the bundle you pay for with payment_token; the proof is verified against that exact bundle, then the account is credited and the balance returned. ' +
       'Afterwards send client_key on every paid tool to pay from balance instead of per-call proofs.',
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
     inputSchema: {
       type: 'object',
       properties: {

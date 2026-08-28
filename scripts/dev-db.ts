@@ -14,7 +14,7 @@ async function main(): Promise<void> {
   await pg.start();
   await pg.createDatabase('licita');
   console.log('Embedded PostgreSQL running on port 5433');
-  console.log('DATABASE_URL=postgres://licita:licita@localhost:5433/licita');
+  console.log('DATABASE_URL=postgres://licita:****@localhost:5433/licita');
   console.log('Press Ctrl+C to stop.');
   process.on('SIGINT', async () => {
     await pg.stop();
