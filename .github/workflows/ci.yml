@@ -1,12 +1,10 @@
 name: CI
 
+# Run on every PR (covers PRs targeting any branch). No separate `push`
+# trigger: pushes to a PR branch are already validated via pull_request, so
+# this avoids double-running CI on every opened PR.
 on:
-  push:
-    branches-ignore:
-      - main
   pull_request:
-    branches:
-      - main
 
 permissions:
   contents: read
