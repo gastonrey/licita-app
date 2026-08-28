@@ -1,4 +1,43 @@
 {
   "$schema": "https://glama.ai/mcp/schemas/server.json",
-  "maintainers": ["gastonrey"]
+  "name": "licita",
+  "title": "Licita — public procurement intelligence for AI agents",
+  "description": "Public procurement intelligence for AI agents: EU (TED) and Spanish (PLACSP) tenders, renewal signals, company opportunities and buyer activity. Pay per call with USDC via x402, or prepaid credit bundles. Every finding carries evidence, confidence and provenance.",
+  "version": "0.1.1",
+  "categories": ["business", "data", "search", "finance"],
+  "tags": ["procurement", "tenders", "eu", "plcsp", "contracts", "ai", "business-intelligence", "eu-tenders"],
+  "maintainers": ["gastonrey"],
+  "server": {
+    "type": "streamable-http",
+    "url": "https://eutenders.duckdns.org/mcp"
+  },
+  "tools": [
+    "search_tenders",
+    "get_tender",
+    "get_company",
+    "get_company_awards",
+    "get_company_opportunities",
+    "get_buyer_history",
+    "get_renewals",
+    "get_pricing",
+    "research",
+    "billing_get_balance",
+    "billing_purchase_credits"
+  ],
+  "transport": "streamable-http",
+  "url": "https://eutenders.duckdns.org/mcp",
+  "license": "MIT",
+  "repository": "https://github.com/gastonrey/licita-app",
+  "keywords": [
+    "public procurement",
+    "eu tenders",
+    "spain procurement",
+    "renewal forecasting",
+    "supplier intelligence",
+    "buyer intelligence",
+    "mcp server",
+    "x402",
+    "USDC",
+    "agent"
+  ]
 }

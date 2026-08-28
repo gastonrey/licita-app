@@ -38,6 +38,18 @@ Client config snippet for the live instance:
 }
 ```
 
+## Distribution &amp; contact
+
+Licita is listed in MCP registries and directories for agent and human discovery:
+
+- **MCP registry manifest:** [`server.json`](./server.json) — streamable-HTTP at `https://eutenders.duckdns.org/mcp`.
+- **Static server card:** `/.well-known/mcp/server-card.json` (identity, SSE URL, all 11 tool schemas).
+- **Glama:** [glama.json](./glama.json) + [Glama server](https://glama.ai/mcp/servers) (badge).
+- **mcp.so:** [Licita on mcp.so](https://mcp.so).
+- **x402 Bazaar:** paid 402s carry `extensions.bazaar`, so x402 facilitators catalog Licita automatically.
+
+For a project, white-label data deal or prepaid plan, contact `hello@licita.dev`.
+
 ## Architecture
 
 ```

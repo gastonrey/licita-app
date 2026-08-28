@@ -123,6 +123,10 @@ const MCP_TOOLS = [
   'billing_purchase_credits',
 ];
 
+// Demand-capture CTA: lightweight mailto, no signup/DB/RGPD. Swap for a real
+// inbox before launch (TODO(owner): set the actual mailbox).
+const CONTACT_EMAIL = 'hello@licita.dev';
+
 function homePage(config: AppConfig): string {
   return page(
     'Licita — public procurement intelligence for AI agents',
@@ -131,6 +135,13 @@ function homePage(config: AppConfig): string {
 <p class="muted">Licita answers the questions an agent needs to act on EU public procurement: what was
 recently tendered, what is about to be re-tendered, which companies are positioned to win, and which
 buyers are active — each answer with evidence, a confidence label and provenance.</p>
+
+<h2>Get access</h2>
+<p>Licita is live and connectable right now — point an MCP client at
+<code>https://eutenders.duckdns.org/mcp</code> and try the free demo
+(<a href="/v1/demo">GET /v1/demo</a>) before paying. To discuss a project, a
+white-label data deal or a prepaid plan, email <a
+href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>.</p>
 
 <h2>Try it — POST /v1/research</h2>
 <p>One call turns a topic into a research brief: recent tenders, renewal signals, company opportunities
@@ -185,6 +196,18 @@ USDC requirement (x402 v2): sign the EIP-3009 authorization and retry with
 <code>POST /v1/dev-faucet</code> (local development only — not in production).
 See <a href="/docs">docs</a> for the full flow.</p>
 ${priceTable(config)}
+<h2>Distribution &amp; registry</h2>
+<p>Licita is discoverable by agents through MCP registries and directories:</p>
+<ul>
+<li><strong>MCP registry manifest</strong> — <code>/server.json</code> (streamable-HTTP at
+<code>https://eutenders.duckdns.org/mcp</code>).</li>
+<li><strong>Static server card</strong> — <code>/.well-known/mcp/server-card.json</code>
+(identity, SSE URL, the 11 tool schemas) for directory crawlers.</li>
+<li><strong>Bazaar extension</strong> — paid 402s carry <code>extensions.bazaar</code>, so x402
+facilitators catalog Licita automatically.</li>
+<li><strong>Directories</strong> — listed on Glama and mcp.so (badges in the README).</li>
+<li><strong>Source</strong> — <a href="https://github.com/gastonrey/licita-app">GitHub repository</a> (MIT).</li>
+</ul>
 <p class="muted">Provenance: every data row exposes <code>meta.provenance</code> as
 <code>[{ source, source_ref, url }]</code> — the upstream source, its publication reference, and the
 original notice where known. Nulls are never fabricated.</p>`,
