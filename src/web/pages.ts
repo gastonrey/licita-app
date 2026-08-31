@@ -7,6 +7,7 @@ import type { FastifyInstance } from 'fastify';
 import { CREDIT_BUNDLES, ENDPOINT_PRICES } from '../domain/types.js';
 import type { AppConfig } from '../config.js';
 import { registerDevFaucet } from '../pay/devProvider.js';
+import { HUMAN_CSS } from './site.css.js';
 
 const CSS = `
 :root { color-scheme: light; }
@@ -27,12 +28,13 @@ nav a { margin-right: 1rem; }
 .tag { display: inline-block; background: #eceff3; border-radius: 4px; padding: 0 .4em; font-size: .8em; color: #45506a; }
 `;
 
-function page(title: string, body: string): string {
+function page(title: string, body: string, head = ''): string {
   return `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+${head}
 <title>${title} — Licita</title>
 <style>${CSS}</style>
 </head>
@@ -42,7 +44,7 @@ ${body}
 </html>`;
 }
 
-const NAV = `<nav class="muted"><a href="/">home</a><a href="/docs">docs</a><a href="/use-cases">use cases</a><a href="/data">data</a><a href="/pricing">pricing</a><a href="/openapi.json">openapi.json</a><a href="/llms.txt">llms.txt</a><a href="/mcp">/mcp (MCP)</a></nav>`;
+const NAV = `<a class="skip-link" href="#main-content">Skip to content</a><nav class="site-nav" aria-label="Primary"><a href="/">Home</a><a href="/use-cases">Use cases</a><a href="/data">Coverage &amp; methodology</a><a href="/pricing">Pricing</a><a href="/docs">Docs</a><a href="/mcp">MCP</a></nav>`;
 
 /** ENDPOINT_PRICES rows (Research is config-owned and rendered separately). */
 const ENDPOINT_ROWS = Object.entries(ENDPOINT_PRICES)
@@ -126,14 +128,23 @@ const MCP_TOOLS = [
 // Demand-capture CTA: lightweight mailto, no signup/DB/RGPD.
 const CONTACT_EMAIL = 'gastonrey@gmail.com';
 
-function homePage(config: AppConfig): string {
+function homePage(config: AppConfig, demoStatus = false): string {
   return page(
-    'Licita — public procurement intelligence for AI agents',
-    `${NAV}
-<h1>Public procurement intelligence for AI agents</h1>
-<p class="muted">Licita answers the questions an agent needs to act on EU public procurement: what was
-recently tendered, what is about to be re-tendered, which companies are positioned to win, and which
-buyers are active — each answer with evidence, a confidence label and provenance.</p>
+    'Licita — know which public contracts deserve your next conversation',
+     `${NAV}
+<div id="main-content" class="human-home"><section class="hero"><p class="source-stamp">EU PUBLIC PROCUREMENT INTELLIGENCE · EVIDENCE FIRST</p><h1>Know which public contracts deserve your next conversation.</h1>
+<p>Licita turns indexed procurement notices into evidence-backed opportunity, buyer, supplier and deterministic renewal signals for professional teams and their agents.</p></section>
+
+<div class="home-columns"><section><h2>Current index sample</h2><article id="demo-sample" class="evidence-rail" data-state="loading" aria-live="polite"><p>Loading…</p><p class="source-stamp">GET /v1/demo · sample status</p></article></section><aside><h2>Scope at a glance</h2><div class="trust-grid"><div><strong>TED</strong><br>EU award notices<br><span class="source-stamp">Enabled · freshness shown at ingestion</span></div><div><strong>PLACSP</strong><br>Spain contracts when enabled<br><span class="source-stamp">Status is operational, not assumed</span></div><div><strong>Dates</strong><br>Publication date ≠ award/contract date<br><span class="source-stamp">Unknown: Not reported</span></div></div></aside></div>
+
+<section class="cta"><h2>See your next opportunity in context.</h2>
+<p>A free labeled sample from the current index, followed by a guided review of your market. We retain demo emails for 30 days unless the lead advances to contacted, used or paid.</p>
+<form id="demo-request" method="post" action="/v1/demo/request"><label for="demo-email">Work email</label><br>
+<input id="demo-email" name="email" type="email" inputmode="email" autocomplete="email" spellcheck="false" required placeholder="name@company.com">
+<button class="btn" type="submit">Request the product demo</button><p id="demo-message" class="demo-message" role="status" aria-live="polite">${demoStatus ? 'Demo request received. We will follow up by email; no meeting was booked.' : ''}</p></form>
+<noscript><p>Email <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a> to request a demo.</p></noscript></section>
+
+ <section><h2>Coverage, trust &amp; privacy</h2><p>Coverage is strongest in the indexed IT, software and cyber vertical. See <a href="/data">source scope and methodology</a> for enabled sources, date ranges and last successful ingestion. Every finding carries a source reference and upstream link where known. We store only a normalized email, channel and source URL; operator access is restricted and deletion requests can be sent to <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>.</p><p><a href="/methodology">Methodology</a> · <a href="/security">Security</a> · <a href="/privacy">Privacy</a> · <a href="/terms">Terms</a> · <a href="/status">Status</a> · <a href="mailto:${CONTACT_EMAIL}">Contact</a></p></section>
 
 <h2>Get access</h2>
 <p>Licita is live and connectable right now — point an MCP client at
@@ -141,12 +152,6 @@ buyers are active — each answer with evidence, a confidence label and provenan
 (<a href="/v1/demo">GET /v1/demo</a>) before paying. To discuss a project, a
 white-label data deal or a prepaid plan, email <a
 href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>.</p>
-
-<h2>Try it — POST /v1/research</h2>
-<p>One call turns a topic into a research brief: recent tenders, renewal signals, company opportunities
-and active buyers, with a deterministic confidence (<code>low</code>/<code>medium</code>/<code>high</code>)
-and per-finding evidence plus provenance.</p>
-<pre>${RESEARCH_EXAMPLE}</pre>
 
 <h2>Pay per call, machine-to-machine</h2>
 <p>Pay per call with <strong>USDC via x402</strong> — no subscriptions, no signup, machine-to-machine.
@@ -207,9 +212,12 @@ facilitators catalog Licita automatically.</li>
 <li><strong>Directories</strong> — listed on Glama and mcp.so (badges in the README).</li>
 <li><strong>Source</strong> — <a href="https://github.com/gastonrey/licita-app">GitHub repository</a> (MIT).</li>
 </ul>
+<footer class="site-footer"><p>Questions? <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a></p>
 <p class="muted">Provenance: every data row exposes <code>meta.provenance</code> as
 <code>[{ source, source_ref, url }]</code> — the upstream source, its publication reference, and the
-original notice where known. Nulls are never fabricated.</p>`,
+original notice where known. Nulls are never fabricated.</p></footer></div>
+ <script>const sample=document.getElementById('demo-sample');const safe=(v)=>String(v??'Not reported').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));const lines=(xs)=>'<ul class="evidence-lines">'+(xs||[]).map(x=>'<li>'+safe(x)+'</li>').join('')+'</ul>';fetch('/v1/demo').then(r=>{if(!r.ok)throw new Error('sample unavailable');return r.json()}).then(({data,meta})=>{const t=data.tender,r=data.renewal;sample.dataset.state='ready';sample.innerHTML=(t?'<h3>'+safe(t.title)+'</h3><p><strong>Buyer:</strong> '+safe(t.buyer?.name)+' · <strong>Value:</strong> '+safe(t.estimated_value)+' '+safe(t.currency||'')+' · <strong>Published:</strong> '+safe(t.published_at)+'</p>'+lines(t.evidence):'<p>No current sample is available.</p>')+(r?'<p><strong>Renewal signal:</strong> '+safe(r.signal_type)+' · '+safe(r.confidence)+' confidence · '+safe(r.contract?.end_date)+'</p>'+lines(r.evidence):'<p>No current renewal sample is available.</p>')+'<p class="source-stamp">'+safe(t?.source||r?.source||'source')+' · '+safe(t?.source_ref||r?.source_ref)+' · generated '+safe(meta?.generated_at)+'</p>'+((t?.url||r?.url)?'<p><a class="upstream" href="'+safe(t?.url||r?.url)+'" target="_blank" rel="noreferrer">Open upstream source</a></p>':'')+'<p class="source-stamp">source_metadata: '+safe(JSON.stringify(data.source_metadata||[]))+'</p>'}).catch(()=>{sample.dataset.state='error';sample.innerHTML='<p>Sample unavailable. <a href="/docs">Read the methodology</a>.</p>'});document.getElementById('demo-request').addEventListener('submit',async(e)=>{e.preventDefault();const f=e.currentTarget,m=document.getElementById('demo-message'),b=f.querySelector('button');m.textContent='Requesting a demo…';b.disabled=true;try{const r=await fetch('/v1/demo/request?source=homepage',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({email:f.email.value})});if(!r.ok){const body=await r.json().catch(()=>({}));throw new Error(body.error?.hint||'Check your email and try again.')}m.textContent='Request received. We will follow up by email; no meeting was booked.';f.reset()}catch(err){m.textContent=err.message+' You can also email ${CONTACT_EMAIL}.'}finally{b.disabled=false}})</script>`,
+     `<link rel="stylesheet" href="/styles.css">`,
   );
 }
 
@@ -802,7 +810,7 @@ const DATA_OVERVIEW = `
 <p class="muted">What Licita indexes, where it comes from, and how agents can validate it before paying.
 Counts are updated on ingestion — they are operational facts, not projections.</p>
 <ul>
-<li><strong>12,718 procurement records</strong> across two public sources (see below).</li>
+<li><strong>Current records and indexed ranges</strong> are returned from live source metadata; no fixed coverage claim is made.</li>
 <li><strong>TED</strong> (Tenders Electronic Daily) — EU award notices, live by default:
 <a href="/data/eu">EU data page</a>.</li>
 <li><strong>PLACSP</strong> — Spanish public-sector contracts (<code>2026/CONTRAT/…</code> refs) when PLACSP
@@ -852,6 +860,14 @@ function dataPage(kind: 'overview' | 'spain' | 'eu'): string {
   return page(title, `${NAV}\n${body}`);
 }
 
+const TRUST_PAGES: Record<string, [string, string]> = {
+  methodology: ['Methodology', '<p>Licita presents source rows and deterministic heuristics with their evidence. Confidence is evidence strength, not a probability. Coverage counts, indexed ranges and freshness are shown only when supplied by the live index; unknown values are Not reported.</p>'],
+  security: ['Security', '<p>Operator statistics and lead details require the server-side operator key. Public demo capture is rate limited and stores only a normalized email, channel, source URL and lifecycle timestamps. Licita does not claim a certification or SLA on this page.</p>'],
+  privacy: ['Privacy', '<p>Demo emails are retained for 30 days unless the lead advances to contacted, used or paid. Access is restricted to operators. Request deletion or ask a privacy question by email.</p>'],
+  terms: ['Terms', '<p>Use Licita and upstream data in accordance with applicable law and the terms of TED and PLACSP. This page is informational; contact us before relying on data for a material decision.</p>'],
+  status: ['Status', '<p>Service status and source freshness are operational values, not guarantees. Check the response metadata and contact us to report an issue. No uptime SLA is claimed here.</p>'],
+};
+
 function serverCard(config: AppConfig): Record<string, unknown> {
   return {
     schemaVersion: '2025-12-11',
@@ -870,7 +886,8 @@ function serverCard(config: AppConfig): Record<string, unknown> {
  * faucet (POST /v1/dev-faucet).
  */
 export function registerWeb(app: FastifyInstance, config: AppConfig): void {
-  app.get('/', async (_req, reply) => reply.type('text/html; charset=utf-8').send(homePage(config)));
+  app.get('/', async (req, reply) => reply.type('text/html; charset=utf-8').send(homePage(config, (req.query as { demo?: string }).demo === 'success')));
+  app.get('/styles.css', async (_req, reply) => reply.type('text/css; charset=utf-8').send(HUMAN_CSS));
   app.get('/docs', async (_req, reply) => reply.type('text/html; charset=utf-8').send(docsPage(config)));
   app.get('/use-cases', async (_req, reply) =>
     reply.type('text/html; charset=utf-8').send(page('Use cases', `${NAV}\n${USECASE_INDEX}`)),
@@ -886,6 +903,9 @@ export function registerWeb(app: FastifyInstance, config: AppConfig): void {
   );
   app.get('/data/spain', async (_req, reply) => reply.type('text/html; charset=utf-8').send(dataPage('spain')));
   app.get('/data/eu', async (_req, reply) => reply.type('text/html; charset=utf-8').send(dataPage('eu')));
+  for (const [slug, [title, body]] of Object.entries(TRUST_PAGES)) {
+    app.get(`/${slug}`, async (_req, reply) => reply.type('text/html; charset=utf-8').send(page(title, `${NAV}\n<h1>${title}</h1>${body}<p><a href="/">Back to Licita</a></p>`)));
+  }
   app.get('/pricing', async (_req, reply) => reply.type('text/html; charset=utf-8').send(pricingPage(config)));
   app.get('/llms.txt', async (_req, reply) => reply.type('text/plain; charset=utf-8').send(llmsTxt(config)));
   app.get('/robots.txt', async (_req, reply) =>

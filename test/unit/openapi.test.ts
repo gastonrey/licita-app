@@ -6,7 +6,7 @@ describe('openapi document', () => {
   const doc = buildOpenApi() as {
     openapi: string;
     info: { title: string };
-    paths: Record<string, Record<string, { operationId?: string; responses?: Record<string, unknown> }>>;
+    paths: Record<string, Record<string, { operationId?: string; responses?: Record<string, unknown>; parameters?: unknown[]; security?: unknown[] }>>;
     components: { schemas: Record<string, unknown> };
   };
 
@@ -126,5 +126,20 @@ describe('openapi document', () => {
     const r402 = responses['402'] as { headers?: Record<string, unknown> };
     expect(r402.headers).toBeDefined();
     expect(r402.headers?.['PAYMENT-REQUIRED']).toBeDefined();
+  });
+
+  it('documents the free demo capture and operator stats surfaces', () => {
+    const create = doc.paths['/v1/demo/request'].post;
+    expect(create.operationId).toBe('createDemoRequest');
+    expect(create.responses?.['201']).toBeDefined();
+    expect(create.responses?.['402']).toBeUndefined();
+    expect(doc.paths['/v1/stats'].get.parameters).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: 'from', in: 'query' }),
+      expect.objectContaining({ name: 'to', in: 'query' }),
+    ]));
+    const demoStats = doc.paths['/v1/stats/demo'].get;
+    expect(demoStats.operationId).toBe('getDemoStats');
+    expect(demoStats.parameters).toEqual(expect.arrayContaining([expect.objectContaining({ name: 'x-operator-key', in: 'header' })]));
+    expect(demoStats.responses?.['401']).toBeDefined();
   });
 });

@@ -22,6 +22,7 @@ import { runMigrations } from '../../src/db/migrate.js';
 import { buildServer } from '../../src/api/server.js';
 import { registerWeb } from '../../src/web/pages.js';
 import { mountMcp } from '../../src/mcp/server.js';
+import { registerDashboard } from '../../src/web/dashboard.js';
 import { runIngestOnce, type IngestSummary } from '../../src/ingest/cli.js';
 
 const REPO_ROOT = join(fileURLToPath(new URL('.', import.meta.url)), '..', '..');
@@ -158,6 +159,7 @@ describe.runIf(TED_OK)('integration: real app + real postgres + live TED slice',
     // 3. real wired app on an ephemeral port.
     app = await buildServer(config, db);
     registerWeb(app, config);
+    registerDashboard(app, config);
     mountMcp(app, config, db);
     await app.listen({ port: 0, host: '127.0.0.1' });
     const address = app.server.address();
@@ -188,6 +190,34 @@ describe.runIf(TED_OK)('integration: real app + real postgres + live TED slice',
       const res = await fetch(`${base}${path}`);
       expect(res.status, path).toBe(200);
     }
+  });
+
+  it('homepage and dashboard expose the human demo and tab surfaces', async () => {
+    const home = await fetch(`${base}/`);
+    expect(home.status).toBe(200);
+    expect(await home.text()).toContain('action="/v1/demo/request"');
+    const dashboard = await fetch(`${base}/dashboard`);
+    expect(dashboard.status).toBe(200);
+    const dashboardHtml = await dashboard.text();
+    expect(dashboardHtml).toContain('data-tab="overview"');
+    expect(dashboardHtml).toContain('Endpoint economics');
+    expect((await fetch(`${base}/dashboard/demo`)).status).toBe(200);
+  });
+
+  it('captures a demo lead and exposes it to the operator stats feed', async () => {
+    const posted = await fetch(`${base}/v1/demo/request?source=integration`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email: 'integration@example.com' }),
+    });
+    expect(posted.status).toBe(201);
+    const body = (await posted.json()) as Json;
+    expect((body.data as Json).email).toBe('integration@example.com');
+    const stats = await fetch(`${base}/v1/stats/demo?limit=200`, { headers: { 'x-operator-key': 'integration-operator' } });
+    expect(stats.status).toBe(200);
+    const statsBody = (await stats.json()) as Json;
+    expect((statsBody.data as Json).requests).toEqual(expect.arrayContaining([
+      expect.objectContaining({ email: 'integration@example.com', channel: 'integration' }),
+    ]));
   });
 
   it('unpaid search → 402 x402 body', async () => {

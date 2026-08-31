@@ -14,6 +14,7 @@ function buildApp() {
     void reply.code(status).send({ error: { code: 'invalid_query', message: err.message } });
   });
   app.get('/v1/stats', { preHandler: [statsAuth(OPERATOR_KEY)] }, async () => ({ ok: true }));
+  app.get('/v1/stats/demo', { preHandler: [statsAuth(OPERATOR_KEY)] }, async () => ({ ok: true }));
   return app;
 }
 
@@ -21,6 +22,13 @@ describe('statsAuth', () => {
   it('401 without the header', async () => {
     const app = buildApp();
     const res = await app.inject({ method: 'GET', url: '/v1/stats' });
+    expect(res.statusCode).toBe(401);
+    await app.close();
+  });
+
+  it('protects the demo admin feed without the header', async () => {
+    const app = buildApp();
+    const res = await app.inject({ method: 'GET', url: '/v1/stats/demo' });
     expect(res.statusCode).toBe(401);
     await app.close();
   });

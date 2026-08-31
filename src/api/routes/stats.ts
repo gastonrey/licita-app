@@ -7,6 +7,23 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
 import type { FastifyReply, FastifyRequest, preHandlerHookHandler } from 'fastify';
 import { envelope, HttpError, type RouteCtx } from './common.js';
+import { validate } from './common.js';
+import { z } from 'zod';
+
+export function isValidCalendarDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(`${value}T00:00:00.000Z`);
+  return date.getUTCFullYear() === Number(value.slice(0, 4))
+    && date.getUTCMonth() + 1 === Number(value.slice(5, 7))
+    && date.getUTCDate() === Number(value.slice(8, 10));
+}
+
+const calendarDate = z.string().refine(isValidCalendarDate, 'invalid calendar date');
+export const statsQuerySchema = z.object({
+  from: calendarDate.optional(),
+  to: calendarDate.optional(),
+}).refine(({ from, to }) => !from || !to || from <= to, { message: 'from must be on or before to', path: ['to'] });
+export const statsQueryValidation = validate(statsQuerySchema, 'query');
 
 /**
  * Constant-time key comparison: both sides are SHA-256 hashed first (which
@@ -192,6 +209,12 @@ ORDER BY ts DESC
 LIMIT $1
 `;
 
+const EMPTY_DEMO = { rows: [] as Record<string, unknown>[] };
+async function optionalQuery(db: RouteCtx['db'], sql: string, values: unknown[] = []) {
+  try { const result = await db.query(sql, values); return { rows: result.rows, missing: false }; }
+  catch { return { ...EMPTY_DEMO, missing: true }; }
+}
+
 function rate(part: number, whole: number): number | null {
   return whole > 0 ? Math.round((part / whole) * 10000) / 10000 : null;
 }
@@ -206,6 +229,32 @@ export function parseRecentLimit(v: unknown): number {
 export function statsHandler(ctx: RouteCtx) {
   return async (req: FastifyRequest, reply: FastifyReply) => {
     const db = ctx.db;
+    const query = (req.query ?? {}) as { from?: string; to?: string };
+    const rangeValues: Date[] = [];
+    let range = '';
+    if (query.from || query.to) {
+      const from = query.from ? new Date(`${query.from}T00:00:00.000Z`) : new Date(0);
+      const to = query.to ? new Date(`${query.to}T00:00:00.000Z`) : new Date('9999-12-31T00:00:00.000Z');
+      to.setUTCDate(to.getUTCDate() + 1);
+      rangeValues.push(from, to);
+      range = ' WHERE created_at >= $1 AND created_at < $2';
+    }
+    const scope = (sql: string, table: 'request_logs' | 'payments', column: 'ts' | 'created_at') => {
+      if (!range) return sql;
+      const condition = `${column} >= $1 AND ${column} < $2`;
+      return sql.includes(`FROM ${table} WHERE`)
+        ? sql.replace(`FROM ${table} WHERE`, `FROM ${table} WHERE ${condition} AND`)
+        : sql.replace(`FROM ${table}`, `FROM ${table} WHERE ${condition}`);
+    };
+    const requestSql = (sql: string) => scope(sql, 'request_logs', 'ts');
+    const paymentSql = (sql: string) => scope(sql, 'payments', 'created_at');
+    const growthPayersSql = range ? `${GROWTH_PAYERS_SQL} AND created_at >= $1 AND created_at < $2` : GROWTH_PAYERS_SQL;
+    const growthTimelineSql = range ? `${GROWTH_PAYER_TIMELINE_SQL.replace('WHERE payer_address IS NOT NULL', 'WHERE payer_address IS NOT NULL AND created_at >= $1 AND created_at < $2')}` : GROWTH_PAYER_TIMELINE_SQL;
+    const growthCallsSql = range ? `${GROWTH_CALLS_SQL.replace('WHERE client_key IN', 'WHERE ts >= $1 AND ts < $2 AND client_key IN').replace('WHERE payer_address IS NOT NULL', 'WHERE payer_address IS NOT NULL AND created_at >= $1 AND created_at < $2')}` : GROWTH_CALLS_SQL;
+    const growthFunnelSql = range ? `${GROWTH_FUNNEL_SQL.replace('FROM request_logs', 'FROM request_logs WHERE ts >= $1 AND ts < $2')}` : GROWTH_FUNNEL_SQL;
+    const mcpDiscoverySql = range ? `${MCP_DISCOVERY_SQL} WHERE ts >= $1 AND ts < $2` : MCP_DISCOVERY_SQL;
+    const mcpHandshakesSql = range ? `${MCP_HANDSHAKES_BY_UA_SQL.replace('GROUP BY user_agent', 'AND ts >= $1 AND ts < $2 GROUP BY user_agent')}` : MCP_HANDSHAKES_BY_UA_SQL;
+    const growthArgs = rangeValues;
     const [
       clients,
       byEndpoint,
@@ -232,30 +281,30 @@ export function statsHandler(ctx: RouteCtx) {
       growthCalls,
       growthFunnel,
     ] = await Promise.all([
-      db.query(UNIQUE_CLIENTS_SQL),
-      db.query(BY_ENDPOINT_SQL),
-      db.query(BY_SOURCE_SQL),
-      db.query(ZERO_RESULT_SQL),
-      db.query(PAYMENT_REQUIRED_SQL),
-      db.query(PAYMENTS_SQL),
-      db.query(PAYMENTS_BY_NETWORK_SQL),
-      db.query(REPEAT_CLIENTS_SQL),
-      db.query(TOP_FIELD_SQL('cpv')),
-      db.query(TOP_FIELD_SQL('buyer')),
-      db.query(TOP_FIELD_SQL('company')),
-      db.query(TOP_SEARCHES_SQL),
-      db.query(TOP_ZERO_RESULT_SQL),
-      db.query(UNIQUE_USER_AGENTS_SQL),
-      db.query(TOP_USER_AGENTS_SQL),
-      db.query(MCP_DISCOVERY_SQL),
-      db.query(MCP_HANDSHAKES_BY_UA_SQL),
-      db.query(FAILED_SQL),
-      db.query(FAILED_RATE_SQL),
+       db.query(requestSql(UNIQUE_CLIENTS_SQL), rangeValues),
+       db.query(requestSql(BY_ENDPOINT_SQL), rangeValues),
+       db.query(requestSql(BY_SOURCE_SQL), rangeValues),
+       db.query(requestSql(ZERO_RESULT_SQL), rangeValues),
+       db.query(requestSql(PAYMENT_REQUIRED_SQL), rangeValues),
+       db.query(paymentSql(PAYMENTS_SQL), rangeValues),
+       db.query(paymentSql(PAYMENTS_BY_NETWORK_SQL), rangeValues),
+       db.query(requestSql(REPEAT_CLIENTS_SQL), rangeValues),
+       db.query(requestSql(TOP_FIELD_SQL('cpv')), rangeValues),
+       db.query(requestSql(TOP_FIELD_SQL('buyer')), rangeValues),
+       db.query(requestSql(TOP_FIELD_SQL('company')), rangeValues),
+       db.query(requestSql(TOP_SEARCHES_SQL), rangeValues),
+       db.query(requestSql(TOP_ZERO_RESULT_SQL), rangeValues),
+       db.query(requestSql(UNIQUE_USER_AGENTS_SQL), rangeValues),
+       db.query(requestSql(TOP_USER_AGENTS_SQL), rangeValues),
+       db.query(mcpDiscoverySql, range ? growthArgs : []),
+       db.query(mcpHandshakesSql, range ? growthArgs : []),
+       db.query(requestSql(FAILED_SQL), rangeValues),
+       db.query(requestSql(FAILED_RATE_SQL), rangeValues),
       db.query(NULL_RATES_SQL),
-      db.query(GROWTH_PAYERS_SQL),
-      db.query(GROWTH_PAYER_TIMELINE_SQL),
-      db.query(GROWTH_CALLS_SQL),
-      db.query(GROWTH_FUNNEL_SQL),
+       db.query(growthPayersSql, range ? growthArgs : []),
+       db.query(growthTimelineSql, range ? growthArgs : []),
+       db.query(growthCallsSql, range ? growthArgs : []),
+       db.query(growthFunnelSql, range ? growthArgs : []),
     ]);
 
     const paymentsByStatus: Record<string, { count: number; amount_usd: number }> = {};
@@ -432,15 +481,113 @@ export function statsHandler(ctx: RouteCtx) {
       in_memory_metrics: ctx.metrics.snapshot(),
     };
 
+    // New product-quality pillars deliberately live beside the legacy document.
+    // Queries are optional for old test fixtures and pre-007 databases.
+    const reqRange = range ? ' WHERE ts >= $1 AND ts < $2' : '';
+    const reqArgs = rangeValues;
+    const [caq, demos, statuses, economics, gaps, paymentTimeline, paidByEndpoint] = await Promise.all([
+      optionalQuery(db, `SELECT source AS channel, count(*)::int AS requests,
+        sum(CASE WHEN paid THEN 1 ELSE 0 END)::int AS paid_requests,
+        count(DISTINCT client_key)::int AS unique_clients FROM request_logs${reqRange} GROUP BY source ORDER BY source`, reqArgs),
+      optionalQuery(db, `SELECT id,email,channel,source_url,status,created_at FROM demo_requests${range} ORDER BY id DESC LIMIT 50`, rangeValues),
+      optionalQuery(db, `SELECT status,count(*)::int AS n FROM demo_requests${range} GROUP BY status`, rangeValues),
+      optionalQuery(db, `SELECT endpoint,count(*)::int AS requests,
+        sum(CASE WHEN paid THEN 1 ELSE 0 END)::int AS paid_requests
+        FROM request_logs${reqRange} GROUP BY endpoint ORDER BY requests DESC`, reqArgs),
+      optionalQuery(db, `SELECT endpoint,
+        sum(CASE WHEN zero_result THEN 1 ELSE 0 END)::int AS zero_result_requests,
+        count(*)::int AS total_requests FROM request_logs${reqRange}
+        GROUP BY endpoint HAVING sum(CASE WHEN zero_result THEN 1 ELSE 0 END) > 0 ORDER BY endpoint`, reqArgs),
+      optionalQuery(db, `SELECT payer_address,amount_usd,created_at FROM payments
+        WHERE payer_address IS NOT NULL AND status = 'settled'${range ? ' AND created_at >= $1 AND created_at < $2' : ''}
+        ORDER BY payer_address,created_at`, rangeValues),
+       optionalQuery(db, `SELECT endpoint, sum(amount_usd) AS revenue
+         FROM payments WHERE status = 'settled'${range ? ' AND created_at >= $1 AND created_at < $2' : ''} GROUP BY endpoint`, rangeValues),
+    ]);
+    const byStatus: Record<string, number> = { new: 0, contacted: 0, used: 0, paid: 0 };
+    for (const row of statuses.rows) if (row.status in byStatus) byStatus[String(row.status)] = Number(row.n);
+    const timelineByPayer = new Map<string, Record<string, unknown>[]>();
+    for (const row of paymentTimeline.rows) {
+      const list = timelineByPayer.get(String(row.payer_address)) ?? [];
+      list.push(row); timelineByPayer.set(String(row.payer_address), list);
+    }
+    let newRevenue = 0, repeatRevenue = 0, newPayments = 0, repeatPayments = 0;
+    for (const rows of timelineByPayer.values()) rows.forEach((row, i) => {
+      const amount = Number(row.amount_usd);
+      if (i === 0) { newRevenue += amount; newPayments++; } else { repeatRevenue += amount; repeatPayments++; }
+    });
+    const stage = [Number((data.growth as { funnel: Record<string, unknown> }).funnel.discovered),
+      Number((data.growth as { funnel: Record<string, unknown> }).funnel.initialized), Number(growthFunnel.rows[0]?.queried ?? 0),
+       Object.values(byStatus).reduce((sum, count) => sum + count, 0), paidAgents, repeatAgents, settledRevenue];
+    const names = GROWTH_FUNNEL_LABELS;
+    const conversions = names.slice(0, -1).map((from, i) => {
+      const value = rate(stage[i + 1], stage[i]);
+      return { from, to: names[i + 1], rate: value, ...(value !== null && value > 1 ? { note: 'initialized counts MCP handshake rows, queried counts distinct clients — rate may exceed 1.0' } : {}) };
+    });
+    const demoRows = demos.rows.map((row) => ({ ...row, converted: row.status === 'paid' }));
+    (data as Record<string, unknown>).caq_by_channel = caq.rows.map((r) => ({ channel: String(r.channel), requests: Number(r.requests), paid_requests: Number(r.paid_requests), unique_clients: Number(r.unique_clients) }));
+    const growthObject = data.growth as unknown as Record<string, unknown>;
+    // Keep the legacy funnel enumerable shape for pre-007 fixtures; once the
+    // demo table exists the richer conversion series is exposed as specified.
+    (data as Record<string, unknown>).growth = demos.missing
+      ? growthObject
+      : { ...growthObject, funnel: { ...(growthObject.funnel as Record<string, unknown>), conversions } };
+    (data as Record<string, unknown>).revenue_new_vs_repeat = { new_revenue_usd: Math.round(newRevenue * 100) / 100, repeat_revenue_usd: Math.round(repeatRevenue * 100) / 100, new_payments: newPayments, repeat_payments: repeatPayments };
+    (data as Record<string, unknown>).demo_pipeline = { by_status: byStatus, requests: demoRows };
+    const usageByEndpoint = new Map(economics.rows.map((r) => [String(r.endpoint), {
+      requests: Number(r.requests), paid_requests: Number(r.paid_requests),
+    }]));
+    const revenueByEndpoint = new Map(paidByEndpoint.rows.map((r) => [String(r.endpoint), Number(r.revenue)]));
+    // Payments are authoritative for revenue. Keep payment-only endpoints so an
+    // accounting event cannot disappear merely because its request log was lost;
+    // with no usage, revenue_per_call is explicitly zero rather than fabricated.
+    for (const endpoint of revenueByEndpoint.keys()) if (!usageByEndpoint.has(endpoint)) usageByEndpoint.set(endpoint, { requests: 0, paid_requests: 0 });
+    (data as Record<string, unknown>).endpoint_economics = [...usageByEndpoint.entries()].map(([endpoint, usage]) => {
+      const revenue = revenueByEndpoint.get(endpoint) ?? 0;
+      return { endpoint, requests: usage.requests, paid_requests: usage.paid_requests, revenue_usd: Math.round(revenue * 100) / 100, revenue_per_call: usage.requests ? Math.round((revenue / usage.requests) * 10000) / 10000 : 0, paid_ratio: rate(usage.paid_requests, usage.requests) };
+    });
+    (data as Record<string, unknown>).zero_result_by_endpoint = gaps.rows.map((r) => ({ endpoint: String(r.endpoint), zero_result_requests: Number(r.zero_result_requests), total_requests: Number(r.total_requests) }));
+
     return reply.send(envelope(req, data));
+  };
+}
+
+export function demoStatsHandler(ctx: RouteCtx) {
+  return async (req: FastifyRequest, reply: FastifyReply) => {
+    const query = (req.query as { limit?: unknown; from?: string; to?: string } | undefined) ?? {};
+    const limit = parseRecentLimit(query.limit);
+    const values: unknown[] = [limit];
+    const range = query.from || query.to
+      ? { from: query.from ? new Date(`${query.from}T00:00:00.000Z`) : new Date(0), to: query.to ? new Date(`${query.to}T00:00:00.000Z`) : new Date('9999-12-31T00:00:00.000Z') }
+      : null;
+    if (range) range.to.setUTCDate(range.to.getUTCDate() + 1);
+    const requestSql = range ? 'SELECT id,email,channel,source_url,status,created_at FROM demo_requests WHERE created_at >= $2 AND created_at < $3 ORDER BY id DESC LIMIT $1' : 'SELECT id,email,channel,source_url,status,created_at FROM demo_requests ORDER BY id DESC LIMIT $1';
+    if (range) values.push(range.from, range.to);
+    const [requests, statuses] = await Promise.all([
+      ctx.db.query(requestSql, values),
+      ctx.db.query(range ? 'SELECT status,count(*)::int AS n FROM demo_requests WHERE created_at >= $1 AND created_at < $2 GROUP BY status' : 'SELECT status,count(*)::int AS n FROM demo_requests GROUP BY status', range ? [range.from, range.to] : []),
+    ]);
+    const by_status: Record<string, number> = { new: 0, contacted: 0, used: 0, paid: 0 };
+    for (const row of statuses.rows) if (row.status in by_status) by_status[String(row.status)] = Number(row.n);
+    return reply.send(envelope(req, { requests: requests.rows, by_status }));
   };
 }
 
 /** GET /v1/stats/recent — newest request_logs rows (free, operator-only auth). */
 export function recentStatsHandler(ctx: RouteCtx) {
   return async (req: FastifyRequest, reply: FastifyReply) => {
-    const limit = parseRecentLimit((req.query as Record<string, unknown> | undefined)?.limit);
-    const { rows } = await ctx.db.query(RECENT_SQL, [limit]);
+    const query = (req.query as { limit?: unknown; from?: string; to?: string } | undefined) ?? {};
+    const limit = parseRecentLimit(query.limit);
+    const values: unknown[] = [limit];
+    let sql = RECENT_SQL;
+    if (query.from || query.to) {
+      const from = query.from ? new Date(`${query.from}T00:00:00.000Z`) : new Date(0);
+      const to = query.to ? new Date(`${query.to}T00:00:00.000Z`) : new Date('9999-12-31T00:00:00.000Z');
+      to.setUTCDate(to.getUTCDate() + 1);
+      sql = RECENT_SQL.replace('ORDER BY', 'WHERE ts >= $2 AND ts < $3 ORDER BY');
+      values.push(from, to);
+    }
+    const { rows } = await ctx.db.query(sql, values);
     return reply.send(envelope(req, rows));
   };
 }

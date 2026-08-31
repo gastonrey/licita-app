@@ -2,6 +2,7 @@
 // limiting, error envelope, request logging and all /v1 routes (SPEC §5 + §9).
 
 import { createHash, randomUUID } from 'node:crypto';
+import { parse as parseQueryString } from 'node:querystring';
 import Fastify, {
   type FastifyError,
   type FastifyInstance,
@@ -30,10 +31,10 @@ import {
 import { buyerHistoryHandler, buyerIdValidation } from './routes/buyers.js';
 import { renewalsHandler, renewalsValidation } from './routes/renewals.js';
 import { researchHandler, researchBodyValidation } from './routes/research.js';
-import { demoHandler } from './routes/demo.js';
+import { demoHandler, demoRequestHandler, demoRequestValidation } from './routes/demo.js';
 import { pricingHandler } from './routes/pricing.js';
 import { billingAmountValidation, billingGetHandler, billingPurchaseHandler } from './routes/billing.js';
-import { recentStatsHandler, statsAuth, statsHandler } from './routes/stats.js';
+import { demoStatsHandler, recentStatsHandler, statsAuth, statsHandler, statsQueryValidation } from './routes/stats.js';
 
 /** Rate-limit identity: X-PAYMENT-derived (proof hash) when present, else client IP. */
 export function rateLimitKey(req: FastifyRequest): string {
@@ -58,6 +59,9 @@ export async function buildServer(config: AppConfig, db: Db): Promise<FastifyIns
     logger: false, // structured JSON logs go through src/obs/log.ts
     genReqId: () => randomUUID(),
     trustProxy: config.trustProxy,
+  });
+  app.addContentTypeParser('application/x-www-form-urlencoded', { parseAs: 'string' }, (_req, body, done) => {
+    try { done(null, parseQueryString(body as string)); } catch (error) { done(error as Error, undefined); }
   });
 
   // --- rate limiting (per client key, 60 req/min token bucket) ----------------
@@ -198,6 +202,7 @@ export async function buildServer(config: AppConfig, db: Db): Promise<FastifyIns
   );
   // free endpoints
   app.get('/v1/demo', { preHandler: [paymentPreHandler('GET /v1/demo')] }, demoHandler(ctx));
+  app.post('/v1/demo/request', { preHandler: [demoRequestValidation] }, demoRequestHandler(ctx));
   app.get('/v1/pricing', pricingHandler(ctx));
   app.get('/v1/billing', { preHandler: [paymentPreHandler('GET /v1/billing')] }, billingGetHandler(ctx));
   app.post(
@@ -222,7 +227,8 @@ export async function buildServer(config: AppConfig, db: Db): Promise<FastifyIns
     },
     billingPurchaseHandler(ctx),
   );
-  app.get('/v1/stats', { preHandler: [statsAuth(config.operatorKey)] }, statsHandler(ctx));
+  app.get('/v1/stats', { preHandler: [statsAuth(config.operatorKey), statsQueryValidation] }, statsHandler(ctx));
+  app.get('/v1/stats/demo', { preHandler: [statsAuth(config.operatorKey)] }, demoStatsHandler(ctx));
   app.get('/v1/stats/recent', { preHandler: [statsAuth(config.operatorKey)] }, recentStatsHandler(ctx));
   app.get('/openapi.json', async (_req, reply) => reply.send(buildOpenApi()));
 

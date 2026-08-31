@@ -7,7 +7,36 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 import { ENDPOINT_PRICES, type Provenance } from '../../domain/types.js';
 import type { Db } from '../../db/client.js';
 import { priceOverrides } from '../../pay/prices.js';
-import { dateStr, envelope, num, type RouteCtx } from './common.js';
+import { dateStr, envelope, num, tedUrl, type RouteCtx, validate } from './common.js';
+import { z } from 'zod';
+
+export const demoRequestSchema = z.object({ email: z.string().trim().toLowerCase().email('invalid email') });
+export const demoRequestValidation = validate(demoRequestSchema, 'body');
+
+export function channelFor(query: Record<string, unknown>, referer?: string): string {
+  const source = typeof query.source === 'string' ? query.source.trim() : '';
+  if (source.length > 0 && source.length <= 64) return source;
+  return referer ? 'web' : 'direct';
+}
+
+export function demoRequestHandler(ctx: RouteCtx) {
+  return async (req: FastifyRequest, reply: FastifyReply) => {
+    const body = req.body as { email: string };
+    const query = (req.query ?? {}) as Record<string, unknown>;
+    const referer = typeof req.headers.referer === 'string' ? req.headers.referer : undefined;
+    const sourceUrl = req.url.includes('?') ? req.url : referer ?? null;
+    await ctx.db.query("DELETE FROM demo_requests WHERE status IN ('new', 'contacted') AND created_at < now() - interval '30 days'");
+    const result = await ctx.db.query(
+      `INSERT INTO demo_requests (email, channel, source_url) VALUES ($1, $2, $3)
+       RETURNING id, email, channel, source_url, status, created_at`,
+      [body.email, channelFor(query, referer), sourceUrl],
+    );
+    if (String(req.headers['content-type'] ?? '').startsWith('application/x-www-form-urlencoded')) {
+      return reply.code(303).header('location', '/?demo=success').send();
+    }
+    return reply.code(201).send(envelope(req, result.rows[0], { meta: { price_usd: '0.00', paid: false } }));
+  };
+}
 
 export const DEMO_TENDER_SQL = `
 SELECT t.id, t.source_ref, t.title, t.cpv_main, t.estimated_value, t.currency,
@@ -35,6 +64,13 @@ ORDER BY fs.computed_at DESC NULLS LAST, fs.id DESC
 LIMIT 1
 `;
 
+export const DEMO_SOURCE_SQL = `
+SELECT s.code AS source, COUNT(t.id)::int AS records,
+       MIN(t.publication_date) AS first_published, MAX(t.publication_date) AS last_published
+FROM sources s LEFT JOIN tenders t ON t.source_id = s.id
+GROUP BY s.code ORDER BY s.code
+`;
+
 /** The priced (non-free) endpoints, merged with config overrides, sorted. Pure. */
 export function pricedEndpoints(
   overrides: Record<string, string>,
@@ -51,8 +87,9 @@ export function pricedEndpoints(
 export async function demoData(
   db: Db,
   overrides: Record<string, string>,
+  placspEnabled = false,
 ): Promise<Record<string, unknown>> {
-  const [t, r] = await Promise.all([db.query(DEMO_TENDER_SQL), db.query(DEMO_RENEWAL_SQL)]);
+  const [t, r, sources] = await Promise.all([db.query(DEMO_TENDER_SQL), db.query(DEMO_RENEWAL_SQL), db.query(DEMO_SOURCE_SQL)]);
   const tender = t.rows[0];
   const renewal = r.rows[0];
   return {
@@ -73,6 +110,8 @@ export async function demoData(
           published_at: dateStr(tender.publication_date),
           source: String(tender.source_code),
           source_ref: (tender.source_ref as string) ?? null,
+          evidence: [`Tender title: ${String(tender.title ?? 'Not reported')}`, `Publication reference: ${String(tender.source_ref ?? 'Not reported')}`],
+          url: tender.source_code === 'ted' ? tedUrl((tender.source_ref as string) ?? null) : undefined,
         }
       : null,
     renewal: renewal
@@ -88,14 +127,23 @@ export async function demoData(
           basis: renewal.basis ?? null,
           source: String(renewal.source_code ?? 'signal'),
           source_ref: (renewal.tender_source_ref as string) ?? null,
+          evidence: [`Signal type: ${String(renewal.signal_type ?? 'Not reported')}`, `Confidence basis: ${String(renewal.confidence ?? 'Not reported')}`],
+          url: renewal.source_code === 'ted' ? tedUrl((renewal.tender_source_ref as string) ?? null) : undefined,
         }
       : null,
+    source_metadata: sources.rows.map((row) => ({
+      source: String(row.source), enabled: row.source === 'placsp' ? placspEnabled : row.source === 'ted',
+      records: row.source === 'placsp' && !placspEnabled ? null : Number(row.records),
+      indexed_from: row.source === 'placsp' && !placspEnabled ? null : dateStr(row.first_published),
+      indexed_to: row.source === 'placsp' && !placspEnabled ? null : dateStr(row.last_published),
+      last_ingestion: null,
+    })),
   };
 }
 
 export function demoHandler(ctx: RouteCtx) {
   return async (req: FastifyRequest, reply: FastifyReply) => {
-    const data = await demoData(ctx.db, priceOverrides(ctx.config));
+    const data = await demoData(ctx.db, priceOverrides(ctx.config), ctx.config.placsp.enabled);
     const provenance: Provenance[] = [];
     const t = data.tender as { source?: string; source_ref?: string | null } | null;
     const r = data.renewal as { source?: string; source_ref?: string | null } | null;

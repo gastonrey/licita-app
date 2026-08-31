@@ -174,7 +174,7 @@ describe('P1 use-case and data pages (agent-first discovery)', () => {
   it('data pages describe sources, coverage and provenance honestly', async () => {
     const app = await webApp();
     const data: Array<[string, string[]]> = [
-      ['/data', ['12,718', 'TED', 'PLACSP', '/data/spain', '/data/eu']],
+       ['/data', ['Current records and indexed ranges', 'TED', 'PLACSP', '/data/spain', '/data/eu']],
       ['/data/spain', ['PLACSP', '2026/CONTRAT/000064', 'Oleiros', 'GET /v1/search']],
       ['/data/eu', ['TED', 'ted.europa.eu', 'GET /v1/tenders/:id']],
     ];

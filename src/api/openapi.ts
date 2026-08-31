@@ -348,6 +348,17 @@ const demoData = {
   },
 } as const;
 
+const demoRequestData = {
+  type: 'object',
+  required: ['id', 'email', 'channel', 'source_url', 'status', 'created_at'],
+  properties: {
+    id: { type: 'integer' }, email: { type: 'string', format: 'email' },
+    channel: { type: 'string' }, source_url: { type: ['string', 'null'] },
+    status: { type: 'string', enum: ['new', 'contacted', 'used', 'paid'] },
+    created_at: { type: 'string', format: 'date-time' },
+  },
+} as const;
+
 /** GET /v1/stats data payload — P0.7 observability aggregates (kept loose). */
 const statsData = {
   type: 'object',
@@ -446,6 +457,9 @@ const statsData = {
     },
     data_null_rates: { type: 'object' },
     in_memory_metrics: { type: 'object' },
+    caq_by_channel: { type: 'array' }, growth: { type: 'object' },
+    revenue_new_vs_repeat: { type: 'object' }, demo_pipeline: { type: 'object' },
+    endpoint_economics: { type: 'array' }, zero_result_by_endpoint: { type: 'array' },
   },
 } as const;
 
@@ -909,6 +923,14 @@ function paths(): Record<string, unknown> {
         responses: stdResponses(demoData, false),
       },
     },
+    '/v1/demo/request': {
+      post: {
+        operationId: 'createDemoRequest', summary: 'Request a product demo',
+        description: 'Free public solo-email demo request capture.',
+        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['email'], properties: { email: { type: 'string', format: 'email' } } } } } },
+        responses: { '201': { description: 'Demo request captured', content: { 'application/json': { schema: envelopeOf(demoRequestData) } } }, '400': errResp('Invalid email'), '429': errResp('Rate limited') },
+      },
+    },
     '/v1/billing': {
       get: {
         operationId: 'getBilling',
@@ -952,6 +974,8 @@ function paths(): Record<string, unknown> {
             required: true,
             schema: { type: 'string' },
           },
+          qParam('from', 'Start date, YYYY-MM-DD', { type: 'string', format: 'date' }),
+          qParam('to', 'End date, YYYY-MM-DD', { type: 'string', format: 'date' }),
         ],
         responses: {
           '200': {
@@ -960,6 +984,13 @@ function paths(): Record<string, unknown> {
           },
           '401': errResp('Missing/invalid operator key'),
         },
+      },
+    },
+    '/v1/stats/demo': {
+      get: {
+        operationId: 'getDemoStats', summary: 'List demo requests (operator only)',
+        parameters: [{ name: 'x-operator-key', in: 'header', required: true, schema: { type: 'string' } }, qParam('limit', 'Maximum rows, up to 200', { type: 'integer', maximum: 200 })],
+        responses: { '200': { description: 'Demo request list', content: { 'application/json': { schema: envelopeOf({ type: 'object' }) } } }, '401': errResp('Missing/invalid operator key') },
       },
     },
     '/v1/stats/recent': {

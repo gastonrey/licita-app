@@ -116,4 +116,13 @@ describe('GET /v1/stats/recent', () => {
       await app.close();
     }
   });
+
+  it('passes the selected date window to the request-log feed', async () => {
+    const { app, calls } = buildApp([FAKE_ROW]);
+    const res = await app.inject({ method: 'GET', url: '/v1/stats/recent?from=2026-08-01&to=2026-08-17', headers: { 'x-operator-key': OPERATOR_KEY } });
+    expect(res.statusCode).toBe(200);
+    expect(calls[0].text).toContain('ts >= $2 AND ts < $3');
+    expect(calls[0].values).toEqual([50, new Date('2026-08-01T00:00:00.000Z'), new Date('2026-08-18T00:00:00.000Z')]);
+    await app.close();
+  });
 });

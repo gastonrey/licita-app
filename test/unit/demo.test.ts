@@ -73,11 +73,14 @@ describe('demoData', () => {
     expect(tender.sample).toBe(true);
     expect(tender.title).toBe('Suministro de software');
     expect(tender.buyer).toEqual({ name: 'Junta de Test', country: 'ES' });
+    expect(tender.evidence).toEqual(['Tender title: Suministro de software', 'Publication reference: 111-2026']);
+    expect(tender.url).toContain('ted.europa.eu');
     expect(renewal.sample).toBe(true);
     expect(renewal.signal_type).toBe('contractSignal');
     expect(renewal.incumbent).toBe('ACME S.A.');
     expect(renewal.source_ref).toBe('222-2026');
     expect(data.note).toContain('Free sample');
+    expect(data.source_metadata).toBeInstanceOf(Array);
     expect((data.priced_endpoints as unknown[]).length).toBeGreaterThan(0);
   });
 
