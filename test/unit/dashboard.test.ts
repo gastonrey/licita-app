@@ -32,7 +32,7 @@ describe('GET /dashboard', () => {
     expect(html).toContain('Auto-refresh 15s');
     expect(html).toContain('MCP discovery');
     expect(html).toContain('mcp_discovery');
-    expect(html).toContain('Growth funnel');
+    expect(html).toContain('Growth cohorts');
     expect(html).toContain('Weekly active paying agents');
     expect(html).toContain('growth-funnel');
     expect(html).toContain('growth-rows');
