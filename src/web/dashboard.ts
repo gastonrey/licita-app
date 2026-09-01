@@ -39,6 +39,14 @@ button { cursor: pointer; touch-action: manipulation; min-height:44px; }
 .pagination button { min-width: 2.75rem; border: 1px solid var(--rule); background: #fff; color: var(--ink); }
 .pagination button:disabled { cursor: not-allowed; opacity: .45; }
 .pagination span { color: var(--muted); font-size: .85rem; }
+.endpoint-list { display: grid; gap: .65rem; margin: .6rem 0 1.25rem; }
+.endpoint-card { display: grid; grid-template-columns: minmax(0, 1.7fr) repeat(3, minmax(4.5rem, .7fr)); gap: .75rem; align-items: center; padding: .75rem .85rem; background: #fff; border: 1px solid var(--rule); }
+.endpoint-name { min-width: 0; overflow-wrap: anywhere; }
+.endpoint-name code { font-size: .9rem; }
+.endpoint-stat { min-width: 0; }
+.endpoint-stat-label { display: block; color: var(--muted); font-size: .68rem; text-transform: uppercase; letter-spacing: .04em; }
+.endpoint-stat-value { display: block; font-variant-numeric: tabular-nums; font-weight: 600; }
+@media (max-width: 720px) { .endpoint-card { grid-template-columns: minmax(0, 1fr) repeat(2, minmax(4rem, .8fr)); } .endpoint-card .endpoint-stat:last-child { grid-column: 2 / -1; } }
 .bar { background: var(--verified); height: 8px; min-width: 2px; }
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 1.5rem; }
 .grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0 1.5rem; }
@@ -249,16 +257,15 @@ function render(stats, recent) {
   $('funnel-warning').innerHTML = conversions.some((c) => Number(c.rate) > 1)
     ? '<p class="warning">A funnel conversion is above 100%. This is shown as recorded: initialized counts handshake rows while queried counts distinct clients.</p>' : '';
 
-  const byEp = stats.requests_by_endpoint || [];
-  const maxEp = byEp.reduce((m, r) => Math.max(m, Number(r.requests)), 0) || 1;
+  const byEp = (stats.requests_by_endpoint || []).filter((r) => Number(r.requests || 0) > 0);
   $('by-endpoint').innerHTML = byEp.length === 0
     ? '<p class="muted">No requests yet.</p>'
-    : '<table><thead><tr><th>Endpoint</th><th class="num">Requests</th><th class="num">Paid</th><th></th></tr></thead><tbody>' +
-      byEp.map((r) => '<tr><td><code>' + esc(r.endpoint) + '</code></td>' +
-        '<td class="num">' + esc(r.requests) + '</td>' +
-        '<td class="num">' + esc(r.paid_requests) + '</td>' +
-        '<td><div class="bar" style="width:' + Math.round((Number(r.requests) / maxEp) * 100) + '%"></div></td></tr>').join('') +
-      '</tbody></table>';
+    : '<div class="endpoint-list" aria-label="Visited endpoints">' +
+      byEp.map((r) => '<article class="endpoint-card"><div class="endpoint-name"><code>' + esc(r.endpoint) + '</code></div>' +
+        '<div class="endpoint-stat"><span class="endpoint-stat-label">Visits</span><span class="endpoint-stat-value">' + esc(r.requests) + '</span></div>' +
+        '<div class="endpoint-stat"><span class="endpoint-stat-label">Paid</span><span class="endpoint-stat-value">' + esc(r.paid_requests) + '</span></div>' +
+        '<div class="endpoint-stat"><span class="endpoint-stat-label">Paid rate</span><span class="endpoint-stat-value">' + esc(pct(Number(r.requests) > 0 ? Number(r.paid_requests || 0) / Number(r.requests) : null)) + '</span></div></article>').join('') +
+      '</div>';
 
   const renderRecentRows = (rows) => rows.length === 0
     ? '<p class="muted">No requests logged yet.</p>'
@@ -341,10 +348,14 @@ function render(stats, recent) {
       : '<table><thead><tr><th>Query</th><th class="num">Attempts</th></tr></thead><tbody>' +
          zrTop.map((r) => '<tr><td><code>' + esc(r.q) + '</code></td><td class="num">' + esc(r.requests) + '</td></tr>').join('') +
        '</tbody></table>');
-  const economics = stats.endpoint_economics || [];
+  const economics = (stats.endpoint_economics || []).filter((r) => Number(r.requests || 0) > 0 && Number(r.paid_requests || 0) > 0);
   $('endpoint-economics').innerHTML = economics.length === 0 ? '<p class="muted">No paid endpoint activity yet.</p>' :
-    '<table><thead><tr><th>Endpoint</th><th class="num">Usage</th><th class="num">Paid</th><th class="num">Revenue</th><th class="num">Revenue / call</th><th class="num">Paid ratio</th></tr></thead><tbody>' +
-    economics.map((r) => '<tr><td><code>' + esc(r.endpoint) + '</code></td><td class="num">' + esc(r.requests) + '</td><td class="num">' + esc(r.paid_requests) + '</td><td class="num">' + esc(money(r.revenue_usd)) + '</td><td class="num">' + esc(money(r.revenue_per_call)) + '</td><td class="num">' + esc(pct(r.paid_ratio)) + '</td></tr>').join('') + '</tbody></table>';
+    '<div class="endpoint-list" aria-label="Paid endpoint economics">' +
+    economics.map((r) => '<article class="endpoint-card"><div class="endpoint-name"><code>' + esc(r.endpoint) + '</code></div>' +
+      '<div class="endpoint-stat"><span class="endpoint-stat-label">Revenue</span><span class="endpoint-stat-value">' + esc(money(r.revenue_usd)) + '</span></div>' +
+      '<div class="endpoint-stat"><span class="endpoint-stat-label">Paid calls</span><span class="endpoint-stat-value">' + esc(r.paid_requests) + '</span></div>' +
+      '<div class="endpoint-stat"><span class="endpoint-stat-label">Per call</span><span class="endpoint-stat-value">' + esc(money(r.revenue_per_call)) + '</span></div></article>').join('') +
+    '</div>';
   const gaps = stats.zero_result_by_endpoint || [];
   $('zero-result-by-endpoint').innerHTML = gaps.length === 0 ? '' : '<h3 class="h3">Zero-result rate by endpoint</h3><table><thead><tr><th>Endpoint</th><th class="num">Zero results</th><th class="num">Usage</th></tr></thead><tbody>' + gaps.map((r) => '<tr><td><code>' + esc(r.endpoint) + '</code></td><td class="num">' + esc(r.zero_result_requests) + '</td><td class="num">' + esc(r.total_requests) + '</td></tr>').join('') + '</tbody></table>';
 }

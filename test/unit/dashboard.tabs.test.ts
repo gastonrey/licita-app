@@ -67,7 +67,7 @@ describe('dashboard tabs', () => {
       ['overview', 'Weekly active paying agents'],
        ['growth', 'Cohort counts'],
       ['leads', 'Demo pipeline'],
-      ['economics', 'Revenue / call'],
+       ['economics', 'Per call'],
       ['gaps', 'Data gaps'],
     ]) {
       expect(html).toContain(`data-tab="${tab}"`);
