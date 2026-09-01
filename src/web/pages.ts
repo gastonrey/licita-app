@@ -126,7 +126,7 @@ const MCP_TOOLS = [
 ];
 
 // Demand-capture CTA: lightweight mailto, no signup/DB/RGPD.
-const CONTACT_EMAIL = 'gastonrey@gmail.com';
+const CONTACT_EMAIL = 'eutendersai@gmail.com';
 
 function homePage(config: AppConfig, demoStatus = false): string {
   return page(
