@@ -35,6 +35,10 @@ button { cursor: pointer; touch-action: manipulation; min-height:44px; }
 .kpi { background: #fff; border: 1px solid var(--rule); padding: .75rem .9rem; min-width: 8.5rem; }
 .kpi-label { font-size: .72rem; color: #5b6575; text-transform: uppercase; letter-spacing: .03em; }
 .kpi-val { font-size: 1.35rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+.pagination { display: flex; align-items: center; justify-content: center; gap: .75rem; margin: .75rem 0 1.25rem; }
+.pagination button { min-width: 2.75rem; border: 1px solid var(--rule); background: #fff; color: var(--ink); }
+.pagination button:disabled { cursor: not-allowed; opacity: .45; }
+.pagination span { color: var(--muted); font-size: .85rem; }
 .bar { background: var(--verified); height: 8px; min-width: 2px; }
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 1.5rem; }
 .grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0 1.5rem; }
@@ -90,7 +94,7 @@ button { cursor: pointer; touch-action: manipulation; min-height:44px; }
     <section id="panel-overview" role="tabpanel" data-tab="overview" aria-label="Overview">
    <h2>KPIs</h2><div id="kpis" class="kpis"></div>
    <h2>Traffic by endpoint</h2><div id="by-endpoint"></div>
-   <h2>Recent activity</h2><div id="recent"></div>
+    <h2>Recent activity</h2><div id="recent"></div><div id="pager-recent" class="pagination" aria-label="Recent activity pagination"></div>
    </section>
     <section id="panel-growth" role="tabpanel" data-tab="growth" aria-label="Growth">
     <h2>Growth cohorts</h2>
@@ -102,7 +106,7 @@ button { cursor: pointer; touch-action: manipulation; min-height:44px; }
    <h2>MCP discovery</h2><div id="mcp-discovery"></div>
    </section>
     <section id="panel-leads" role="tabpanel" data-tab="leads" aria-label="Leads"><h2>Demo pipeline</h2><p class="muted">Email is shown only to authorized operators. <button id="open-details" type="button" aria-expanded="false">Open details</button></p><div id="lead-kpis" class="kpis" aria-label="Status: new Status: contacted Status: used Status: paid"></div><div id="leads" hidden></div></section>
-   <section data-tab="economics" aria-label="Endpoint economics"><h2>Endpoint economics</h2><div id="endpoint-economics"></div>
+    <section id="panel-economics" role="tabpanel" data-tab="economics" aria-label="Endpoint economics"><h2>Endpoint economics</h2><div id="endpoint-economics"></div>
    <h2>Who accessed</h2>
   <div class="grid2">
     <div><h3 class="h3">Repeat paid clients</h3><div id="repeat-clients"></div></div>
@@ -133,7 +137,7 @@ const initialParams = new URLSearchParams(location.search);
 const state = { timer: null, tab: initialParams.get('view') === 'data-quality' ? 'gaps' : initialParams.get('view') || initialParams.get('tab') || 'overview', page: initialParams.get('page') || '1' };
 const validTabs = ['overview', 'growth', 'leads', 'economics', 'gaps'];
  function syncUrl(tab) { const params = new URLSearchParams(location.search); params.set('view', tab === 'gaps' ? 'data-quality' : tab); if ($('from').value) params.set('from', $('from').value); else params.delete('from'); if ($('to').value) params.set('to', $('to').value); else params.delete('to'); params.set('page', state.page); history.pushState({}, '', location.pathname + '?' + params.toString()); renderFilters(); }
-function restoreUrl() { const params = new URLSearchParams(location.search); const view = params.get('view'); state.tab = view === 'data-quality' ? 'gaps' : validTabs.includes(view) ? view : 'overview'; state.page = params.get('page') || '1'; $('from').value = params.get('from') || ''; $('to').value = params.get('to') || ''; }
+function restoreUrl() { const params = new URLSearchParams(location.search); const view = params.get('view'); state.tab = view === 'data-quality' ? 'gaps' : validTabs.includes(view) ? view : 'overview'; const page = Number(params.get('page')); state.page = Number.isInteger(page) && page > 0 ? String(page) : '1'; $('from').value = params.get('from') || ''; $('to').value = params.get('to') || ''; }
 
 // Escape every dynamic value before it touches innerHTML — user_agent / q /
 // client_key come from clients and must never execute as markup.
@@ -174,16 +178,40 @@ function kvTable(rows, label, codeFirst) {
 }
 function renderFilters() { const from = $('from').value, to = $('to').value; $('period').textContent = from || to ? 'Period: ' + (from || 'beginning') + ' → ' + (to || 'today') : 'All available dates'; $('filter-chips').innerHTML = (from ? '<span class="filter-chip">From: '+esc(from)+'</span>' : '') + (to ? '<span class="filter-chip">To: '+esc(to)+'</span>' : ''); }
 
+const PAGE_SIZE = 10;
+function renderPager(id, page, total) {
+  const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const current = Math.min(Math.max(1, page), pages);
+  if (pages <= 1) return '';
+  return '<button type="button" data-page-target="' + esc(id) + '" data-page="' + (current - 1) + '"' + (current <= 1 ? ' disabled' : '') + ' aria-label="Previous page">‹</button>' +
+    '<span aria-live="polite">Page ' + current + ' of ' + pages + '</span>' +
+    '<button type="button" data-page-target="' + esc(id) + '" data-page="' + (current + 1) + '"' + (current >= pages ? ' disabled' : '') + ' aria-label="Next page">›</button>';
+}
+
+function bindPager(id, rows, renderRows) {
+  const pager = $('pager-' + id);
+  if (!pager) return;
+  const page = Math.min(Math.max(1, Number(state.page) || 1), Math.max(1, Math.ceil(rows.length / PAGE_SIZE)));
+  pager.innerHTML = renderPager(id, page, rows.length);
+  pager.querySelectorAll('button[data-page]').forEach((button) => button.addEventListener('click', () => {
+    state.page = String(Number(button.getAttribute('data-page')) || 1);
+    syncUrl(state.tab);
+    renderRows(pageRows(rows, Number(state.page)));
+  }));
+}
+
+function pageRows(rows, page) { return rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE); }
+
 function render(stats, recent) {
   const paidTotal = (stats.requests_by_endpoint || []).reduce((s, r) => s + Number(r.paid_requests || 0), 0);
   const kpis = [
-    ['Unique clients', esc(stats.unique_clients ?? 0)],
-    ['Total requests', esc(stats.total_requests ?? (stats.failed_requests_rate || {}).total ?? 0)],
-    ['Paid requests', esc(paidTotal)],
-    ['Revenue', esc(money((stats.payments || {}).revenue_usd))],
-    ['Payment required', esc(stats.payment_required_responses ?? 0)],
-    ['Failed rate', esc(pct((stats.failed_requests_rate || {}).rate))],
-  ];
+      ['Revenue', esc(money((stats.payments || {}).revenue_usd))],
+      ['Unique clients', esc(stats.unique_clients ?? 0)],
+      ['Total requests', esc(stats.total_requests ?? (stats.failed_requests_rate || {}).total ?? 0)],
+      ['Paid requests', esc(paidTotal)],
+      ['Payment required', esc(stats.payment_required_responses ?? 0)],
+      ['Failed rate', esc(pct((stats.failed_requests_rate || {}).rate))],
+    ];
   $('kpis').innerHTML = kpis
     .map((p) => '<div class="kpi"><div class="kpi-label">' + p[0] + '</div><div class="kpi-val">' + p[1] + '</div></div>')
     .join('');
@@ -232,10 +260,10 @@ function render(stats, recent) {
         '<td><div class="bar" style="width:' + Math.round((Number(r.requests) / maxEp) * 100) + '%"></div></td></tr>').join('') +
       '</tbody></table>';
 
-  $('recent').innerHTML = recent.length === 0
+  const renderRecentRows = (rows) => rows.length === 0
     ? '<p class="muted">No requests logged yet.</p>'
     : '<table><thead><tr><th>Time</th><th>Client</th><th>Endpoint</th><th class="num">Status</th><th>Paid</th><th>Source</th><th>User agent</th><th class="num">Latency ms</th><th>Context</th></tr></thead><tbody>' +
-      recent.map((r) => {
+       rows.map((r) => {
         const ctxParts = [];
         if (r.q) ctxParts.push('q=' + r.q);
         if (r.cpv) ctxParts.push('cpv=' + r.cpv);
@@ -253,8 +281,10 @@ function render(stats, recent) {
           '<td class="num">' + esc(r.latency_ms) + '</td>' +
           '<td class="muted">' + esc(ctxParts.join(' · ')) + '</td>' +
           '</tr>';
-      }).join('') +
+       }).join('') +
       '</tbody></table>';
+  $('recent').innerHTML = renderRecentRows(pageRows(recent, Number(state.page) || 1));
+  bindPager('recent', recent, (rows) => { $('recent').innerHTML = renderRecentRows(rows); });
 
   const repeatTop = (stats.repeat_clients || {}).top || [];
   $('repeat-clients').innerHTML = repeatTop.length === 0

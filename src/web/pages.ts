@@ -132,8 +132,9 @@ function homePage(config: AppConfig, demoStatus = false): string {
   return page(
     'Licita — know which public contracts deserve your next conversation',
      `${NAV}
-<div id="main-content" class="human-home"><section class="hero"><p class="source-stamp">EU PUBLIC PROCUREMENT INTELLIGENCE · EVIDENCE FIRST</p><h1>Know which public contracts deserve your next conversation.</h1>
-<p>Licita turns indexed procurement notices into evidence-backed opportunity, buyer, supplier and deterministic renewal signals for professional teams and their agents.</p></section>
+<div id="main-content" class="human-home"><section class="hero"><h1>Know which public contracts deserve your next conversation.</h1>
+<p class="source-stamp">EU PUBLIC PROCUREMENT INTELLIGENCE · EVIDENCE FIRST</p>
+<p>Licita turns indexed procurement notices into evidence‑backed opportunities, buyers, suppliers and deterministic renewal signals for professional teams.</p></section>
 
 <div class="home-columns"><section><h2>Current index sample</h2><article id="demo-sample" class="evidence-rail" data-state="loading" aria-live="polite"><p>Loading…</p><p class="source-stamp">GET /v1/demo · sample status</p></article></section><aside><h2>Scope at a glance</h2><div class="trust-grid"><div><strong>TED</strong><br>EU award notices<br><span class="source-stamp">Enabled · freshness shown at ingestion</span></div><div><strong>PLACSP</strong><br>Spain contracts when enabled<br><span class="source-stamp">Status is operational, not assumed</span></div><div><strong>Dates</strong><br>Publication date ≠ award/contract date<br><span class="source-stamp">Unknown: Not reported</span></div></div></aside></div>
 
@@ -142,7 +143,8 @@ function homePage(config: AppConfig, demoStatus = false): string {
 <form id="demo-request" method="post" action="/v1/demo/request"><label for="demo-email">Work email</label><br>
 <input id="demo-email" name="email" type="email" inputmode="email" autocomplete="email" spellcheck="false" required placeholder="name@company.com">
 <button class="btn" type="submit">Request the product demo</button><p id="demo-message" class="demo-message" role="status" aria-live="polite">${demoStatus ? 'Demo request received. We will follow up by email; no meeting was booked.' : ''}</p></form>
-<noscript><p>Email <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a> to request a demo.</p></noscript></section>
+<noscript><p>Email <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a> to request a demo.</p></noscript>
+</section>
 
  <section><h2>Coverage, trust &amp; privacy</h2><p>Coverage is strongest in the indexed IT, software and cyber vertical. See <a href="/data">source scope and methodology</a> for enabled sources, date ranges and last successful ingestion. Every finding carries a source reference and upstream link where known. We store only a normalized email, channel and source URL; operator access is restricted and deletion requests can be sent to <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>.</p><p><a href="/methodology">Methodology</a> · <a href="/security">Security</a> · <a href="/privacy">Privacy</a> · <a href="/terms">Terms</a> · <a href="/status">Status</a> · <a href="mailto:${CONTACT_EMAIL}">Contact</a></p></section>
 
