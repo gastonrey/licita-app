@@ -101,8 +101,17 @@ button { cursor: pointer; touch-action: manipulation; min-height:44px; }
    <p id="period" class="muted" aria-live="polite">All available dates</p><div id="filter-chips" aria-label="Active filters"></div><p id="load-state" class="muted" aria-live="polite"></p><button id="retry" type="button">Retry</button>
     <section id="panel-overview" role="tabpanel" data-tab="overview" aria-label="Overview">
    <h2>KPIs</h2><div id="kpis" class="kpis"></div>
-   <h2>Traffic by endpoint</h2><div id="by-endpoint"></div>
-    <h2>Recent activity</h2><div id="recent"></div><div id="pager-recent" class="pagination" aria-label="Recent activity pagination"></div>
+    <h2>Traffic by endpoint</h2><div id="by-endpoint"></div>
+     <h2>Recent activity</h2>
+     <form id="recent-filters" class="filters" aria-label="Filter recent activity">
+       <label>Endpoint <input id="recent-endpoint" name="recent_endpoint" type="search" placeholder="/v1/search"></label>
+       <label>Source <select id="recent-source" name="recent_source"><option value="">All sources</option><option value="rest">REST</option><option value="mcp">MCP</option></select></label>
+       <label>Payment <select id="recent-paid" name="recent_paid"><option value="">All requests</option><option value="paid">Paid</option><option value="unpaid">Unpaid</option></select></label>
+       <label>Status <select id="recent-status" name="recent_status"><option value="">All statuses</option><option value="2xx">2xx success</option><option value="4xx">4xx client error</option><option value="5xx">5xx server error</option></select></label>
+       <button id="clear-recent-filters" type="button">Clear filters</button>
+     </form>
+     <p id="recent-result-count" class="muted" aria-live="polite"></p>
+     <div id="recent"></div><div id="pager-recent" class="pagination" aria-label="Recent activity pagination"></div>
    </section>
     <section id="panel-growth" role="tabpanel" data-tab="growth" aria-label="Growth">
     <h2>Growth cohorts</h2>
@@ -142,10 +151,10 @@ const KEY = 'licita_operator_key';
 const LS = sessionStorage;
 const $ = (id) => document.getElementById(id);
 const initialParams = new URLSearchParams(location.search);
-const state = { timer: null, tab: initialParams.get('view') === 'data-quality' ? 'gaps' : initialParams.get('view') || initialParams.get('tab') || 'overview', page: initialParams.get('page') || '1' };
+const state = { timer: null, tab: initialParams.get('view') === 'data-quality' ? 'gaps' : initialParams.get('view') || initialParams.get('tab') || 'overview', page: initialParams.get('page') || '1', recent_endpoint: '', recent_source: '', recent_paid: '', recent_status: '' };
 const validTabs = ['overview', 'growth', 'leads', 'economics', 'gaps'];
- function syncUrl(tab) { const params = new URLSearchParams(location.search); params.set('view', tab === 'gaps' ? 'data-quality' : tab); if ($('from').value) params.set('from', $('from').value); else params.delete('from'); if ($('to').value) params.set('to', $('to').value); else params.delete('to'); params.set('page', state.page); history.pushState({}, '', location.pathname + '?' + params.toString()); renderFilters(); }
-function restoreUrl() { const params = new URLSearchParams(location.search); const view = params.get('view'); state.tab = view === 'data-quality' ? 'gaps' : validTabs.includes(view) ? view : 'overview'; const page = Number(params.get('page')); state.page = Number.isInteger(page) && page > 0 ? String(page) : '1'; $('from').value = params.get('from') || ''; $('to').value = params.get('to') || ''; }
+function syncUrl(tab) { const params = new URLSearchParams(location.search); params.set('view', tab === 'gaps' ? 'data-quality' : tab); if ($('from').value) params.set('from', $('from').value); else params.delete('from'); if ($('to').value) params.set('to', $('to').value); else params.delete('to'); if (state.page !== '1') params.set('page', state.page); else params.delete('page'); [['recent_endpoint', state.recent_endpoint], ['recent_source', state.recent_source], ['recent_paid', state.recent_paid], ['recent_status', state.recent_status]].forEach(([key, value]) => value ? params.set(key, value) : params.delete(key)); history.pushState({}, '', location.pathname + '?' + params.toString()); renderFilters(); }
+function restoreUrl() { const params = new URLSearchParams(location.search); const view = params.get('view'); state.tab = view === 'data-quality' ? 'gaps' : validTabs.includes(view) ? view : 'overview'; const page = Number(params.get('page')); state.page = Number.isInteger(page) && page > 0 ? String(page) : '1'; state.recent_endpoint = params.get('recent_endpoint') || ''; state.recent_source = params.get('recent_source') || ''; state.recent_paid = params.get('recent_paid') || ''; state.recent_status = params.get('recent_status') || ''; $('from').value = params.get('from') || ''; $('to').value = params.get('to') || ''; $('recent-endpoint').value = state.recent_endpoint; $('recent-source').value = state.recent_source; $('recent-paid').value = state.recent_paid; $('recent-status').value = state.recent_status; }
 
 // Escape every dynamic value before it touches innerHTML — user_agent / q /
 // client_key come from clients and must never execute as markup.
@@ -257,7 +266,9 @@ function render(stats, recent) {
   $('funnel-warning').innerHTML = conversions.some((c) => Number(c.rate) > 1)
     ? '<p class="warning">A funnel conversion is above 100%. This is shown as recorded: initialized counts handshake rows while queried counts distinct clients.</p>' : '';
 
-  const byEp = (stats.requests_by_endpoint || []).filter((r) => Number(r.requests || 0) > 0);
+  const byEp = (stats.requests_by_endpoint || [])
+    .filter((r) => Number(r.requests || 0) > 0)
+    .sort((a, b) => Number(b.paid_requests || 0) - Number(a.paid_requests || 0) || Number(b.requests || 0) - Number(a.requests || 0));
   $('by-endpoint').innerHTML = byEp.length === 0
     ? '<p class="muted">No requests yet.</p>'
     : '<div class="endpoint-list" aria-label="Visited endpoints">' +
@@ -290,8 +301,17 @@ function render(stats, recent) {
           '</tr>';
        }).join('') +
       '</tbody></table>';
-  $('recent').innerHTML = renderRecentRows(pageRows(recent, Number(state.page) || 1));
-  bindPager('recent', recent, (rows) => { $('recent').innerHTML = renderRecentRows(rows); });
+  const recentFiltered = recent.filter((r) => {
+    const status = Number(r.status || 0);
+    const statusClass = status >= 500 ? '5xx' : status >= 400 ? '4xx' : status >= 200 && status < 300 ? '2xx' : '';
+    return (!state.recent_endpoint || String(r.endpoint || '').toLowerCase().includes(state.recent_endpoint.toLowerCase())) &&
+      (!state.recent_source || r.source === state.recent_source) &&
+      (!state.recent_paid || (state.recent_paid === 'paid' ? Boolean(r.paid) : !r.paid)) &&
+      (!state.recent_status || state.recent_status === statusClass);
+  });
+  $('recent-result-count').textContent = recentFiltered.length + ' matching requests';
+  $('recent').innerHTML = renderRecentRows(pageRows(recentFiltered, Number(state.page) || 1));
+  bindPager('recent', recentFiltered, (rows) => { $('recent').innerHTML = renderRecentRows(rows); });
 
   const repeatTop = (stats.repeat_clients || {}).top || [];
   $('repeat-clients').innerHTML = repeatTop.length === 0
@@ -375,7 +395,7 @@ async function load() {
      renderFilters(); $('load-state').textContent = 'Loading selected period…';
     const [s, r, d] = await Promise.all([
       fetch('/v1/stats' + range, { headers: { 'x-operator-key': key } }),
-       fetch('/v1/stats/recent?limit=50' + (range ? '&' + range.slice(1) : ''), { headers: { 'x-operator-key': key } }),
+        fetch('/v1/stats/recent?limit=200' + (range ? '&' + range.slice(1) : ''), { headers: { 'x-operator-key': key } }),
        fetch('/v1/stats/demo?limit=200' + (range ? '&' + range.slice(1) : ''), { headers: { 'x-operator-key': key } }),
     ]);
     if (s.status === 401 || r.status === 401 || d.status === 401) { invalidKey(); return; }
@@ -447,6 +467,18 @@ $('retry').addEventListener('click', load);
 $('open-details').addEventListener('click', () => { const open = $('leads').hidden; $('leads').hidden = !open; $('open-details').setAttribute('aria-expanded', String(open)); $('open-details').textContent = open ? 'Hide details' : 'Open details'; });
 $('clear-filters').addEventListener('click', () => { $('from').value = ''; $('to').value = ''; state.page = '1'; syncUrl(state.tab); load(); });
 $('auto-refresh').addEventListener('change', updateTimer);
+['recent-endpoint', 'recent-source', 'recent-paid', 'recent-status'].forEach((id) => $(id).addEventListener('input', () => {
+  state[id.replace('recent-', 'recent_')] = $(id).value;
+  state.page = '1';
+  syncUrl(state.tab);
+  load();
+}));
+$('clear-recent-filters').addEventListener('click', () => {
+  ['recent-endpoint', 'recent-source', 'recent-paid', 'recent-status'].forEach((id) => { $(id).value = ''; state[id.replace('recent-', 'recent_')] = ''; });
+  state.page = '1';
+  syncUrl(state.tab);
+  load();
+});
 document.querySelectorAll('[data-tab-button]').forEach((button) => button.addEventListener('click', () => selectTab(button.dataset.tabButton)));
 document.querySelectorAll('[data-tab-button]').forEach((button) => button.addEventListener('keydown', (event) => { const buttons = [...document.querySelectorAll('[data-tab-button]')]; const i = buttons.indexOf(button); const next = event.key === 'ArrowRight' ? buttons[(i + 1) % buttons.length] : event.key === 'ArrowLeft' ? buttons[(i - 1 + buttons.length) % buttons.length] : event.key === 'Home' ? buttons[0] : event.key === 'End' ? buttons.at(-1) : null; if (next) { event.preventDefault(); next.focus(); selectTab(next.dataset.tabButton); } }));
 ['from', 'to'].forEach((id) => $(id).addEventListener('change', () => { state.page = '1'; syncUrl(state.tab); load(); }));

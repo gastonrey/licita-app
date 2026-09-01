@@ -28,7 +28,7 @@ describe('GET /dashboard', () => {
     expect(html).toContain('<title>Dashboard — Licita (operator)</title>');
     expect(html).toContain('licita_operator_key');
     expect(html).toContain('x-operator-key');
-    expect(html).toContain('/v1/stats/recent?limit=50');
+    expect(html).toContain('/v1/stats/recent?limit=200');
     expect(html).toContain('Auto-refresh 15s');
     expect(html).toContain('MCP discovery');
     expect(html).toContain('mcp_discovery');
