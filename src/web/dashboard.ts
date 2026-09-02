@@ -595,6 +595,7 @@ section[role="tabpanel"] > :first-child:is(h2) { margin-top: 0; }
 /* === EMPTY STATE === */
 .empty-state { color: var(--color-muted-foreground); padding: var(--space-4); text-align: center; font-size: var(--text-sm); }
 section[hidden] { display: none; }
+
 </style>
 </head>
 <body>
@@ -614,6 +615,7 @@ section[hidden] { display: none; }
   </nav>
   <div class="sidebar-footer">
     <div class="key-status">Key: <strong>active</strong></div>
+
   </div>
 </aside>
 
@@ -843,6 +845,7 @@ function pageRows(rows, page) { return rows.slice((page - 1) * PAGE_SIZE, page *
 function renderTrafficChart(rows) {
   if (!rows.length) return '<p class="muted">No traffic recorded in this period.</p>';
   const width = 720, height = 220, left = 56, right = 16, top = 16, bottom = 36;
+
   const plotWidth = width - left - right, plotHeight = height - top - bottom;
   const max = Math.max(1, ...rows.map((r) => Number(r.requests) || 0));
   const x = (i) => left + (rows.length === 1 ? plotWidth / 2 : (i / (rows.length - 1)) * plotWidth);
@@ -854,6 +857,7 @@ function renderTrafficChart(rows) {
     ? '<rect class="chart-selected" x="0" y="' + top + '" width="' + width + '" height="' + plotHeight + '" fill="transparent" />'
       + '<line class="chart-cursor" x1="' + x(rows.findIndex((r) => r.date === state.selected_day)).toFixed(1) + '" y1="' + top + '" x2="' + x(rows.findIndex((r) => r.date === state.selected_day)).toFixed(1) + '" y2="' + (top + plotHeight).toFixed(1) + '"/>'
     : '';
+
   const labels = rows.map((r, i) => i === 0 || i === rows.length - 1 || i % Math.ceil(rows.length / 6) === 0
     ? '<text class="axis-label" x="' + x(i).toFixed(1) + '" y="' + (height - 8) + '" text-anchor="middle">' + esc(String(r.date).slice(5)) + '</text>' : '').join('');
   const grid = [0, .5, 1].map((fraction) => '<line class="grid-line" x1="' + left + '" x2="' + (width - right) + '" y1="' + y(max * fraction).toFixed(1) + '" y2="' + y(max * fraction).toFixed(1) + '" />' +
@@ -912,6 +916,7 @@ function renderEndpointBars(rows) {
     ? '<p class="endpoint-bars-rest muted">+ ' + rest + ' more endpoint' + (rest === 1 ? '' : 's') + ' · <button type="button" id="endpoint-bars-show-all" class="btn-sm">View all</button></p>'
     : '';
   return '<div class="endpoint-bars" role="list" aria-label="Top endpoints by visits">' + bars + '</div>' + restNotice;
+
 }
 
 function render(stats, recent) {
