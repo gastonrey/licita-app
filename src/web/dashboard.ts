@@ -104,8 +104,8 @@ body {
 
 /* === TYPOGRAPHY === */
 h1 { font-family: var(--font-heading); font-size: var(--text-2xl); margin: 0; color: var(--color-foreground); text-wrap: balance; }
-h2 { font-family: var(--font-heading); font-size: var(--text-lg); font-weight: 600; margin: 0 0 var(--space-4); color: var(--color-ink-light); text-wrap: balance; }
-h3.h3 { font-family: var(--font-body); font-size: var(--text-sm); color: var(--color-ink-mid); margin: 0 0 var(--space-2); text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600; }
+h2 { font-family: var(--font-heading); font-size: var(--text-lg); font-weight: 600; margin: 0 0 var(--space-4); color: var(--color-foreground); text-wrap: balance; }
+h3.h3 { font-family: var(--font-body); font-size: var(--text-sm); color: var(--color-foreground); margin: 0 0 var(--space-2); text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600; }
 a { color: var(--link-color); text-decoration: none; }
 a:hover { text-decoration: underline; }
 code { font-family: var(--font-mono); font-size: 0.85em; }
@@ -171,7 +171,7 @@ button:focus-visible { outline: 3px solid var(--color-brand); outline-offset: 3p
 .sidebar-logo a:hover { text-decoration: none; opacity: 0.9; }
 .sidebar-logo .subtitle {
   display: block;
-  color: var(--color-ink-mid);
+  color: rgba(255,255,255,0.5);
   font-family: var(--font-body);
   font-size: var(--text-xs);
   margin-top: 2px;
@@ -189,7 +189,7 @@ button:focus-visible { outline: 3px solid var(--color-brand); outline-offset: 3p
   border-left: 3px solid transparent;
   border-radius: 0;
   background: none;
-  color: var(--color-ink-mid);
+  color: rgba(255,255,255,0.7);
   font-size: var(--text-sm);
   font-weight: 500;
   text-align: left;
@@ -212,14 +212,14 @@ button:focus-visible { outline: 3px solid var(--color-brand); outline-offset: 3p
   border-top: 1px solid rgba(255,255,255,0.06);
 }
 .sidebar-footer .key-status {
-  color: var(--color-ink-mid);
+  color: rgba(255,255,255,0.6);
   font-size: var(--text-xs);
 }
 .sidebar-footer .key-status strong { color: var(--color-verified); }
 .sidebar-footer .logout-link {
   display: inline-block;
   margin-top: var(--space-2);
-  color: var(--color-ink-mid);
+  color: rgba(255,255,255,0.6);
   font-size: var(--text-xs);
   cursor: pointer;
   text-decoration: none;
@@ -314,9 +314,14 @@ button:focus-visible { outline: 3px solid var(--color-brand); outline-offset: 3p
 
 /* === PERIOD BAR === */
 .period-bar {
-  padding: var(--space-2) var(--space-6);
+  padding: var(--space-3) var(--space-6);
   font-size: var(--text-sm);
   color: var(--color-muted-foreground);
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
 }
 
 /* === CARDS === */
@@ -324,8 +329,8 @@ button:focus-visible { outline: 3px solid var(--color-brand); outline-offset: 3p
   background: var(--card-bg);
   border: 1px solid var(--card-border);
   border-radius: var(--radius-default);
-  padding: var(--space-5);
-  margin-bottom: var(--space-5);
+  padding: var(--space-6);
+  margin-bottom: var(--space-6);
 }
 
 /* === KPI GRID === */
@@ -387,7 +392,7 @@ section[role="tabpanel"] > :first-child:is(h2) { margin-top: 0; }
 
 /* === TRAFFIC CHART === */
 .traffic-chart { padding: var(--space-3) var(--space-4); background: var(--chart-bg); border-radius: var(--radius-default); }
-.traffic-chart svg { display: block; width: 100%; height: auto; max-height: 22rem; }
+.traffic-chart svg { display: block; width: 100%; height: auto; max-height: 16rem; }
 .traffic-chart .grid-line { stroke: var(--color-grid-line); stroke-width: 1; }
 .traffic-chart .traffic-line { fill: none; stroke: var(--chart-line); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
 .traffic-chart .paid-line { fill: none; stroke: var(--chart-paid); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
@@ -399,19 +404,19 @@ section[role="tabpanel"] > :first-child:is(h2) { margin-top: 0; }
 .traffic-data { margin-top: var(--space-3); }
 
 /* === ENDPOINT LIST === */
-.endpoint-list { display: grid; gap: var(--space-2); }
+.endpoint-list { display: grid; gap: var(--space-1); }
 .endpoint-card {
   display: grid;
   grid-template-columns: minmax(0, 1.7fr) repeat(3, minmax(4.5rem, .7fr));
   gap: var(--space-3);
   align-items: center;
-  padding: var(--space-3) var(--space-4);
+  padding: var(--space-2) var(--space-4);
   background: var(--endpoint-bg);
-  border: 1px solid var(--card-border);
+  border: 1px solid transparent;
   border-radius: var(--radius-sm);
-  transition: border-color .15s ease, box-shadow .15s ease;
+  transition: border-color .15s ease, background-color .15s ease;
 }
-.endpoint-card:hover { border-color: var(--color-brand); box-shadow: var(--shadow-sm); }
+.endpoint-card:hover { border-color: var(--color-border); background: var(--color-paper); }
 .endpoint-name { min-width: 0; overflow-wrap: anywhere; }
 .endpoint-name code { font-size: .9rem; }
 .endpoint-stat { min-width: 0; }
