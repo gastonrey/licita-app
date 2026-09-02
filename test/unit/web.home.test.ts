@@ -37,7 +37,7 @@ describe('human homepage', () => {
     const styles = await app.inject({ method: 'GET', url: '/styles.css' });
     expect(styles.statusCode).toBe(200);
     expect(styles.headers['content-type']).toMatch(/text\/css/);
-    expect(styles.body).toContain('--registry-ink');
+    expect(styles.body).toContain('--color-ink');
     expect(styles.body).toContain('.evidence-rail');
     expect(styles.body).toContain('@media (prefers-reduced-motion: reduce)');
     await app.close();

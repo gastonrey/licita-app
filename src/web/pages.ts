@@ -11,21 +11,7 @@ import { HUMAN_CSS } from './site.css.js';
 
 const CSS = `
 :root { color-scheme: light; }
-body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  margin: 0; background: #fafafa; color: #1f2430; line-height: 1.55; }
-main { max-width: 52rem; margin: 0 auto; padding: 2.5rem 1.25rem 4rem; }
-h1 { font-size: 1.6rem; margin: 0 0 .25rem; color: #182030; }
-h2 { font-size: 1.15rem; margin-top: 2rem; color: #2a3242; border-bottom: 1px solid #e3e6eb; padding-bottom: .25rem; }
-a { color: #2f5d8a; }
-code, pre { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: .85em; }
-pre { background: #f0f1f4; border: 1px solid #e0e3e9; border-radius: 6px; padding: .75rem 1rem; overflow-x: auto; }
-table { border-collapse: collapse; width: 100%; margin: .75rem 0; font-size: .9rem; }
-th, td { text-align: left; padding: .4rem .6rem; border-bottom: 1px solid #e3e6eb; }
-th { color: #4a5468; font-weight: 600; }
-td.num { font-variant-numeric: tabular-nums; }
-.muted { color: #5b6575; }
-nav a { margin-right: 1rem; }
-.tag { display: inline-block; background: #eceff3; border-radius: 4px; padding: 0 .4em; font-size: .8em; color: #45506a; }
+main > *:first-child { margin-top: 0; }
 `;
 
 function page(title: string, body: string, head = ''): string {
@@ -34,17 +20,26 @@ function page(title: string, body: string, head = ''): string {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#16232B">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=Source+Serif+4:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/styles.css">
 ${head}
 <title>${title} — Licita</title>
 <style>${CSS}</style>
 </head>
-<body><main>
+<body>
+${NAV}
+<main id="main-content">
 ${body}
-</main></body>
-</html>`;
+</main>
+</body></html>`;
 }
 
-const NAV = `<a class="skip-link" href="#main-content">Skip to content</a><nav class="site-nav" aria-label="Primary"><a href="/">Home</a><a href="/use-cases">Use cases</a><a href="/data">Coverage &amp; methodology</a><a href="/pricing">Pricing</a><a href="/docs">Docs</a><a href="/mcp">MCP</a></nav>`;
+const NAV = `<a class="skip-link" href="#main-content">Skip to content</a>
+<header class="site-header"><a class="site-brand" href="/">Licita</a>
+<nav class="site-nav" aria-label="Primary"><a href="/">Home</a><a href="/use-cases">Use cases</a><a href="/data">Coverage &amp; methodology</a><a href="/pricing">Pricing</a><a href="/docs">Docs</a><a href="/mcp">MCP</a></nav></header>`;
 
 /** ENDPOINT_PRICES rows (Research is config-owned and rendered separately). */
 const ENDPOINT_ROWS = Object.entries(ENDPOINT_PRICES)
@@ -128,100 +123,121 @@ const MCP_TOOLS = [
 // Demand-capture CTA: lightweight mailto, no signup/DB/RGPD.
 const CONTACT_EMAIL = 'eutendersai@gmail.com';
 
+
 function homePage(config: AppConfig, demoStatus = false): string {
   return page(
     'Licita — know which public contracts deserve your next conversation',
-     `${NAV}
-<div id="main-content" class="human-home"><section class="hero"><h1>Know which public contracts deserve your next conversation.</h1>
-<p class="source-stamp">EU PUBLIC PROCUREMENT INTELLIGENCE · EVIDENCE FIRST</p>
-<p>Licita turns indexed procurement notices into evidence‑backed opportunities, buyers, suppliers and deterministic renewal signals for professional teams.</p></section>
+    `
+<section class="hero">
+<p class="hero-eyebrow">EU Public Procurement Intelligence · Evidence First</p>
+<h1>Know which public contracts deserve your next conversation.</h1>
+<p class="hero-subtitle">Licita turns indexed procurement notices into evidence-backed opportunities, buyers, suppliers and deterministic renewal signals for professional teams.</p>
+</section>
 
-<div class="home-columns"><section><h2>Current index sample</h2><article id="demo-sample" class="evidence-rail" data-state="loading" aria-live="polite"><p>Loading…</p><p class="source-stamp">GET /v1/demo · sample status</p></article></section><aside><h2>Scope at a glance</h2><div class="trust-grid"><div><strong>TED</strong><br>EU award notices<br><span class="source-stamp">Enabled · freshness shown at ingestion</span></div><div><strong>PLACSP</strong><br>Spain contracts when enabled<br><span class="source-stamp">Status is operational, not assumed</span></div><div><strong>Dates</strong><br>Publication date ≠ award/contract date<br><span class="source-stamp">Unknown: Not reported</span></div></div></aside></div>
+<section>
+<h2>Scope at a glance</h2>
+<div class="scope-grid">
+  <div class="scope-card"><h3>TED</h3><p>EU award notices. Enabled — freshness shown at ingestion.</p></div>
+  <div class="scope-card"><h3>PLACSP</h3><p>Spain contracts when enabled. Status is operational, not assumed.</p></div>
+  <div class="scope-card"><h3>Dates</h3><p>Publication date set to Not reported when unknown.</p></div>
+</div>
+</section>
 
-<section class="cta"><h2>See your next opportunity in context.</h2>
+<section>
+<h2>Current index sample</h2>
+<article id="demo-sample" class="evidence-rail" data-state="loading" aria-live="polite"><p>Loading…</p><p class="source-stamp">GET /v1/demo · sample status</p></article>
+<p class="muted">A free labeled sample from the live index—recent tender and renewal signal, with evidence.</p>
+</section>
+
+<section class="cta-section">
+<h2>See your next opportunity in context.</h2>
 <p>A free labeled sample from the current index, followed by a guided review of your market. We retain demo emails for 30 days unless the lead advances to contacted, used or paid.</p>
-<form id="demo-request" method="post" action="/v1/demo/request"><label for="demo-email">Work email</label><br>
+<form id="demo-request" class="cta-form" method="post" action="/v1/demo/request">
+<label for="demo-email" class="visually-hidden">Work email</label>
 <input id="demo-email" name="email" type="email" inputmode="email" autocomplete="email" spellcheck="false" required placeholder="name@company.com">
-<button class="btn" type="submit">Request the product demo</button><p id="demo-message" class="demo-message" role="status" aria-live="polite">${demoStatus ? 'Demo request received. We will follow up by email; no meeting was booked.' : ''}</p></form>
+<button class="btn" type="submit">Request the product demo</button>
+<p id="demo-message" class="cta-message" role="status" aria-live="polite">${demoStatus ? 'Demo request received. We will follow up by email; no meeting was booked.' : ''}</p>
+</form>
 <noscript><p>Email <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a> to request a demo.</p></noscript>
 </section>
 
- <section><h2>Coverage, trust &amp; privacy</h2><p>Coverage is strongest in the indexed IT, software and cyber vertical. See <a href="/data">source scope and methodology</a> for enabled sources, date ranges and last successful ingestion. Every finding carries a source reference and upstream link where known. We store only a normalized email, channel and source URL; operator access is restricted and deletion requests can be sent to <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>.</p><p><a href="/methodology">Methodology</a> · <a href="/security">Security</a> · <a href="/privacy">Privacy</a> · <a href="/terms">Terms</a> · <a href="/status">Status</a> · <a href="mailto:${CONTACT_EMAIL}">Contact</a></p></section>
-
-<h2>Get access</h2>
-<p>Licita is live and connectable right now — point an MCP client at
-<code>https://eutenders.duckdns.org/mcp</code> and try the free demo
-(<a href="/v1/demo">GET /v1/demo</a>) before paying. To discuss a project, a
-white-label data deal or a prepaid plan, email <a
-href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>.</p>
-
-<h2>Pay per call, machine-to-machine</h2>
-<p>Pay per call with <strong>USDC via x402</strong> — no subscriptions, no signup, machine-to-machine.
-An unpaid request returns <code>HTTP 402</code> with the exact payment requirement in a base64
-<code>PAYMENT-REQUIRED</code> header; sign the EIP-3009 authorization and retry with
-<code>PAYMENT-SIGNATURE</code>. The server verifies <em>and settles</em> before serving content. Start at
-<code>GET /v1/pricing</code> for the full price ladder.</p>
-
-<h2>How agents use it</h2>
-<ul>
-<li><strong>MCP</strong> — streamable-HTTP server at <code>/mcp</code> with 11 tools
-(<code>${MCP_TOOLS.join('</code>, <code>')}</code>). Static server card:
-<a href="/.well-known/mcp/server-card.json">/.well-known/mcp/server-card.json</a>.</li>
-<li><strong>REST</strong> — priced per call, x402-compatible. Send the base64 payment payload as the
-<code>PAYMENT-SIGNATURE</code> header (legacy v1 <code>X-PAYMENT</code> still accepted). Start at
-<a href="/llms.txt">/llms.txt</a> → <a href="/openapi.json">/openapi.json</a> → <a href="/v1/pricing">/v1/pricing</a>.</li>
-<li><strong>Humans</strong> — <a href="/docs">/docs</a> quickstart, <a href="/pricing">/pricing</a> ladder.</li>
-</ul>
-
-<h2>What questions it answers</h2>
-<ul>
-<li><strong>Who bought what, who won, for how much, under which CPV codes.</strong></li>
-<li><strong>Company track record: wins, total awarded value, top CPVs and buyers.</strong></li>
-<li><strong>Buyer history: award history, supplier concentration, re-tender recurrence.</strong></li>
-<li><strong>Upcoming renewals: contracts and frameworks likely to be re-tendered soon
-(deterministic heuristic with per-signal evidence — not a probability model).</strong></li>
-</ul>
-
+<section>
 <h2>Use cases</h2>
-<p>Concrete agent missions with the exact endpoints and costs:
-<a href="/use-cases/tender-intelligence">tender intelligence</a>,
-<a href="/use-cases/company-research">company research</a>,
-<a href="/use-cases/buyer-intelligence">buyer intelligence</a>,
-<a href="/use-cases/renewals-forecasting">renewals forecasting</a>.</p>
+<div class="usecase-grid">
+  <a class="usecase-card" href="/use-cases/tender-intelligence"><h3>Tender intelligence</h3><p>Find recent tenders and who won, with provenance.</p></a>
+  <a class="usecase-card" href="/use-cases/company-research"><h3>Company research</h3><p>Track record and live matching opportunities.</p></a>
+  <a class="usecase-card" href="/use-cases/buyer-intelligence"><h3>Buyer intelligence</h3><p>Activity, supplier concentration, recurrence.</p></a>
+  <a class="usecase-card" href="/use-cases/renewals-forecasting"><h3>Renewals forecasting</h3><p>Which contracts will be re-tendered, with evidence.</p></a>
+</div>
+</section>
 
-<h2>Data</h2>
-<p>What Licita indexes and where it comes from:
-<a href="/data">data overview</a>, <a href="/data/spain">Spain (PLACSP)</a>,
-<a href="/data/eu">EU (TED)</a>.</p>
+<section>
+<h2>Pricing</h2>
+<p class="muted">Pay per call with <strong>USDC via x402</strong> — no subscriptions, no signup, machine-to-machine. Start at <a href="/v1/pricing">GET /v1/pricing</a> for the full ladder.</p>
+<div class="card card-flush">${priceTable(config)}</div>
+</section>
 
-<h2>Payment mode</h2>
-<p>Payments mode: <code>${config.paymentsMode}</code>. Priced endpoints return
-<code>402</code> with a base64 <code>PAYMENT-REQUIRED</code> header describing the exact
-USDC requirement (x402 v2): sign the EIP-3009 authorization and retry with
-<code>PAYMENT-SIGNATURE</code>. In dev mode a token faucet is available at
-<code>POST /v1/dev-faucet</code> (local development only — not in production).
-See <a href="/docs">docs</a> for the full flow.</p>
-${priceTable(config)}
-<h2>Distribution &amp; registry</h2>
-<p>Licita is discoverable by agents through MCP registries and directories:</p>
-<ul>
-<li><strong>MCP registry manifest</strong> — <code>/server.json</code> (streamable-HTTP at
-<code>https://eutenders.duckdns.org/mcp</code>).</li>
-<li><strong>Static server card</strong> — <code>/.well-known/mcp/server-card.json</code>
-(identity, SSE URL, the 11 tool schemas) for directory crawlers.</li>
-<li><strong>Bazaar extension</strong> — paid 402s carry <code>extensions.bazaar</code>, so x402
-facilitators catalog Licita automatically.</li>
-<li><strong>Directories</strong> — listed on Glama and mcp.so (badges in the README).</li>
-<li><strong>Source</strong> — <a href="https://github.com/gastonrey/licita-app">GitHub repository</a> (MIT).</li>
-</ul>
-<footer class="site-footer"><p>Questions? <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a></p>
-<p class="muted">Provenance: every data row exposes <code>meta.provenance</code> as
-<code>[{ source, source_ref, url }]</code> — the upstream source, its publication reference, and the
-original notice where known. Nulls are never fabricated.</p></footer></div>
+<section class="grid-2">
+<div>
+<h2>Coverage &amp; methodology</h2>
+<p class="muted">Coverage is strongest in the indexed IT, software and cyber vertical. See <a href="/data">source scope and methodology</a> for enabled sources, date ranges and last successful ingestion. Every finding carries a source reference and upstream link where known.</p>
+<p class="muted"><a href="/data/spain">Spain (PLACSP)</a> · <a href="/data/eu">EU (TED)</a> · <a href="/data">Data overview</a></p>
+</div>
+<div>
+<h2>For developers</h2>
+<p class="muted">Priced REST, x402-compatible. Start at <a href="/llms.txt">/llms.txt</a> → <a href="/openapi.json">/openapi.json</a> → <a href="/v1/pricing">/v1/pricing</a>. Streamable-HTTP MCP server at <a href="/mcp">/mcp</a>.</p>
+</div>
+</section>
+
+<section class="cta-section">
+<h2>Connectable right now.</h2>
+<p>Point an MCP client at <code>https://eutenders.duckdns.org/mcp</code> and try the free demo before paying.</p>
+<p><a class="btn btn-secondary" href="/docs">Read the docs</a> <a class="btn btn-secondary" href="/v1/demo">GET /v1/demo</a></p>
+</section>
+
+<footer class="site-footer">
+<div class="footer-inner">
+  <div>
+    <div class="footer-brand">Licita</div>
+    <p class="footer-desc">Evidence-backed EU public procurement intelligence for professional teams and AI agents.</p>
+  </div>
+  <div class="footer-col">
+    <h4>Product</h4>
+    <ul>
+      <li><a href="/use-cases">Use cases</a></li>
+      <li><a href="/pricing">Pricing</a></li>
+      <li><a href="/docs">Docs</a></li>
+      <li><a href="/mcp">MCP</a></li>
+      <li><a href="/data">Coverage &amp; methodology</a></li>
+    </ul>
+  </div>
+  <div class="footer-col">
+    <h4>Company</h4>
+    <ul>
+      <li><a href="/methodology">Methodology</a></li>
+      <li><a href="/security">Security</a></li>
+      <li><a href="/privacy">Privacy</a></li>
+      <li><a href="/terms">Terms</a></li>
+      <li><a href="/status">Status</a></li>
+    </ul>
+  </div>
+  <div class="footer-col">
+    <h4>Contact</h4>
+    <ul>
+      <li><a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a></li>
+      <li><a href="https://github.com/gastonrey/licita-app">GitHub (MIT)</a></li>
+    </ul>
+  </div>
+</div>
+<div class="footer-bottom">
+  <span>&copy; ${new Date().getFullYear()} Licita</span>
+  <span>Provenance: every data row exposes <code>meta.provenance</code> as <code>[{ source, source_ref, url }]</code>.</span>
+</div>
+</footer>
  <script>const sample=document.getElementById('demo-sample');const safe=(v)=>String(v??'Not reported').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));const lines=(xs)=>'<ul class="evidence-lines">'+(xs||[]).map(x=>'<li>'+safe(x)+'</li>').join('')+'</ul>';fetch('/v1/demo').then(r=>{if(!r.ok)throw new Error('sample unavailable');return r.json()}).then(({data,meta})=>{const t=data.tender,r=data.renewal;sample.dataset.state='ready';sample.innerHTML=(t?'<h3>'+safe(t.title)+'</h3><p><strong>Buyer:</strong> '+safe(t.buyer?.name)+' · <strong>Value:</strong> '+safe(t.estimated_value)+' '+safe(t.currency||'')+' · <strong>Published:</strong> '+safe(t.published_at)+'</p>'+lines(t.evidence):'<p>No current sample is available.</p>')+(r?'<p><strong>Renewal signal:</strong> '+safe(r.signal_type)+' · '+safe(r.confidence)+' confidence · '+safe(r.contract?.end_date)+'</p>'+lines(r.evidence):'<p>No current renewal sample is available.</p>')+'<p class="source-stamp">'+safe(t?.source||r?.source||'source')+' · '+safe(t?.source_ref||r?.source_ref)+' · generated '+safe(meta?.generated_at)+'</p>'+((t?.url||r?.url)?'<p><a class="upstream" href="'+safe(t?.url||r?.url)+'" target="_blank" rel="noreferrer">Open upstream source</a></p>':'')+'<p class="source-stamp">source_metadata: '+safe(JSON.stringify(data.source_metadata||[]))+'</p>'}).catch(()=>{sample.dataset.state='error';sample.innerHTML='<p>Sample unavailable. <a href="/docs">Read the methodology</a>.</p>'});document.getElementById('demo-request').addEventListener('submit',async(e)=>{e.preventDefault();const f=e.currentTarget,m=document.getElementById('demo-message'),b=f.querySelector('button');m.textContent='Requesting a demo…';b.disabled=true;try{const r=await fetch('/v1/demo/request?source=homepage',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({email:f.email.value})});if(!r.ok){const body=await r.json().catch(()=>({}));throw new Error(body.error?.hint||'Check your email and try again.')}m.textContent='Request received. We will follow up by email; no meeting was booked.';f.reset()}catch(err){m.textContent=err.message+' You can also email ${CONTACT_EMAIL}.'}finally{b.disabled=false}})</script>`,
-     `<link rel="stylesheet" href="/styles.css">`,
   );
 }
+
 
 const DOCS_CURL_SEARCH = `# 1. Try a paid endpoint without payment → HTTP 402 + base64 PAYMENT-REQUIRED header
 curl -i 'http://localhost:3000/v1/search?q=software&type=award'
@@ -248,7 +264,7 @@ curl -s 'http://localhost:3000/v1/search?q=software&type=award' \\
 function docsPage(config: AppConfig): string {
   return page(
     'Docs',
-    `${NAV}
+    `
 <h1>Docs — Licita</h1>
 
 <h2>Discovery order (for agents)</h2>
@@ -360,7 +376,7 @@ probabilities. Each signal exposes its full evidence in <code>basis</code>.</li>
 function pricingPage(config: AppConfig): string {
   return page(
     'Pricing',
-    `${NAV}
+    `
 <h1>Pricing</h1>
 <p class="muted">Per-call prices in USD. Machine-readable version:
 <a href="/v1/pricing">/v1/pricing</a>. Payments mode: <code>${config.paymentsMode}</code>.
@@ -794,7 +810,7 @@ function useCasePage(slug: string): string | null {
   if (!uc) return null;
   return page(
     `Use case: ${uc.title}`,
-    `${NAV}
+    `
 <h1>${uc.title}</h1>
 <p>${uc.problem}</p>
 <h2>Tools</h2>
@@ -859,7 +875,7 @@ function dataPage(kind: 'overview' | 'spain' | 'eu'): string {
     eu: ['Data — EU (TED)', DATA_EU],
   } as const;
   const [title, body] = map[kind];
-  return page(title, `${NAV}\n${body}`);
+  return page(title, `\n${body}`);
 }
 
 const TRUST_PAGES: Record<string, [string, string]> = {
@@ -892,12 +908,12 @@ export function registerWeb(app: FastifyInstance, config: AppConfig): void {
   app.get('/styles.css', async (_req, reply) => reply.type('text/css; charset=utf-8').send(HUMAN_CSS));
   app.get('/docs', async (_req, reply) => reply.type('text/html; charset=utf-8').send(docsPage(config)));
   app.get('/use-cases', async (_req, reply) =>
-    reply.type('text/html; charset=utf-8').send(page('Use cases', `${NAV}\n${USECASE_INDEX}`)),
+    reply.type('text/html; charset=utf-8').send(page('Use cases', `\n${USECASE_INDEX}`)),
   );
   app.get('/use-cases/:slug', async (req, reply) => {
     const slug = (req.params as { slug: string }).slug;
     const html = useCasePage(slug);
-    if (!html) return reply.code(404).type('text/html; charset=utf-8').send(page('Not found', `${NAV}\n<h1>Not found</h1>`));
+    if (!html) return reply.code(404).type('text/html; charset=utf-8').send(page('Not found', `\n<h1>Not found</h1>`));
     return reply.type('text/html; charset=utf-8').send(html);
   });
   app.get('/data', async (_req, reply) =>
@@ -906,7 +922,7 @@ export function registerWeb(app: FastifyInstance, config: AppConfig): void {
   app.get('/data/spain', async (_req, reply) => reply.type('text/html; charset=utf-8').send(dataPage('spain')));
   app.get('/data/eu', async (_req, reply) => reply.type('text/html; charset=utf-8').send(dataPage('eu')));
   for (const [slug, [title, body]] of Object.entries(TRUST_PAGES)) {
-    app.get(`/${slug}`, async (_req, reply) => reply.type('text/html; charset=utf-8').send(page(title, `${NAV}\n<h1>${title}</h1>${body}<p><a href="/">Back to Licita</a></p>`)));
+    app.get(`/${slug}`, async (_req, reply) => reply.type('text/html; charset=utf-8').send(page(title, `\n<h1>${title}</h1>${body}<p><a href="/">Back to Licita</a></p>`)));
   }
   app.get('/pricing', async (_req, reply) => reply.type('text/html; charset=utf-8').send(pricingPage(config)));
   app.get('/llms.txt', async (_req, reply) => reply.type('text/plain; charset=utf-8').send(llmsTxt(config)));
