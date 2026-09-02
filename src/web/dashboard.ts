@@ -13,161 +13,771 @@ const PAGE = `<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Dashboard — Licita (operator)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=Source+Serif+4:wght@400;600;700&display=swap" rel="stylesheet">
 <style>
-:root { color-scheme: light; --ink:#16232B; --paper:#F6F3EA; --rule:#C9C3B5; --signal:#B9472E; --verified:#356B52; --muted:#5B6870; }
-body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  margin: 0; background: var(--paper); color: var(--ink); line-height: 1.55; font-family: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif; }
-main { max-width: 70rem; margin: 0 auto; padding: 2rem 1.25rem 4rem; }
-h1 { font-family: 'Source Serif 4', Georgia, serif; font-size: clamp(2rem,5vw,3.5rem); margin: 0 0 .25rem; color: var(--ink); text-wrap: balance; }
-h2 { font-size: 1.1rem; margin-top: 1.75rem; margin-bottom: .25rem; color: #2a3242;
-  border-bottom: 1px solid #e3e6eb; padding-bottom: .25rem; }
-h3.h3 { font-size: .9rem; color: #4a5468; margin: .75rem 0 .25rem; }
-a { color: var(--verified); }
-code { font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: .85em; }
-table { border-collapse: collapse; width: 100%; margin: .6rem 0; font-size: .85rem; }
-th, td { text-align: left; padding: .5rem .6rem; border-bottom: 1px solid var(--rule); vertical-align: top; }
-th { color: #4a5468; font-weight: 600; white-space: nowrap; }
+/* === PRIMITIVES === */
+:root {
+  color-scheme: light;
+  --color-ink: #16232B;
+  --color-ink-light: #2a3242;
+  --color-ink-mid: #4a5468;
+  --color-paper: #F6F3EA;
+  --color-surface: #FFFFFF;
+  --color-rule: #C9C3B5;
+  --color-grid-line: #e3e6eb;
+  --color-signal: #B9472E;
+  --color-signal-hover: #8f321f;
+  --color-verified: #356B52;
+  --color-green-600: #1a7f37;
+  --color-amber-600: #9a6700;
+  --color-red-600: #cf222e;
+  --color-muted: #5B6870;
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --font-body: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
+  --font-heading: 'Source Serif 4', Georgia, serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+  --text-xs: 0.68rem;
+  --text-sm: 0.72rem;
+  --text-base: 0.85rem;
+  --text-lg: 1.1rem;
+  --text-xl: 1.35rem;
+  --text-2xl: clamp(2rem,5vw,3.5rem);
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.05);
+  --shadow-md: 0 4px 12px rgb(0 0 0 / 0.08);
+  --shadow-lg: 0 8px 24px rgb(0 0 0 / 0.12);
+  --transition-fast: 120ms ease;
+  --transition-base: 200ms ease;
+  --radius-sm: 0.25rem;
+  --radius-default: 0.5rem;
+}
+
+/* === SEMANTIC === */
+:root {
+  --color-foreground: var(--color-ink);
+  --color-background: var(--color-paper);
+  --color-surface-alt: var(--color-surface);
+  --color-border: var(--color-rule);
+  --color-brand: var(--color-signal);
+  --color-brand-hover: var(--color-signal-hover);
+  --color-success: var(--color-green-600);
+  --color-warning: var(--color-amber-600);
+  --color-destructive: var(--color-red-600);
+  --color-muted-foreground: var(--color-muted);
+}
+
+/* === COMPONENTS === */
+:root {
+  --card-bg: var(--color-surface-alt);
+  --card-border: var(--color-border);
+  --kpi-bg: var(--color-surface-alt);
+  --kpi-border: var(--color-border);
+  --kpi-label-color: var(--color-muted-foreground);
+  --endpoint-bg: var(--color-surface-alt);
+  --chart-bg: var(--color-surface-alt);
+  --btn-bg: var(--color-brand);
+  --btn-fg: #FFFFFF;
+  --tab-bg: var(--color-surface-alt);
+  --tab-active-border: var(--color-brand);
+  --link-color: var(--color-success);
+  --chart-line: var(--color-verified);
+  --chart-paid: var(--color-brand);
+}
+
+/* === RESET === */
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  font-family: var(--font-body);
+  margin: 0;
+  background: var(--color-background);
+  color: var(--color-foreground);
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* === TYPOGRAPHY === */
+h1 { font-family: var(--font-heading); font-size: var(--text-2xl); margin: 0; color: var(--color-foreground); text-wrap: balance; }
+h2 { font-family: var(--font-heading); font-size: var(--text-lg); font-weight: 600; margin: 0 0 var(--space-4); color: var(--color-foreground); text-wrap: balance; }
+h3.h3 { font-family: var(--font-body); font-size: var(--text-sm); color: var(--color-foreground); margin: 0 0 var(--space-2); text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600; }
+a { color: var(--link-color); text-decoration: none; }
+a:hover { text-decoration: underline; }
+code { font-family: var(--font-mono); font-size: 0.85em; }
+.muted { color: var(--color-muted-foreground); }
+.err { color: var(--color-destructive); }
+summary { cursor: pointer; color: var(--link-color); font-weight: 600; }
+[hidden] { display: none !important; }
+
+/* === INPUTS === */
+input, button, select { font: inherit; }
+input[type="date"], input[type="password"], input[type="search"], select {
+  height: 36px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-foreground);
+  font-size: var(--text-sm);
+}
+input:focus-visible, select:focus-visible {
+  outline: none;
+  border-color: var(--color-brand);
+  box-shadow: 0 0 0 3px rgba(185, 71, 46, 0.15);
+}
+button {
+  cursor: pointer;
+  touch-action: manipulation;
+  min-height: 44px;
+  border: none;
+  border-radius: var(--radius-default);
+  padding: 0 var(--space-4);
+  font-weight: 600;
+  font-size: var(--text-sm);
+  transition: background-color .15s ease, border-color .15s ease, box-shadow .15s ease;
+}
+button:focus-visible { outline: 3px solid var(--color-brand); outline-offset: 3px; }
+
+/* === SIDEBAR (desktop) === */
+.sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 240px;
+  height: 100vh;
+  background: var(--color-ink);
+  display: flex;
+  flex-direction: column;
+  z-index: 100;
+  overflow-y: auto;
+}
+.sidebar-logo {
+  padding: var(--space-5) var(--space-5) var(--space-4);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.sidebar-logo a {
+  color: var(--color-surface);
+  text-decoration: none;
+  font-family: var(--font-heading);
+  font-size: var(--text-lg);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.sidebar-logo a:hover { text-decoration: none; opacity: 0.9; }
+.sidebar-logo .subtitle {
+  display: block;
+  color: rgba(255,255,255,0.5);
+  font-family: var(--font-body);
+  font-size: var(--text-xs);
+  margin-top: 2px;
+  font-weight: 400;
+}
+.sidebar-nav {
+  flex: 1;
+  padding: var(--space-3) 0;
+}
+.sidebar-nav [role="tab"] {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  border: none;
+  border-left: 3px solid transparent;
+  border-radius: 0;
+  background: none;
+  color: rgba(255,255,255,0.7);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  text-align: left;
+  padding: var(--space-3) var(--space-5);
+  min-height: 40px;
+  transition: color .15s ease, background .15s ease, border-color .15s ease;
+}
+.sidebar-nav [role="tab"]:hover {
+  color: var(--color-surface);
+  background: rgba(255,255,255,0.04);
+}
+.sidebar-nav [role="tab"][aria-selected="true"] {
+  color: var(--color-surface);
+  background: rgba(255,255,255,0.07);
+  border-left-color: var(--color-brand);
+  font-weight: 600;
+}
+.sidebar-footer {
+  padding: var(--space-4) var(--space-5);
+  border-top: 1px solid rgba(255,255,255,0.06);
+}
+.sidebar-footer .key-status {
+  color: rgba(255,255,255,0.6);
+  font-size: var(--text-xs);
+}
+.sidebar-footer .key-status strong { color: var(--color-verified); }
+.sidebar-footer .logout-link {
+  display: inline-block;
+  margin-top: var(--space-2);
+  color: rgba(255,255,255,0.6);
+  font-size: var(--text-xs);
+  cursor: pointer;
+  text-decoration: none;
+}
+.sidebar-footer .logout-link:hover { color: var(--color-surface); }
+
+/* === MAIN CONTENT === */
+.main-content {
+  margin-left: 240px;
+  min-height: 100vh;
+}
+.header-bar {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-6);
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  min-height: 56px;
+}
+.header-bar label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-muted-foreground);
+  font-size: var(--text-sm);
+  white-space: nowrap;
+}
+.header-bar .header-spacer { flex: 1; }
+.header-bar .auto-label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--color-muted-foreground);
+  cursor: pointer;
+}
+.header-bar .auto-label input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--color-brand);
+  cursor: pointer;
+}
+.header-bar .btn-refresh {
+  height: 34px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-foreground);
+  font-size: var(--text-sm);
+}
+.header-bar .btn-refresh:hover { border-color: var(--color-brand); color: var(--color-brand); }
+.header-bar .last-updated { font-size: var(--text-xs); color: var(--color-muted-foreground); white-space: nowrap; }
+.content-area { padding: var(--space-5) var(--space-6) var(--space-6); }
+
+/* === MOBILE TAB BAR (visible < 768px, replaces sidebar) === */
+.mobile-tabs {
+  display: none;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-4);
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+}
+.mobile-tabs [role="tab"] {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--tab-bg);
+  color: var(--color-foreground);
+  padding: var(--space-2) var(--space-1);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mobile-tabs [role="tab"][aria-selected="true"] {
+  border-color: var(--tab-active-border);
+  border-bottom: 3px solid var(--tab-active-border);
+  font-weight: 700;
+  color: var(--color-brand);
+  background: var(--color-surface);
+}
+
+/* === PERIOD BAR === */
+.period-bar {
+  padding: var(--space-3) var(--space-6);
+  font-size: var(--text-sm);
+  color: var(--color-muted-foreground);
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+/* === CARDS === */
+.card {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-default);
+  padding: var(--space-6);
+  margin-bottom: var(--space-6);
+}
+
+/* === KPI GRID === */
+.kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+  gap: var(--space-3);
+}
+.kpi {
+  background: var(--kpi-bg);
+  border: 1px solid var(--kpi-border);
+  border-left: 3px solid var(--color-brand);
+  border-radius: var(--radius-default);
+  padding: var(--space-4) var(--space-5);
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+.kpi:hover { border-color: var(--color-brand); box-shadow: var(--shadow-sm); }
+.kpi-label {
+  font-size: var(--text-xs);
+  color: var(--kpi-label-color);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+  margin-bottom: var(--space-1);
+}
+.kpi-val {
+  font-size: 1.75rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-foreground);
+  line-height: 1.2;
+}
+
+/* === TABLES === */
+table { border-collapse: collapse; width: 100%; font-size: var(--text-base); }
+thead th {
+  background: var(--color-ink-light);
+  color: var(--color-paper);
+  font-weight: 600;
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  text-align: left;
+  padding: var(--space-2) var(--space-3);
+  white-space: nowrap;
+}
+tbody td {
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--color-grid-line);
+  vertical-align: top;
+}
+tbody tr:hover { background: rgba(185, 71, 46, 0.03); }
 td.num, th.num { font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
-.muted { color: var(--muted); }
-input, button { font: inherit; }
-button { cursor: pointer; touch-action: manipulation; min-height:44px; }
-.kpis { display: flex; flex-wrap: wrap; gap: .75rem; margin: .75rem 0; }
-.kpi { background: #fff; border: 1px solid var(--rule); padding: .75rem .9rem; min-width: 8.5rem; }
-.kpi-label { font-size: .72rem; color: #5b6575; text-transform: uppercase; letter-spacing: .03em; }
-.kpi-val { font-size: 1.35rem; font-weight: 600; font-variant-numeric: tabular-nums; }
-.pagination { display: flex; align-items: center; justify-content: center; gap: .75rem; margin: .75rem 0 1.25rem; }
-.pagination button { min-width: 2.75rem; border: 1px solid var(--rule); background: #fff; color: var(--ink); }
-.pagination button:disabled { cursor: not-allowed; opacity: .45; }
-.pagination span { color: var(--muted); font-size: .85rem; }
-.endpoint-list { display: grid; gap: .65rem; margin: .6rem 0 1.25rem; }
-.endpoint-card { display: grid; grid-template-columns: minmax(0, 1.7fr) repeat(3, minmax(4.5rem, .7fr)); gap: .75rem; align-items: center; padding: .75rem .85rem; background: #fff; border: 1px solid var(--rule); }
+
+/* === SECTION SPACING === */
+section[role="tabpanel"] h2 { margin-top: var(--space-5); }
+section[role="tabpanel"] > :first-child { margin-top: 0; }
+section[role="tabpanel"] > :first-child:is(h2) { margin-top: 0; }
+
+/* === TRAFFIC CHART === */
+.traffic-chart { position: relative; padding: var(--space-3) var(--space-4); background: var(--chart-bg); border-radius: var(--radius-default); }
+.traffic-chart svg { display: block; width: 100%; height: auto; max-height: 16rem; }
+.traffic-chart .grid-line { stroke: var(--color-grid-line); stroke-width: 1; }
+.traffic-chart .traffic-line { fill: none; stroke: var(--chart-line); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+.traffic-chart .paid-line { fill: none; stroke: var(--chart-paid); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+.traffic-chart .axis-label { fill: var(--color-muted-foreground); font-size: 12px; }
+.traffic-chart .traffic-dot { fill: var(--chart-line); stroke: var(--color-paper); stroke-width: 2; cursor: pointer; transition: r .15s ease, fill .15s ease; }
+.traffic-chart .traffic-dot:hover, .traffic-chart .traffic-dot:focus { fill: var(--color-brand); outline: none; }
+.traffic-chart .traffic-dot:focus-visible { stroke: var(--color-focus-ring); stroke-width: 3; }
+.traffic-chart .traffic-dot[aria-pressed="true"] { fill: var(--color-brand); r: 7; stroke: var(--color-paper); stroke-width: 3; }
+.traffic-chart .paid-dot { fill: var(--chart-paid); stroke: var(--color-paper); stroke-width: 1.5; pointer-events: none; }
+.traffic-chart .chart-hit { cursor: pointer; }
+.traffic-chart .chart-cursor { stroke: var(--color-brand); stroke-width: 1; stroke-dasharray: 3 3; pointer-events: none; opacity: .5; }
+.traffic-chart .chart-selected { pointer-events: none; }
+.chart-tooltip { position: absolute; transform: translate(-50%, -100%); background: var(--color-foreground); color: var(--color-paper); padding: .4rem .6rem; border-radius: var(--radius-sm); font-size: var(--text-sm); line-height: 1.4; display: flex; flex-direction: column; gap: .1rem; pointer-events: none; box-shadow: 0 4px 12px rgba(0, 0, 0, .15); white-space: nowrap; z-index: 10; }
+.chart-tooltip strong { font-weight: 600; }
+.chart-tooltip::after { content: ''; position: absolute; bottom: -4px; left: 50%; transform: translateX(-50%) rotate(45deg); width: 8px; height: 8px; background: var(--color-foreground); }
+.chart-hint { font-size: var(--text-sm); margin: var(--space-2) 0 0; }
+.chart-filter-banner { background: var(--color-brand-soft); border: 1px solid var(--color-brand); border-radius: var(--radius-sm); padding: var(--space-2) var(--space-3); margin: 0 0 var(--space-3); font-size: var(--text-sm); display: flex; align-items: center; gap: var(--space-2); }
+.chart-filter-banner a { color: var(--color-brand); font-weight: 600; text-decoration: underline; }
+.traffic-legend { display: flex; flex-wrap: wrap; gap: 1rem; margin-top: var(--space-3); color: var(--color-muted-foreground); font-size: var(--text-base); }
+.traffic-legend strong { color: var(--color-foreground); }
+.traffic-legend .total::before, .traffic-legend .paid::before { content: ''; display: inline-block; width: .75rem; height: .2rem; margin-right: .35rem; vertical-align: middle; background: var(--chart-line); }
+.traffic-legend .paid::before { background: var(--chart-paid); }
+.traffic-data { margin-top: var(--space-3); }
+
+/* === ENDPOINT LIST (interactive horizontal bar chart) === */
+.endpoint-bars { display: flex; flex-direction: column; gap: var(--space-1); }
+.endpoint-bar {
+  display: grid;
+  grid-template-columns: minmax(7rem, 1.2fr) minmax(3rem, 1.5fr) minmax(7rem, 1fr);
+  gap: var(--space-3);
+  align-items: center;
+  padding: var(--space-2) var(--space-3);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  font: inherit;
+  text-align: left;
+  color: var(--color-foreground);
+  cursor: pointer;
+  transition: background-color .15s ease, border-color .15s ease;
+}
+.endpoint-bar:hover, .endpoint-bar:focus-visible { background: var(--color-paper); border-color: var(--color-border); outline: none; }
+.endpoint-bar:focus-visible { box-shadow: 0 0 0 2px var(--color-focus-ring); }
+.endpoint-bar[aria-pressed="true"] { background: var(--color-brand-soft); border-color: var(--color-brand); }
+.endpoint-bar-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.endpoint-bar-label code { font-family: var(--font-mono); font-size: var(--text-sm); color: var(--color-foreground); background: transparent; padding: 0; }
+.endpoint-bar-track { position: relative; height: 8px; background: var(--color-muted); border-radius: 4px; overflow: hidden; min-width: 3rem; }
+.endpoint-bar-fill { display: block; height: 100%; border-radius: 4px; transition: width .3s ease; }
+.endpoint-bar-stats { display: flex; gap: var(--space-3); align-items: baseline; font-size: var(--text-sm); color: var(--color-muted-foreground); justify-content: flex-end; }
+.endpoint-bar-visits { font-weight: 600; color: var(--color-foreground); font-variant-numeric: tabular-nums; }
+.endpoint-bar-share { font-variant-numeric: tabular-nums; }
+.endpoint-bar-rate { font-size: var(--text-xs); font-weight: 600; color: var(--color-brand); background: var(--color-brand-soft); padding: .1rem .4rem; border-radius: 999px; }
+.endpoint-bar-rate--free { color: var(--color-muted-foreground); background: var(--color-muted); }
+.endpoint-bars-rest { font-size: var(--text-sm); margin: var(--space-2) 0 0; padding: 0 var(--space-3); }
+.endpoint-bars-rest .btn-sm { font: inherit; font-size: var(--text-sm); color: var(--color-brand); background: none; border: 1px solid var(--color-border); border-radius: var(--radius-sm); padding: .2rem .6rem; cursor: pointer; }
+.endpoint-bars-rest .btn-sm:hover { border-color: var(--color-brand); }
+.endpoint-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) repeat(3, minmax(4.5rem, .7fr));
+  gap: var(--space-3);
+  align-items: center;
+  padding: var(--space-2) var(--space-4);
+  background: var(--endpoint-bg);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  transition: border-color .15s ease, background-color .15s ease;
+}
+.endpoint-card:hover { border-color: var(--color-border); background: var(--color-paper); }
 .endpoint-name { min-width: 0; overflow-wrap: anywhere; }
 .endpoint-name code { font-size: .9rem; }
 .endpoint-stat { min-width: 0; }
-.endpoint-stat-label { display: block; color: var(--muted); font-size: .68rem; text-transform: uppercase; letter-spacing: .04em; }
+.endpoint-stat-label { display: block; color: var(--color-muted-foreground); font-size: var(--text-xs); text-transform: uppercase; letter-spacing: .04em; }
 .endpoint-stat-value { display: block; font-variant-numeric: tabular-nums; font-weight: 600; }
-.traffic-chart { margin: .75rem 0 1.5rem; padding: .85rem; background: #fff; border: 1px solid var(--rule); }
-.traffic-chart svg { display: block; width: 100%; height: auto; }
-.traffic-chart .grid-line { stroke: #e3e6eb; stroke-width: 1; }
-.traffic-chart .traffic-line { fill: none; stroke: var(--verified); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
-.traffic-chart .paid-line { fill: none; stroke: var(--signal); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
-.traffic-chart .axis-label { fill: var(--muted); font-size: 12px; }
-.traffic-legend { display: flex; flex-wrap: wrap; gap: 1rem; margin-top: .5rem; color: var(--muted); font-size: .85rem; }
-.traffic-legend strong { color: var(--ink); }
-.traffic-legend .total::before, .traffic-legend .paid::before { content: ''; display: inline-block; width: .75rem; height: .2rem; margin-right: .35rem; vertical-align: middle; background: var(--verified); }
-.traffic-legend .paid::before { background: var(--signal); }
-.traffic-data { margin-top: .75rem; }
-summary { cursor: pointer; color: var(--verified); font-weight: 600; }
-@media (max-width: 720px) { .endpoint-card { grid-template-columns: minmax(0, 1fr) repeat(2, minmax(4rem, .8fr)); } .endpoint-card .endpoint-stat:last-child { grid-column: 2 / -1; } }
-.bar { background: var(--verified); height: 8px; min-width: 2px; }
-.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 1.5rem; }
-.grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0 1.5rem; }
-@media (max-width: 720px) { .grid2, .grid3 { grid-template-columns: 1fr; } }
-.toolbar { display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; margin: .5rem 0; }
-.st-2 { color: #1a7f37; font-weight: 600; }
-.st-4 { color: #9a6700; font-weight: 600; }
-.st-5 { color: #cf222e; font-weight: 600; }
-.err { color: #cf222e; }
-.tabs { display:flex; flex-wrap:wrap; gap:.4rem; margin:1rem 0; }
- .tabs button { border:1px solid var(--rule); background:#fff; padding:.45rem .7rem; }
- .tabs button[aria-selected="true"] { border-bottom:3px solid var(--signal); font-weight:700; }
- section[hidden] { display: none; }
- .warning { color:#7b351f; background:#fff4ce; border:1px solid #c98b63; padding:.6rem .8rem; }
-  .table-wrap { overflow-x:auto; max-width:100%; }
-  #recent, #leads, #by-endpoint, #endpoint-economics, #zero-result, #zero-result-by-endpoint, #repeat-clients, #user-agents, #mcp-discovery { overflow-x:auto; }
-  .filter-chip { display:inline-block; border:1px solid var(--rule); padding:.2rem .5rem; margin:.15rem; background:#fff; }
- :focus-visible { outline:3px solid var(--signal); outline-offset:3px; }
- @media (prefers-reduced-motion: reduce) { *,*::before,*::after { animation-duration:.01ms !important; transition-duration:.01ms !important; } }
+
+/* === PAGINATION === */
+.pagination { display: flex; align-items: center; justify-content: center; gap: var(--space-3); margin: var(--space-3) 0; }
+.pagination button {
+  min-width: 2.75rem;
+  height: 36px;
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-sm);
+  background: var(--tab-bg);
+  color: var(--color-foreground);
+  font-weight: 400;
+}
+.pagination button:not(:disabled):hover { border-color: var(--color-brand); color: var(--color-brand); }
+.pagination button:disabled { cursor: not-allowed; opacity: .45; }
+.pagination span { color: var(--color-muted-foreground); font-size: var(--text-base); }
+
+/* === FILTERS === */
+.filters { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: center; padding: var(--space-3) 0; }
+.filters label { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-sm); color: var(--color-muted-foreground); }
+.filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  border: 1px solid var(--card-border);
+  border-radius: 9999px;
+  padding: 2px var(--space-2);
+  background: var(--tab-bg);
+  font-size: var(--text-xs);
+  color: var(--color-foreground);
+}
+.filter-chips { display: flex; flex-wrap: wrap; gap: var(--space-1); }
+
+/* === TOOLBAR === */
+.toolbar { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: center; }
+.btn-sm {
+  height: 36px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-foreground);
+  font-size: var(--text-sm);
+  font-weight: 500;
+}
+.btn-sm:hover { border-color: var(--color-brand); color: var(--color-brand); }
+.btn-brand {
+  background: var(--btn-bg);
+  color: var(--btn-fg);
+  border: 1px solid transparent;
+}
+.btn-brand:hover { background: var(--color-brand-hover); }
+
+/* === GRID LAYOUTS === */
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-5); }
+.grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: var(--space-5); }
+
+/* === STATUS CLASSES === */
+.st-2 { color: var(--color-success); font-weight: 600; }
+.st-4 { color: var(--color-warning); font-weight: 600; }
+.st-5 { color: var(--color-destructive); font-weight: 600; }
+
+/* === BAR === */
+.bar { background: var(--color-success); height: 8px; min-width: 2px; }
+
+/* === WARNING === */
+.warning { color: #7b351f; background: #fff4ce; border: 1px solid #c98b63; padding: var(--space-3) var(--space-4); border-radius: var(--radius-sm); font-size: var(--text-sm); }
+
+/* === OVERRIDES FOR JS-GENERATED CONTENT INSIDE CARDS === */
+.card .traffic-chart { margin: 0; padding: 0; background: none; border: none; }
+.card .traffic-chart .traffic-data { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-sm); padding: var(--space-3); margin-top: var(--space-3); }
+.card .traffic-chart .traffic-data table { margin: 0; }
+.card .traffic-chart .traffic-data table thead th { background: var(--color-ink-light); }
+.card table { margin: 0; }
+.card .endpoint-list { margin: 0; }
+.overview-filters { padding: var(--space-3) 0; }
+.recent-filters-wrap { padding: var(--space-3) 0; border-bottom: 1px solid var(--color-grid-line); margin-bottom: var(--space-3); }
+
+/* === SCROLLABLE REGIONS === */
+.table-wrap { overflow-x: auto; max-width: 100%; }
+#recent, #leads, #by-endpoint, #endpoint-economics, #zero-result, #zero-result-by-endpoint, #repeat-clients, #user-agents, #mcp-discovery { overflow-x: auto; }
+
+/* === LOGIN === */
+#login { display: flex; align-items: center; justify-content: center; min-height: 60vh; }
+#login-form {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-default);
+  padding: var(--space-6);
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  width: 100%;
+  max-width: 28rem;
+}
+#login-form label { font-weight: 600; font-size: var(--text-sm); }
+#login-form button {
+  align-self: flex-start;
+  background: var(--btn-bg);
+  color: var(--btn-fg);
+  border: none;
+  padding: var(--space-3) var(--space-6);
+}
+#login-form button:hover { background: var(--color-brand-hover); }
+#login-msg { font-size: var(--text-sm); margin: 0; }
+
+/* === RESPONSIVE === */
+@media (max-width: 768px) {
+  .sidebar { display: none; }
+  .mobile-tabs { display: flex; }
+  .main-content { margin-left: 0; }
+  .header-bar { padding: var(--space-3) var(--space-4); }
+  .content-area { padding: var(--space-4); }
+  .period-bar { padding: var(--space-2) var(--space-4); }
+  .kpis { grid-template-columns: 1fr; }
+  .grid2, .grid3 { grid-template-columns: 1fr; }
+  .endpoint-card { grid-template-columns: minmax(0, 1fr) repeat(2, minmax(4rem, .8fr)); }
+  .endpoint-card .endpoint-stat:last-child { grid-column: 2 / -1; }
+}
+
+/* === ACCESSIBILITY === */
+:focus-visible { outline: 3px solid var(--color-brand); outline-offset: 3px; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}
+
+/* === EMPTY STATE === */
+.empty-state { color: var(--color-muted-foreground); padding: var(--space-4); text-align: center; font-size: var(--text-sm); }
+section[hidden] { display: none; }
+
 </style>
 </head>
 <body>
-<main>
-<h1>Dashboard — Licita <span class="muted">(operator)</span></h1>
-<p class="muted">Who accessed the API, which endpoints, when, paid vs unpaid, KPIs, revenue and failures. Data is raw <code>request_logs</code> + <code>payments</code> aggregates.</p>
 
-<div id="login" hidden>
-  <form id="login-form">
-    <label for="key">Operator key</label>
-    <input type="password" id="key" name="key" autocomplete="current-password" autofocus>
-    <button type="submit">Unlock</button>
-    <p id="login-msg" class="err"></p>
-  </form>
-</div>
-
-<div id="dash" hidden>
-  <p class="toolbar">
-    <label>From <input type="date" id="from"></label>
-    <label>To <input type="date" id="to"></label>
-    <label><input type="checkbox" id="auto-refresh" checked> Auto-refresh 15s</label>
-    <button id="refresh" type="button">Refresh</button>
-     <span id="last-updated" class="muted" aria-live="polite"></span>
-  </p>
-
-   <nav class="tabs" role="tablist" aria-label="Dashboard sections">
-     <button role="tab" aria-controls="panel-overview" type="button" data-tab-button="overview" data-view="overview">Overview</button>
-     <button role="tab" aria-controls="panel-growth" type="button" data-tab-button="growth" data-view="growth">Growth</button>
-     <button role="tab" aria-controls="panel-leads" type="button" data-tab-button="leads" data-view="leads">Leads</button>
-     <button role="tab" aria-controls="panel-economics" type="button" data-tab-button="economics" data-view="economics">Endpoint economics</button>
-     <button role="tab" aria-controls="panel-gaps" type="button" data-tab-button="gaps" data-view="data-quality">Data Quality</button>
+<!-- Desktop sidebar -->
+<aside class="sidebar" aria-label="Dashboard navigation">
+  <div class="sidebar-logo">
+    <a href="/dashboard">Licita</a>
+    <span class="subtitle">Operator Dashboard</span>
+  </div>
+  <nav class="sidebar-nav" role="tablist" aria-label="Dashboard sections">
+    <button role="tab" aria-controls="panel-overview" type="button" data-tab-button="overview" data-view="overview" aria-selected="true" tabindex="0">Overview</button>
+    <button role="tab" aria-controls="panel-growth" type="button" data-tab-button="growth" data-view="growth" aria-selected="false" tabindex="-1">Growth</button>
+    <button role="tab" aria-controls="panel-leads" type="button" data-tab-button="leads" data-view="leads" aria-selected="false" tabindex="-1">Leads</button>
+    <button role="tab" aria-controls="panel-economics" type="button" data-tab-button="economics" data-view="economics" aria-selected="false" tabindex="-1">Endpoint Economics</button>
+    <button role="tab" aria-controls="panel-gaps" type="button" data-tab-button="gaps" data-view="data-quality" aria-selected="false" tabindex="-1">Data Quality</button>
   </nav>
-   <p id="period" class="muted" aria-live="polite">All available dates</p><div id="filter-chips" aria-label="Active filters"></div><p id="load-state" class="muted" aria-live="polite"></p><button id="retry" type="button">Retry</button>
-    <section id="panel-overview" role="tabpanel" data-tab="overview" aria-label="Overview">
-   <h2>KPIs</h2><div id="kpis" class="kpis"></div>
-    <h2>Traffic by day</h2><div id="traffic-by-day"></div>
-    <h2>Traffic by endpoint</h2><div id="by-endpoint"></div>
-     <h2>Recent activity</h2>
-     <form id="recent-filters" class="filters" aria-label="Filter recent activity">
-       <label>Endpoint <input id="recent-endpoint" name="recent_endpoint" type="search" placeholder="/v1/search"></label>
-       <label>Source <select id="recent-source" name="recent_source"><option value="">All sources</option><option value="rest">REST</option><option value="mcp">MCP</option></select></label>
-       <label>Payment <select id="recent-paid" name="recent_paid"><option value="">All requests</option><option value="paid">Paid</option><option value="unpaid">Unpaid</option></select></label>
-       <label>Status <select id="recent-status" name="recent_status"><option value="">All statuses</option><option value="2xx">2xx success</option><option value="4xx">4xx client error</option><option value="5xx">5xx server error</option></select></label>
-       <button id="clear-recent-filters" type="button">Clear filters</button>
-     </form>
-     <p id="recent-result-count" class="muted" aria-live="polite"></p>
-     <div id="recent"></div><div id="pager-recent" class="pagination" aria-label="Recent activity pagination"></div>
-   </section>
-    <section id="panel-growth" role="tabpanel" data-tab="growth" aria-label="Growth">
-    <h2>Growth cohorts</h2>
-  <div class="kpis">
-    <div class="kpi"><div class="kpi-label">Weekly active paying agents</div><div class="kpi-val" id="nsm"></div></div>
+  <div class="sidebar-footer">
+    <div class="key-status">Key: <strong>active</strong></div>
+
   </div>
-  <div id="growth-funnel"></div>
-   <div id="growth-rows"></div><div id="funnel-warning" role="alert"></div>
-   <h2>MCP discovery</h2><div id="mcp-discovery"></div>
-   </section>
-    <section id="panel-leads" role="tabpanel" data-tab="leads" aria-label="Leads"><h2>Demo pipeline</h2><p class="muted">Email is shown only to authorized operators. <button id="open-details" type="button" aria-expanded="false">Open details</button></p><div id="lead-kpis" class="kpis" aria-label="Status: new Status: contacted Status: used Status: paid"></div><div id="leads" hidden></div></section>
-    <section id="panel-economics" role="tabpanel" data-tab="economics" aria-label="Endpoint economics"><h2>Endpoint economics</h2><div id="endpoint-economics"></div>
-   <h2>Who accessed</h2>
-  <div class="grid2">
-    <div><h3 class="h3">Repeat paid clients</h3><div id="repeat-clients"></div></div>
-    <div><h3 class="h3">User agents</h3><div id="user-agents"></div></div>
+</aside>
+
+<!-- Main content area -->
+<div class="main-content">
+
+  <div id="login" hidden>
+    <form id="login-form">
+      <label for="key">Operator key</label>
+      <input type="password" id="key" name="key" autocomplete="current-password" autofocus>
+      <button type="submit">Unlock</button>
+      <p id="login-msg" class="err"></p>
+    </form>
   </div>
 
-   <h2>Top requested</h2>
-  <div class="grid3">
-    <div><h3 class="h3">CPVs</h3><div id="top-cpvs"></div></div>
-    <div><h3 class="h3">Buyers</h3><div id="top-buyers"></div></div>
-    <div><h3 class="h3">Companies</h3><div id="top-companies"></div></div>
-  </div>
+  <div id="dash" hidden>
+    <!-- Sticky header bar with date controls -->
+    <div class="header-bar">
+      <label>From <input type="date" id="from"></label>
+      <label>To <input type="date" id="to"></label>
+      <span class="header-spacer"></span>
+      <label class="auto-label"><input type="checkbox" id="auto-refresh" checked> Auto-refresh 15s</label>
+      <button id="refresh" class="btn-refresh" type="button">Refresh</button>
+      <span id="last-updated" class="last-updated" aria-live="polite"></span>
+    </div>
 
-   <h2>Payments</h2>
-  <div class="grid2">
-     <div><h3 class="h3">By network / provider</h3><div id="payments-net"></div></div>
-   </div>
-   </section>
-    <section id="panel-gaps" role="tabpanel" data-tab="gaps" aria-label="Data gaps"><h2>Data gaps</h2><p class="muted">Measured zero-result queries by endpoint. Unavailable panels remain labeled, not converted to zero.</p><button id="clear-filters" type="button">Clear filters</button><div id="zero-result"></div><div id="zero-result-by-endpoint"></div></section>
-</div>
-</main>
+    <!-- Mobile tab bar (hidden on desktop) -->
+    <nav class="mobile-tabs" role="tablist" aria-label="Dashboard sections">
+      <button role="tab" aria-controls="panel-overview" type="button" data-tab-button="overview" data-view="overview">Overview</button>
+      <button role="tab" aria-controls="panel-growth" type="button" data-tab-button="growth" data-view="growth">Growth</button>
+      <button role="tab" aria-controls="panel-leads" type="button" data-tab-button="leads" data-view="leads">Leads</button>
+      <button role="tab" aria-controls="panel-economics" type="button" data-tab-button="economics" data-view="economics">Endpoint Economics</button>
+      <button role="tab" aria-controls="panel-gaps" type="button" data-tab-button="gaps" data-view="data-quality">Data Quality</button>
+    </nav>
+
+    <div class="period-bar">
+      <span id="period" class="muted" aria-live="polite">All available dates</span>
+      <span id="filter-chips" class="filter-chips" aria-label="Active filters"></span>
+      <span id="load-state" class="muted" aria-live="polite"></span>
+      <button id="retry" class="btn-sm" type="button">Retry</button>
+    </div>
+
+    <div class="content-area">
+
+      <!-- Overview panel -->
+      <section id="panel-overview" role="tabpanel" data-tab="overview" aria-label="Overview">
+        <div class="card">
+          <h2>KPIs</h2>
+          <div id="kpis" class="kpis"></div>
+        </div>
+
+        <div class="card">
+          <h2>Traffic by day</h2>
+          <div id="traffic-by-day"></div>
+        </div>
+
+        <div class="card">
+          <h2>Traffic by endpoint</h2>
+          <div id="by-endpoint"></div>
+        </div>
+
+        <div class="card">
+          <h2>Recent activity</h2>
+          <div class="recent-filters-wrap">
+            <form id="recent-filters" class="filters" aria-label="Filter recent activity">
+              <label>Endpoint <input id="recent-endpoint" name="recent_endpoint" type="search" placeholder="/v1/search"></label>
+              <label>Source <select id="recent-source" name="recent_source"><option value="">All sources</option><option value="rest">REST</option><option value="mcp">MCP</option></select></label>
+              <label>Payment <select id="recent-paid" name="recent_paid"><option value="">All requests</option><option value="paid">Paid</option><option value="unpaid">Unpaid</option></select></label>
+              <label>Status <select id="recent-status" name="recent_status"><option value="">All statuses</option><option value="2xx">2xx success</option><option value="4xx">4xx client error</option><option value="5xx">5xx server error</option></select></label>
+              <button id="clear-recent-filters" class="btn-sm" type="button">Clear filters</button>
+            </form>
+          </div>
+          <p id="recent-result-count" class="muted" aria-live="polite"></p>
+          <div id="recent"></div>
+          <div id="pager-recent" class="pagination" aria-label="Recent activity pagination"></div>
+        </div>
+      </section>
+
+      <!-- Growth panel -->
+      <section id="panel-growth" role="tabpanel" data-tab="growth" aria-label="Growth" hidden>
+        <div class="card">
+          <h2>Growth cohorts</h2>
+          <div class="kpis">
+            <div class="kpi"><div class="kpi-label">Weekly active paying agents</div><div class="kpi-val" id="nsm"></div></div>
+          </div>
+          <div id="growth-funnel"></div>
+          <div id="growth-rows"></div>
+          <div id="funnel-warning" role="alert"></div>
+        </div>
+
+        <div class="card">
+          <h2>MCP discovery</h2>
+          <div id="mcp-discovery"></div>
+        </div>
+      </section>
+
+      <!-- Leads panel -->
+      <section id="panel-leads" role="tabpanel" data-tab="leads" aria-label="Leads" hidden>
+        <div class="card">
+          <h2>Demo pipeline</h2>
+          <p class="muted">Email is shown only to authorized operators. <button id="open-details" class="btn-sm" type="button" aria-expanded="false">Open details</button></p>
+          <div id="lead-kpis" class="kpis" aria-label="Status: new Status: contacted Status: used Status: paid"></div>
+          <div id="leads" hidden></div>
+        </div>
+      </section>
+
+      <!-- Endpoint economics panel -->
+      <section id="panel-economics" role="tabpanel" data-tab="economics" aria-label="Endpoint economics" hidden>
+        <div class="card">
+          <h2>Endpoint economics</h2>
+          <div id="endpoint-economics"></div>
+        </div>
+
+        <div class="card">
+          <h2>Who accessed</h2>
+          <div class="grid2">
+            <div><h3 class="h3">Repeat paid clients</h3><div id="repeat-clients"></div></div>
+            <div><h3 class="h3">User agents</h3><div id="user-agents"></div></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Top requested</h2>
+          <div class="grid3">
+            <div><h3 class="h3">CPVs</h3><div id="top-cpvs"></div></div>
+            <div><h3 class="h3">Buyers</h3><div id="top-buyers"></div></div>
+            <div><h3 class="h3">Companies</h3><div id="top-companies"></div></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Payments</h2>
+          <div class="grid2">
+            <div><h3 class="h3">By network / provider</h3><div id="payments-net"></div></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Data quality panel -->
+      <section id="panel-gaps" role="tabpanel" data-tab="gaps" aria-label="Data gaps" hidden>
+        <div class="card">
+          <h2>Data gaps</h2>
+          <p class="muted">Measured zero-result queries by endpoint. Unavailable panels remain labeled, not converted to zero.</p>
+          <button id="clear-filters" class="btn-sm" type="button">Clear filters</button>
+          <div id="zero-result"></div>
+          <div id="zero-result-by-endpoint"></div>
+        </div>
+      </section>
+
+    </div><!-- /content-area -->
+  </div><!-- /dash -->
+</div><!-- /main-content -->
 
 <script>
 const KEY = 'licita_operator_key';
 const LS = sessionStorage;
 const $ = (id) => document.getElementById(id);
 const initialParams = new URLSearchParams(location.search);
-const state = { timer: null, tab: initialParams.get('view') === 'data-quality' ? 'gaps' : initialParams.get('view') || initialParams.get('tab') || 'overview', page: initialParams.get('page') || '1', recent_endpoint: '', recent_source: '', recent_paid: '', recent_status: '' };
+const state = { timer: null, tab: initialParams.get('view') === 'data-quality' ? 'gaps' : initialParams.get('view') || initialParams.get('tab') || 'overview', page: initialParams.get('page') || '1', recent_endpoint: '', recent_source: '', recent_paid: '', recent_status: '', selected_day: initialParams.get('day') || '', endpoint_limit: 10 };
 const validTabs = ['overview', 'growth', 'leads', 'economics', 'gaps'];
-function syncUrl(tab) { const params = new URLSearchParams(location.search); params.set('view', tab === 'gaps' ? 'data-quality' : tab); if ($('from').value) params.set('from', $('from').value); else params.delete('from'); if ($('to').value) params.set('to', $('to').value); else params.delete('to'); if (state.page !== '1') params.set('page', state.page); else params.delete('page'); [['recent_endpoint', state.recent_endpoint], ['recent_source', state.recent_source], ['recent_paid', state.recent_paid], ['recent_status', state.recent_status]].forEach(([key, value]) => value ? params.set(key, value) : params.delete(key)); history.pushState({}, '', location.pathname + '?' + params.toString()); renderFilters(); }
-function restoreUrl() { const params = new URLSearchParams(location.search); const view = params.get('view'); state.tab = view === 'data-quality' ? 'gaps' : validTabs.includes(view) ? view : 'overview'; const page = Number(params.get('page')); state.page = Number.isInteger(page) && page > 0 ? String(page) : '1'; state.recent_endpoint = params.get('recent_endpoint') || ''; state.recent_source = params.get('recent_source') || ''; state.recent_paid = params.get('recent_paid') || ''; state.recent_status = params.get('recent_status') || ''; $('from').value = params.get('from') || ''; $('to').value = params.get('to') || ''; $('recent-endpoint').value = state.recent_endpoint; $('recent-source').value = state.recent_source; $('recent-paid').value = state.recent_paid; $('recent-status').value = state.recent_status; }
+function syncUrl(tab) { const params = new URLSearchParams(location.search); params.set('view', tab === 'gaps' ? 'data-quality' : tab); if ($('from').value) params.set('from', $('from').value); else params.delete('from'); if ($('to').value) params.set('to', $('to').value); else params.delete('to'); if (state.page !== '1') params.set('page', state.page); else params.delete('page'); if (state.selected_day) params.set('day', state.selected_day); else params.delete('day'); [['recent_endpoint', state.recent_endpoint], ['recent_source', state.recent_source], ['recent_paid', state.recent_paid], ['recent_status', state.recent_status]].forEach(([key, value]) => value ? params.set(key, value) : params.delete(key)); history.pushState({}, '', location.pathname + '?' + params.toString()); renderFilters(); }
+function restoreUrl() { const params = new URLSearchParams(location.search); const view = params.get('view'); state.tab = view === 'data-quality' ? 'gaps' : validTabs.includes(view) ? view : 'overview'; const page = Number(params.get('page')); state.page = Number.isInteger(page) && page > 0 ? String(page) : '1'; state.recent_endpoint = params.get('recent_endpoint') || ''; state.recent_source = params.get('recent_source') || ''; state.recent_paid = params.get('recent_paid') || ''; state.recent_status = params.get('recent_status') || ''; state.selected_day = params.get('day') || ''; $('from').value = params.get('from') || ''; $('to').value = params.get('to') || ''; $('recent-endpoint').value = state.recent_endpoint; $('recent-source').value = state.recent_source; $('recent-paid').value = state.recent_paid; $('recent-status').value = state.recent_status; }
 
 // Escape every dynamic value before it touches innerHTML — user_agent / q /
 // client_key come from clients and must never execute as markup.
@@ -234,18 +844,79 @@ function pageRows(rows, page) { return rows.slice((page - 1) * PAGE_SIZE, page *
 
 function renderTrafficChart(rows) {
   if (!rows.length) return '<p class="muted">No traffic recorded in this period.</p>';
-  const width = 720, height = 240, left = 48, right = 16, top = 18, bottom = 34;
+  const width = 720, height = 220, left = 56, right = 16, top = 16, bottom = 36;
+
   const plotWidth = width - left - right, plotHeight = height - top - bottom;
   const max = Math.max(1, ...rows.map((r) => Number(r.requests) || 0));
   const x = (i) => left + (rows.length === 1 ? plotWidth / 2 : (i / (rows.length - 1)) * plotWidth);
   const y = (value) => top + plotHeight - ((Number(value) || 0) / max) * plotHeight;
-  const line = (key, className) => rows.map((r, i) => x(i).toFixed(1) + ',' + y(r[key]).toFixed(1)).join(' ');
+  const totalPoints = rows.map((r, i) => '<circle class="traffic-dot" data-day="' + esc(r.date) + '" data-requests="' + esc(r.requests) + '" data-paid="' + esc(r.paid_requests) + '" cx="' + x(i).toFixed(1) + '" cy="' + y(r.requests).toFixed(1) + '" r="5" tabindex="0" role="button" aria-label="' + esc(r.date) + ': ' + esc(r.requests) + ' requests, ' + esc(r.paid_requests) + ' paid' + (r.date === state.selected_day ? '" aria-pressed="true' : '') + '"/>').join('');
+  const paidPoints = rows.map((r, i) => '<circle class="paid-dot" cx="' + x(i).toFixed(1) + '" cy="' + y(r.paid_requests).toFixed(1) + '" r="3"/>').join('');
+  const hitAreas = rows.map((r, i) => '<rect class="chart-hit" data-day="' + esc(r.date) + '" x="' + (x(i) - 20).toFixed(1) + '" y="' + top + '" width="40" height="' + plotHeight + '" fill="transparent" tabindex="-1"/>').join('');
+  const selectedHighlight = state.selected_day
+    ? '<rect class="chart-selected" x="0" y="' + top + '" width="' + width + '" height="' + plotHeight + '" fill="transparent" />'
+      + '<line class="chart-cursor" x1="' + x(rows.findIndex((r) => r.date === state.selected_day)).toFixed(1) + '" y1="' + top + '" x2="' + x(rows.findIndex((r) => r.date === state.selected_day)).toFixed(1) + '" y2="' + (top + plotHeight).toFixed(1) + '"/>'
+    : '';
+
   const labels = rows.map((r, i) => i === 0 || i === rows.length - 1 || i % Math.ceil(rows.length / 6) === 0
     ? '<text class="axis-label" x="' + x(i).toFixed(1) + '" y="' + (height - 8) + '" text-anchor="middle">' + esc(String(r.date).slice(5)) + '</text>' : '').join('');
   const grid = [0, .5, 1].map((fraction) => '<line class="grid-line" x1="' + left + '" x2="' + (width - right) + '" y1="' + y(max * fraction).toFixed(1) + '" y2="' + y(max * fraction).toFixed(1) + '" />' +
     '<text class="axis-label" x="' + (left - 8) + '" y="' + (y(max * fraction) + 4).toFixed(1) + '" text-anchor="end">' + Math.round(max * fraction) + '</text>').join('');
-  const table = '<details class="traffic-data"><summary>View daily values</summary><table><caption>Daily traffic values</caption><thead><tr><th scope="col">Date</th><th scope="col" class="num">Requests</th><th scope="col" class="num">Paid</th></tr></thead><tbody>' + rows.map((r) => '<tr><td>' + esc(r.date) + '</td><td class="num">' + esc(r.requests) + '</td><td class="num">' + esc(r.paid_requests) + '</td></tr>').join('') + '</tbody></table></details>';
-  return '<figure class="traffic-chart" aria-labelledby="traffic-chart-title" aria-describedby="traffic-chart-description"><svg viewBox="0 0 ' + width + ' ' + height + '" role="img"><title id="traffic-chart-title">Daily endpoint traffic</title><desc id="traffic-chart-description">Total requests and paid requests by UTC day.</desc>' + grid + '<polyline class="traffic-line" points="' + line('requests', 'traffic-line') + '" /><polyline class="paid-line" points="' + line('paid_requests', 'paid-line') + '" />' + labels + '</svg><figcaption class="traffic-legend"><span class="total"><strong>Total requests</strong></span><span class="paid"><strong>Paid requests</strong></span><span>UTC dates</span></figcaption>' + table + '</figure>';
+  const tooltip = '<div id="traffic-tooltip" class="chart-tooltip" role="status" aria-live="polite" hidden></div>';
+  const filterBanner = state.selected_day
+    ? '<p class="chart-filter-banner">Filtered to <strong>' + esc(state.selected_day) + '</strong> · <a href="#" id="clear-day-filter">clear filter</a></p>'
+    : '';
+  const hint = '<p class="chart-hint muted">Click a data point to filter recent activity to that day. Click again to clear.</p>';
+  return filterBanner
+    + '<figure class="traffic-chart" aria-labelledby="traffic-chart-title" aria-describedby="traffic-chart-description">'
+    + '<svg id="traffic-chart-svg" viewBox="0 0 ' + width + ' ' + height + '" role="img" preserveAspectRatio="xMidYMid meet">'
+    + '<title id="traffic-chart-title">Daily endpoint traffic</title>'
+    + '<desc id="traffic-chart-description">Total requests and paid requests by UTC day. Click a data point to filter the endpoint list to that day.</desc>'
+    + grid
+    + selectedHighlight
+    + '<polyline class="traffic-line" points="' + rows.map((r, i) => x(i).toFixed(1) + ',' + y(r.requests).toFixed(1)).join(' ') + '" />'
+    + '<polyline class="paid-line" points="' + rows.map((r, i) => x(i).toFixed(1) + ',' + y(r.paid_requests).toFixed(1)).join(' ') + '" />'
+    + labels
+    + paidPoints
+    + totalPoints
+    + hitAreas
+    + '</svg>'
+    + tooltip
+    + '<figcaption class="traffic-legend"><span class="total"><strong>Total requests</strong></span><span class="paid"><strong>Paid requests</strong></span><span>UTC dates</span></figcaption>'
+    + hint
+    + '</figure>';
+}
+
+function renderEndpointBars(rows) {
+  if (!rows.length) return '<p class="muted">No requests yet.</p>';
+  const sorted = rows.slice().sort((a, b) => Number(b.requests || 0) - Number(a.requests || 0));
+  const total = sorted.reduce((s, r) => s + Number(r.requests || 0), 0);
+  const max = Math.max(1, ...sorted.map((r) => Number(r.requests || 0)));
+  const shown = sorted.slice(0, state.endpoint_limit);
+  const rest = sorted.length - shown.length;
+  const bars = shown.map((r) => {
+    const visits = Number(r.requests) || 0;
+    const paid = Number(r.paid_requests) || 0;
+    const rate = visits > 0 ? paid / visits : 0;
+    const widthPct = (visits / max) * 100;
+    const sharePct = total > 0 ? (visits / total) * 100 : 0;
+    const isPaid = paid > 0;
+    const color = isPaid ? 'var(--color-brand)' : 'var(--color-muted)';
+    return '<button type="button" class="endpoint-bar" data-endpoint="' + esc(r.endpoint) + '"' + (state.recent_endpoint && r.endpoint.toLowerCase().includes(state.recent_endpoint.toLowerCase()) ? ' aria-pressed="true"' : '') + '>'
+      + '<span class="endpoint-bar-label"><code>' + esc(r.endpoint) + '</code></span>'
+      + '<span class="endpoint-bar-track"><span class="endpoint-bar-fill" style="width:' + widthPct.toFixed(1) + '%; background:' + color + '"></span></span>'
+      + '<span class="endpoint-bar-stats">'
+        + '<span class="endpoint-bar-visits">' + esc(visits.toLocaleString()) + '</span>'
+        + '<span class="endpoint-bar-share">' + sharePct.toFixed(1) + '%</span>'
+        + (isPaid ? '<span class="endpoint-bar-rate">' + (rate * 100).toFixed(0) + '% paid</span>' : '<span class="endpoint-bar-rate endpoint-bar-rate--free">free</span>')
+      + '</span>'
+      + '</button>';
+  }).join('');
+  const restNotice = rest > 0
+    ? '<p class="endpoint-bars-rest muted">+ ' + rest + ' more endpoint' + (rest === 1 ? '' : 's') + ' · <button type="button" id="endpoint-bars-show-all" class="btn-sm">View all</button></p>'
+    : '';
+  return '<div class="endpoint-bars" role="list" aria-label="Top endpoints by visits">' + bars + '</div>' + restNotice;
+
 }
 
 function render(stats, recent) {
@@ -299,14 +970,7 @@ function render(stats, recent) {
   const byEp = (stats.requests_by_endpoint || [])
     .filter((r) => Number(r.requests || 0) > 0)
     .sort((a, b) => Number(b.paid_requests || 0) - Number(a.paid_requests || 0) || Number(b.requests || 0) - Number(a.requests || 0));
-  $('by-endpoint').innerHTML = byEp.length === 0
-    ? '<p class="muted">No requests yet.</p>'
-    : '<div class="endpoint-list" aria-label="Visited endpoints">' +
-      byEp.map((r) => '<article class="endpoint-card"><div class="endpoint-name"><code>' + esc(r.endpoint) + '</code></div>' +
-        '<div class="endpoint-stat"><span class="endpoint-stat-label">Visits</span><span class="endpoint-stat-value">' + esc(r.requests) + '</span></div>' +
-        '<div class="endpoint-stat"><span class="endpoint-stat-label">Paid</span><span class="endpoint-stat-value">' + esc(r.paid_requests) + '</span></div>' +
-        '<div class="endpoint-stat"><span class="endpoint-stat-label">Paid rate</span><span class="endpoint-stat-value">' + esc(pct(Number(r.requests) > 0 ? Number(r.paid_requests || 0) / Number(r.requests) : null)) + '</span></div></article>').join('') +
-      '</div>';
+  $('by-endpoint').innerHTML = renderEndpointBars(stats.requests_by_endpoint || []);
 
   const renderRecentRows = (rows) => rows.length === 0
     ? '<p class="muted">No requests logged yet.</p>'
@@ -334,14 +998,19 @@ function render(stats, recent) {
   const recentFiltered = recent.filter((r) => {
     const status = Number(r.status || 0);
     const statusClass = status >= 500 ? '5xx' : status >= 400 ? '4xx' : status >= 200 && status < 300 ? '2xx' : '';
+    const rDate = r.ts ? String(r.ts).slice(0, 10) : '';
     return (!state.recent_endpoint || String(r.endpoint || '').toLowerCase().includes(state.recent_endpoint.toLowerCase())) &&
       (!state.recent_source || r.source === state.recent_source) &&
       (!state.recent_paid || (state.recent_paid === 'paid' ? Boolean(r.paid) : !r.paid)) &&
-      (!state.recent_status || state.recent_status === statusClass);
+      (!state.recent_status || state.recent_status === statusClass) &&
+      (!state.selected_day || rDate === state.selected_day);
   });
+  const dayFilterBanner = state.selected_day
+    ? '<p class="chart-filter-banner">Recent activity filtered to <strong>' + esc(state.selected_day) + '</strong> · <a href="#" id="clear-day-filter-recent">clear filter</a></p>'
+    : '';
   $('recent-result-count').textContent = recentFiltered.length + ' matching requests';
-  $('recent').innerHTML = renderRecentRows(pageRows(recentFiltered, Number(state.page) || 1));
-  bindPager('recent', recentFiltered, (rows) => { $('recent').innerHTML = renderRecentRows(rows); });
+  $('recent').innerHTML = dayFilterBanner + renderRecentRows(pageRows(recentFiltered, Number(state.page) || 1));
+  bindPager('recent', recentFiltered, (rows) => { $('recent').innerHTML = dayFilterBanner + renderRecentRows(rows); });
 
   const repeatTop = (stats.repeat_clients || {}).top || [];
   $('repeat-clients').innerHTML = repeatTop.length === 0
@@ -513,6 +1182,95 @@ document.querySelectorAll('[data-tab-button]').forEach((button) => button.addEve
 document.querySelectorAll('[data-tab-button]').forEach((button) => button.addEventListener('keydown', (event) => { const buttons = [...document.querySelectorAll('[data-tab-button]')]; const i = buttons.indexOf(button); const next = event.key === 'ArrowRight' ? buttons[(i + 1) % buttons.length] : event.key === 'ArrowLeft' ? buttons[(i - 1 + buttons.length) % buttons.length] : event.key === 'Home' ? buttons[0] : event.key === 'End' ? buttons.at(-1) : null; if (next) { event.preventDefault(); next.focus(); selectTab(next.dataset.tabButton); } }));
 ['from', 'to'].forEach((id) => $(id).addEventListener('change', () => { state.page = '1'; syncUrl(state.tab); load(); }));
 window.addEventListener('popstate', () => { restoreUrl(); selectTab(state.tab, false); load(); });
+
+// Event delegation for the interactive traffic chart (clickable data points + tooltip)
+const trafficChart = $('traffic-by-day');
+const trafficTooltip = () => document.getElementById('traffic-tooltip');
+const trafficSvg = () => document.getElementById('traffic-chart-svg');
+const showTooltip = (target) => {
+  const tip = trafficTooltip();
+  if (!tip || !trafficSvg()) return;
+  const day = target.getAttribute('data-day');
+  const requests = target.getAttribute('data-requests');
+  const paid = target.getAttribute('data-paid');
+  const svgRect = trafficSvg().getBoundingClientRect();
+  const dotRect = target.getBoundingClientRect();
+  tip.innerHTML = '<strong>' + esc(day) + '</strong><span>' + Number(requests).toLocaleString() + ' requests</span><span>' + Number(paid).toLocaleString() + ' paid</span>';
+  tip.hidden = false;
+  tip.style.left = (dotRect.left - svgRect.left + dotRect.width / 2) + 'px';
+  tip.style.top = (dotRect.top - svgRect.top - 8) + 'px';
+};
+const hideTooltip = () => { const tip = trafficTooltip(); if (tip) tip.hidden = true; };
+trafficChart.addEventListener('click', (event) => {
+  const target = event.target.closest('[data-day]');
+  if (!target) return;
+  const day = target.getAttribute('data-day');
+  if (!day) return;
+  state.selected_day = state.selected_day === day ? '' : day;
+  state.page = '1';
+  syncUrl(state.tab);
+  load();
+});
+trafficChart.addEventListener('mouseover', (event) => {
+  const target = event.target.closest('.traffic-dot');
+  if (target) showTooltip(target);
+});
+trafficChart.addEventListener('mouseout', (event) => {
+  const target = event.target.closest('.traffic-dot');
+  if (target) hideTooltip();
+});
+trafficChart.addEventListener('focusin', (event) => {
+  const target = event.target.closest('.traffic-dot');
+  if (target) showTooltip(target);
+});
+trafficChart.addEventListener('focusout', () => hideTooltip());
+trafficChart.addEventListener('keydown', (event) => {
+  if (event.key !== 'Enter' && event.key !== ' ') return;
+  const target = event.target.closest('.traffic-dot');
+  if (!target) return;
+  event.preventDefault();
+  const day = target.getAttribute('data-day');
+  if (!day) return;
+  state.selected_day = state.selected_day === day ? '' : day;
+  state.page = '1';
+  syncUrl(state.tab);
+  load();
+});
+trafficChart.addEventListener('click', (event) => {
+  if (event.target.closest('#clear-day-filter')) {
+    event.preventDefault();
+    state.selected_day = '';
+    state.page = '1';
+    syncUrl(state.tab);
+    load();
+  }
+});
+const recentContainer = $('recent');
+recentContainer.addEventListener('click', (event) => {
+  if (event.target.closest('#clear-day-filter-recent')) {
+    event.preventDefault();
+    state.selected_day = '';
+    state.page = '1';
+    syncUrl(state.tab);
+    load();
+  }
+});
+
+// Event delegation for the endpoint bars (click to filter recent activity, or expand all)
+const byEndpoint = $('by-endpoint');
+byEndpoint.addEventListener('click', (event) => {
+  const showAll = event.target.closest('#endpoint-bars-show-all');
+  if (showAll) { event.preventDefault(); state.endpoint_limit = 1000; load(); return; }
+  const bar = event.target.closest('.endpoint-bar');
+  if (!bar) return;
+  const endpoint = bar.getAttribute('data-endpoint');
+  if (!endpoint) return;
+  state.recent_endpoint = state.recent_endpoint === endpoint ? '' : endpoint;
+  $('recent-endpoint').value = state.recent_endpoint;
+  state.page = '1';
+  syncUrl(state.tab);
+  load();
+});
 
 updateTimer();
 restoreUrl();
