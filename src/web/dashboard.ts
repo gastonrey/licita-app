@@ -46,6 +46,18 @@ button { cursor: pointer; touch-action: manipulation; min-height:44px; }
 .endpoint-stat { min-width: 0; }
 .endpoint-stat-label { display: block; color: var(--muted); font-size: .68rem; text-transform: uppercase; letter-spacing: .04em; }
 .endpoint-stat-value { display: block; font-variant-numeric: tabular-nums; font-weight: 600; }
+.traffic-chart { margin: .75rem 0 1.5rem; padding: .85rem; background: #fff; border: 1px solid var(--rule); }
+.traffic-chart svg { display: block; width: 100%; height: auto; }
+.traffic-chart .grid-line { stroke: #e3e6eb; stroke-width: 1; }
+.traffic-chart .traffic-line { fill: none; stroke: var(--verified); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+.traffic-chart .paid-line { fill: none; stroke: var(--signal); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+.traffic-chart .axis-label { fill: var(--muted); font-size: 12px; }
+.traffic-legend { display: flex; flex-wrap: wrap; gap: 1rem; margin-top: .5rem; color: var(--muted); font-size: .85rem; }
+.traffic-legend strong { color: var(--ink); }
+.traffic-legend .total::before, .traffic-legend .paid::before { content: ''; display: inline-block; width: .75rem; height: .2rem; margin-right: .35rem; vertical-align: middle; background: var(--verified); }
+.traffic-legend .paid::before { background: var(--signal); }
+.traffic-data { margin-top: .75rem; }
+summary { cursor: pointer; color: var(--verified); font-weight: 600; }
 @media (max-width: 720px) { .endpoint-card { grid-template-columns: minmax(0, 1fr) repeat(2, minmax(4rem, .8fr)); } .endpoint-card .endpoint-stat:last-child { grid-column: 2 / -1; } }
 .bar { background: var(--verified); height: 8px; min-width: 2px; }
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 1.5rem; }
@@ -101,6 +113,7 @@ button { cursor: pointer; touch-action: manipulation; min-height:44px; }
    <p id="period" class="muted" aria-live="polite">All available dates</p><div id="filter-chips" aria-label="Active filters"></div><p id="load-state" class="muted" aria-live="polite"></p><button id="retry" type="button">Retry</button>
     <section id="panel-overview" role="tabpanel" data-tab="overview" aria-label="Overview">
    <h2>KPIs</h2><div id="kpis" class="kpis"></div>
+    <h2>Traffic by day</h2><div id="traffic-by-day"></div>
     <h2>Traffic by endpoint</h2><div id="by-endpoint"></div>
      <h2>Recent activity</h2>
      <form id="recent-filters" class="filters" aria-label="Filter recent activity">
@@ -219,6 +232,22 @@ function bindPager(id, rows, renderRows) {
 
 function pageRows(rows, page) { return rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE); }
 
+function renderTrafficChart(rows) {
+  if (!rows.length) return '<p class="muted">No traffic recorded in this period.</p>';
+  const width = 720, height = 240, left = 48, right = 16, top = 18, bottom = 34;
+  const plotWidth = width - left - right, plotHeight = height - top - bottom;
+  const max = Math.max(1, ...rows.map((r) => Number(r.requests) || 0));
+  const x = (i) => left + (rows.length === 1 ? plotWidth / 2 : (i / (rows.length - 1)) * plotWidth);
+  const y = (value) => top + plotHeight - ((Number(value) || 0) / max) * plotHeight;
+  const line = (key, className) => rows.map((r, i) => x(i).toFixed(1) + ',' + y(r[key]).toFixed(1)).join(' ');
+  const labels = rows.map((r, i) => i === 0 || i === rows.length - 1 || i % Math.ceil(rows.length / 6) === 0
+    ? '<text class="axis-label" x="' + x(i).toFixed(1) + '" y="' + (height - 8) + '" text-anchor="middle">' + esc(String(r.date).slice(5)) + '</text>' : '').join('');
+  const grid = [0, .5, 1].map((fraction) => '<line class="grid-line" x1="' + left + '" x2="' + (width - right) + '" y1="' + y(max * fraction).toFixed(1) + '" y2="' + y(max * fraction).toFixed(1) + '" />' +
+    '<text class="axis-label" x="' + (left - 8) + '" y="' + (y(max * fraction) + 4).toFixed(1) + '" text-anchor="end">' + Math.round(max * fraction) + '</text>').join('');
+  const table = '<details class="traffic-data"><summary>View daily values</summary><table><caption>Daily traffic values</caption><thead><tr><th scope="col">Date</th><th scope="col" class="num">Requests</th><th scope="col" class="num">Paid</th></tr></thead><tbody>' + rows.map((r) => '<tr><td>' + esc(r.date) + '</td><td class="num">' + esc(r.requests) + '</td><td class="num">' + esc(r.paid_requests) + '</td></tr>').join('') + '</tbody></table></details>';
+  return '<figure class="traffic-chart" aria-labelledby="traffic-chart-title" aria-describedby="traffic-chart-description"><svg viewBox="0 0 ' + width + ' ' + height + '" role="img"><title id="traffic-chart-title">Daily endpoint traffic</title><desc id="traffic-chart-description">Total requests and paid requests by UTC day.</desc>' + grid + '<polyline class="traffic-line" points="' + line('requests', 'traffic-line') + '" /><polyline class="paid-line" points="' + line('paid_requests', 'paid-line') + '" />' + labels + '</svg><figcaption class="traffic-legend"><span class="total"><strong>Total requests</strong></span><span class="paid"><strong>Paid requests</strong></span><span>UTC dates</span></figcaption>' + table + '</figure>';
+}
+
 function render(stats, recent) {
   const paidTotal = (stats.requests_by_endpoint || []).reduce((s, r) => s + Number(r.paid_requests || 0), 0);
   const kpis = [
@@ -232,6 +261,7 @@ function render(stats, recent) {
   $('kpis').innerHTML = kpis
     .map((p) => '<div class="kpi"><div class="kpi-label">' + p[0] + '</div><div class="kpi-val">' + p[1] + '</div></div>')
     .join('');
+  $('traffic-by-day').innerHTML = renderTrafficChart(stats.daily_traffic || []);
 
   const g = stats.growth || {};
   $('nsm').textContent = esc(g.weekly_active_paying_agents ?? 0);

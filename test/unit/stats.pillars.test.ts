@@ -74,6 +74,7 @@ describe('product-quality stats pillars', () => {
     expect(data.growth.funnel.conversions.every((c: any) => c.rate === null)).toBe(true);
     expect(data.revenue_new_vs_repeat).toEqual({ new_revenue_usd: 0, repeat_revenue_usd: 0, new_payments: 0, repeat_payments: 0 });
     expect(data.demo_pipeline).toEqual({ by_status: { new: 0, contacted: 0, used: 0, paid: 0 }, requests: [] });
+    expect(data.daily_traffic).toEqual([]);
     expect(data.endpoint_economics).toEqual([]);
     expect(data.zero_result_by_endpoint).toEqual([]);
   });
@@ -101,6 +102,7 @@ describe('product-quality stats pillars', () => {
       expect.objectContaining({ endpoint: 'GET /v1/hidden-paid', requests: 0, revenue_usd: 1, revenue_per_call: 0 }),
       expect.objectContaining({ endpoint: 'POST /v1/research', requests: 3, revenue_usd: 1, revenue_per_call: 0.3333 }),
     ]));
+    expect(data.daily_traffic).toEqual([{ date: '2026-08-15', requests: 4, paid_requests: 2, rest_requests: 3, mcp_requests: 1 }]);
     expect(data.growth.funnel.conversions).toEqual(expect.arrayContaining([
       expect.objectContaining({ from: 'initialized', to: 'queried', rate: 3 }),
     ]));
@@ -116,5 +118,6 @@ describe('product-quality stats pillars', () => {
     expect(data.payments.revenue_usd).toBe(1);
     expect(data.failed_queries).toBe(1);
     expect(data.requests_by_endpoint).toEqual([{ endpoint: 'GET /inside', requests: 1, paid_requests: 1 }]);
+    expect(data.daily_traffic).toEqual([{ date: '2026-08-15', requests: 1, paid_requests: 0, rest_requests: 1, mcp_requests: 0 }]);
   });
 });

@@ -62,6 +62,10 @@ const BY_SOURCE_SQL = `
 SELECT source, count(*)::int AS requests
 FROM request_logs GROUP BY source ORDER BY requests DESC, source
 `;
+const DAILY_TRAFFIC_SQL = `
+SELECT ts, paid, source
+FROM request_logs ORDER BY ts
+`;
 const ZERO_RESULT_SQL = `
 SELECT sum(CASE WHEN zero_result THEN 1 ELSE 0 END)::int AS zero_result_count,
        count(*)::int AS total
@@ -259,6 +263,7 @@ export function statsHandler(ctx: RouteCtx) {
       clients,
       byEndpoint,
       bySource,
+      dailyTraffic,
       zeroResult,
       paymentRequired,
       payments,
@@ -284,6 +289,7 @@ export function statsHandler(ctx: RouteCtx) {
        db.query(requestSql(UNIQUE_CLIENTS_SQL), rangeValues),
        db.query(requestSql(BY_ENDPOINT_SQL), rangeValues),
        db.query(requestSql(BY_SOURCE_SQL), rangeValues),
+       db.query(requestSql(DAILY_TRAFFIC_SQL), rangeValues),
        db.query(requestSql(ZERO_RESULT_SQL), rangeValues),
        db.query(requestSql(PAYMENT_REQUIRED_SQL), rangeValues),
        db.query(paymentSql(PAYMENTS_SQL), rangeValues),
@@ -343,6 +349,17 @@ export function statsHandler(ctx: RouteCtx) {
     const fr = failedRate.rows[0] ?? { failed: 0, total: 0 };
     const failedCount = Number(fr.failed);
     const requestTotal = Number(fr.total);
+
+    const dailyTrafficByDate = new Map<string, { requests: number; paid_requests: number; rest_requests: number; mcp_requests: number }>();
+    for (const row of dailyTraffic.rows) {
+      const date = (row.ts instanceof Date ? row.ts : new Date(String(row.ts))).toISOString().slice(0, 10);
+      const current = dailyTrafficByDate.get(date) ?? { requests: 0, paid_requests: 0, rest_requests: 0, mcp_requests: 0 };
+      current.requests += 1;
+      if (row.paid) current.paid_requests += 1;
+      if (row.source === 'rest') current.rest_requests += 1;
+      if (row.source === 'mcp') current.mcp_requests += 1;
+      dailyTrafficByDate.set(date, current);
+    }
 
     // --- growth (P0.8): derive the agent funnel + North Star --------------------
     const gp = growthPayers.rows[0] ?? { paid_agents: 0, weekly_active: 0, settled_revenue: 0 };
@@ -422,6 +439,7 @@ export function statsHandler(ctx: RouteCtx) {
         source: String(r.source),
         requests: Number(r.requests),
       })),
+      daily_traffic: [...dailyTrafficByDate.entries()].map(([date, values]) => ({ date, ...values })),
       zero_result_queries: {
         count: zeroCount,
         rate: rate(zeroCount, zeroTotal),
