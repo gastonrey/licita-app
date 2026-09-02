@@ -47,4 +47,27 @@ describe('GET /dashboard', () => {
     expect(res.statusCode).toBe(200); // no X-PAYMENT, no x-operator-key needed
     await app.close();
   });
+
+  it('contains interactive chart elements (clickable dots, tooltip, bar chart)', async () => {
+    const app = buildApp();
+    const res = await app.inject({ method: 'GET', url: '/dashboard' });
+    const html = res.body;
+    expect(html).toContain('chart-tooltip');
+    expect(html).toContain('endpoint-bars');
+    expect(html).toContain('chart-filter-banner');
+    expect(html).toContain('chart-hint');
+    expect(html).toContain('endpoint-bars-rest');
+    await app.close();
+  });
+
+  it('exposes URL state for day filter (restores selected day from ?day=)', async () => {
+    const app = buildApp();
+    const res = await app.inject({ method: 'GET', url: '/dashboard' });
+    const html = res.body;
+    // The state init reads ?day=... and the chart's hint mentions recent activity filtering
+    expect(html).toContain('filter recent activity to that day');
+    // The day URL param round-trips via syncUrl
+    expect(html).toMatch(/params\.set\(.day.|params\.delete\(.day.\)/);
+    await app.close();
+  });
 });

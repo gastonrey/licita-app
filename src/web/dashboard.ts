@@ -391,20 +391,64 @@ section[role="tabpanel"] > :first-child { margin-top: 0; }
 section[role="tabpanel"] > :first-child:is(h2) { margin-top: 0; }
 
 /* === TRAFFIC CHART === */
-.traffic-chart { padding: var(--space-3) var(--space-4); background: var(--chart-bg); border-radius: var(--radius-default); }
+.traffic-chart { position: relative; padding: var(--space-3) var(--space-4); background: var(--chart-bg); border-radius: var(--radius-default); }
 .traffic-chart svg { display: block; width: 100%; height: auto; max-height: 16rem; }
 .traffic-chart .grid-line { stroke: var(--color-grid-line); stroke-width: 1; }
 .traffic-chart .traffic-line { fill: none; stroke: var(--chart-line); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
 .traffic-chart .paid-line { fill: none; stroke: var(--chart-paid); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
 .traffic-chart .axis-label { fill: var(--color-muted-foreground); font-size: 12px; }
+.traffic-chart .traffic-dot { fill: var(--chart-line); stroke: var(--color-paper); stroke-width: 2; cursor: pointer; transition: r .15s ease, fill .15s ease; }
+.traffic-chart .traffic-dot:hover, .traffic-chart .traffic-dot:focus { fill: var(--color-brand); outline: none; }
+.traffic-chart .traffic-dot:focus-visible { stroke: var(--color-focus-ring); stroke-width: 3; }
+.traffic-chart .traffic-dot[aria-pressed="true"] { fill: var(--color-brand); r: 7; stroke: var(--color-paper); stroke-width: 3; }
+.traffic-chart .paid-dot { fill: var(--chart-paid); stroke: var(--color-paper); stroke-width: 1.5; pointer-events: none; }
+.traffic-chart .chart-hit { cursor: pointer; }
+.traffic-chart .chart-cursor { stroke: var(--color-brand); stroke-width: 1; stroke-dasharray: 3 3; pointer-events: none; opacity: .5; }
+.traffic-chart .chart-selected { pointer-events: none; }
+.chart-tooltip { position: absolute; transform: translate(-50%, -100%); background: var(--color-foreground); color: var(--color-paper); padding: .4rem .6rem; border-radius: var(--radius-sm); font-size: var(--text-sm); line-height: 1.4; display: flex; flex-direction: column; gap: .1rem; pointer-events: none; box-shadow: 0 4px 12px rgba(0, 0, 0, .15); white-space: nowrap; z-index: 10; }
+.chart-tooltip strong { font-weight: 600; }
+.chart-tooltip::after { content: ''; position: absolute; bottom: -4px; left: 50%; transform: translateX(-50%) rotate(45deg); width: 8px; height: 8px; background: var(--color-foreground); }
+.chart-hint { font-size: var(--text-sm); margin: var(--space-2) 0 0; }
+.chart-filter-banner { background: var(--color-brand-soft); border: 1px solid var(--color-brand); border-radius: var(--radius-sm); padding: var(--space-2) var(--space-3); margin: 0 0 var(--space-3); font-size: var(--text-sm); display: flex; align-items: center; gap: var(--space-2); }
+.chart-filter-banner a { color: var(--color-brand); font-weight: 600; text-decoration: underline; }
 .traffic-legend { display: flex; flex-wrap: wrap; gap: 1rem; margin-top: var(--space-3); color: var(--color-muted-foreground); font-size: var(--text-base); }
 .traffic-legend strong { color: var(--color-foreground); }
 .traffic-legend .total::before, .traffic-legend .paid::before { content: ''; display: inline-block; width: .75rem; height: .2rem; margin-right: .35rem; vertical-align: middle; background: var(--chart-line); }
 .traffic-legend .paid::before { background: var(--chart-paid); }
 .traffic-data { margin-top: var(--space-3); }
 
-/* === ENDPOINT LIST === */
-.endpoint-list { display: grid; gap: var(--space-1); }
+/* === ENDPOINT LIST (interactive horizontal bar chart) === */
+.endpoint-bars { display: flex; flex-direction: column; gap: var(--space-1); }
+.endpoint-bar {
+  display: grid;
+  grid-template-columns: minmax(7rem, 1.2fr) minmax(3rem, 1.5fr) minmax(7rem, 1fr);
+  gap: var(--space-3);
+  align-items: center;
+  padding: var(--space-2) var(--space-3);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  font: inherit;
+  text-align: left;
+  color: var(--color-foreground);
+  cursor: pointer;
+  transition: background-color .15s ease, border-color .15s ease;
+}
+.endpoint-bar:hover, .endpoint-bar:focus-visible { background: var(--color-paper); border-color: var(--color-border); outline: none; }
+.endpoint-bar:focus-visible { box-shadow: 0 0 0 2px var(--color-focus-ring); }
+.endpoint-bar[aria-pressed="true"] { background: var(--color-brand-soft); border-color: var(--color-brand); }
+.endpoint-bar-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.endpoint-bar-label code { font-family: var(--font-mono); font-size: var(--text-sm); color: var(--color-foreground); background: transparent; padding: 0; }
+.endpoint-bar-track { position: relative; height: 8px; background: var(--color-muted); border-radius: 4px; overflow: hidden; min-width: 3rem; }
+.endpoint-bar-fill { display: block; height: 100%; border-radius: 4px; transition: width .3s ease; }
+.endpoint-bar-stats { display: flex; gap: var(--space-3); align-items: baseline; font-size: var(--text-sm); color: var(--color-muted-foreground); justify-content: flex-end; }
+.endpoint-bar-visits { font-weight: 600; color: var(--color-foreground); font-variant-numeric: tabular-nums; }
+.endpoint-bar-share { font-variant-numeric: tabular-nums; }
+.endpoint-bar-rate { font-size: var(--text-xs); font-weight: 600; color: var(--color-brand); background: var(--color-brand-soft); padding: .1rem .4rem; border-radius: 999px; }
+.endpoint-bar-rate--free { color: var(--color-muted-foreground); background: var(--color-muted); }
+.endpoint-bars-rest { font-size: var(--text-sm); margin: var(--space-2) 0 0; padding: 0 var(--space-3); }
+.endpoint-bars-rest .btn-sm { font: inherit; font-size: var(--text-sm); color: var(--color-brand); background: none; border: 1px solid var(--color-border); border-radius: var(--radius-sm); padding: .2rem .6rem; cursor: pointer; }
+.endpoint-bars-rest .btn-sm:hover { border-color: var(--color-brand); }
 .endpoint-card {
   display: grid;
   grid-template-columns: minmax(0, 1.7fr) repeat(3, minmax(4.5rem, .7fr));
@@ -728,10 +772,10 @@ const KEY = 'licita_operator_key';
 const LS = sessionStorage;
 const $ = (id) => document.getElementById(id);
 const initialParams = new URLSearchParams(location.search);
-const state = { timer: null, tab: initialParams.get('view') === 'data-quality' ? 'gaps' : initialParams.get('view') || initialParams.get('tab') || 'overview', page: initialParams.get('page') || '1', recent_endpoint: '', recent_source: '', recent_paid: '', recent_status: '' };
+const state = { timer: null, tab: initialParams.get('view') === 'data-quality' ? 'gaps' : initialParams.get('view') || initialParams.get('tab') || 'overview', page: initialParams.get('page') || '1', recent_endpoint: '', recent_source: '', recent_paid: '', recent_status: '', selected_day: initialParams.get('day') || '', endpoint_limit: 10 };
 const validTabs = ['overview', 'growth', 'leads', 'economics', 'gaps'];
-function syncUrl(tab) { const params = new URLSearchParams(location.search); params.set('view', tab === 'gaps' ? 'data-quality' : tab); if ($('from').value) params.set('from', $('from').value); else params.delete('from'); if ($('to').value) params.set('to', $('to').value); else params.delete('to'); if (state.page !== '1') params.set('page', state.page); else params.delete('page'); [['recent_endpoint', state.recent_endpoint], ['recent_source', state.recent_source], ['recent_paid', state.recent_paid], ['recent_status', state.recent_status]].forEach(([key, value]) => value ? params.set(key, value) : params.delete(key)); history.pushState({}, '', location.pathname + '?' + params.toString()); renderFilters(); }
-function restoreUrl() { const params = new URLSearchParams(location.search); const view = params.get('view'); state.tab = view === 'data-quality' ? 'gaps' : validTabs.includes(view) ? view : 'overview'; const page = Number(params.get('page')); state.page = Number.isInteger(page) && page > 0 ? String(page) : '1'; state.recent_endpoint = params.get('recent_endpoint') || ''; state.recent_source = params.get('recent_source') || ''; state.recent_paid = params.get('recent_paid') || ''; state.recent_status = params.get('recent_status') || ''; $('from').value = params.get('from') || ''; $('to').value = params.get('to') || ''; $('recent-endpoint').value = state.recent_endpoint; $('recent-source').value = state.recent_source; $('recent-paid').value = state.recent_paid; $('recent-status').value = state.recent_status; }
+function syncUrl(tab) { const params = new URLSearchParams(location.search); params.set('view', tab === 'gaps' ? 'data-quality' : tab); if ($('from').value) params.set('from', $('from').value); else params.delete('from'); if ($('to').value) params.set('to', $('to').value); else params.delete('to'); if (state.page !== '1') params.set('page', state.page); else params.delete('page'); if (state.selected_day) params.set('day', state.selected_day); else params.delete('day'); [['recent_endpoint', state.recent_endpoint], ['recent_source', state.recent_source], ['recent_paid', state.recent_paid], ['recent_status', state.recent_status]].forEach(([key, value]) => value ? params.set(key, value) : params.delete(key)); history.pushState({}, '', location.pathname + '?' + params.toString()); renderFilters(); }
+function restoreUrl() { const params = new URLSearchParams(location.search); const view = params.get('view'); state.tab = view === 'data-quality' ? 'gaps' : validTabs.includes(view) ? view : 'overview'; const page = Number(params.get('page')); state.page = Number.isInteger(page) && page > 0 ? String(page) : '1'; state.recent_endpoint = params.get('recent_endpoint') || ''; state.recent_source = params.get('recent_source') || ''; state.recent_paid = params.get('recent_paid') || ''; state.recent_status = params.get('recent_status') || ''; state.selected_day = params.get('day') || ''; $('from').value = params.get('from') || ''; $('to').value = params.get('to') || ''; $('recent-endpoint').value = state.recent_endpoint; $('recent-source').value = state.recent_source; $('recent-paid').value = state.recent_paid; $('recent-status').value = state.recent_status; }
 
 // Escape every dynamic value before it touches innerHTML — user_agent / q /
 // client_key come from clients and must never execute as markup.
@@ -798,18 +842,76 @@ function pageRows(rows, page) { return rows.slice((page - 1) * PAGE_SIZE, page *
 
 function renderTrafficChart(rows) {
   if (!rows.length) return '<p class="muted">No traffic recorded in this period.</p>';
-  const width = 720, height = 240, left = 48, right = 16, top = 18, bottom = 34;
+  const width = 720, height = 220, left = 56, right = 16, top = 16, bottom = 36;
   const plotWidth = width - left - right, plotHeight = height - top - bottom;
   const max = Math.max(1, ...rows.map((r) => Number(r.requests) || 0));
   const x = (i) => left + (rows.length === 1 ? plotWidth / 2 : (i / (rows.length - 1)) * plotWidth);
   const y = (value) => top + plotHeight - ((Number(value) || 0) / max) * plotHeight;
-  const line = (key, className) => rows.map((r, i) => x(i).toFixed(1) + ',' + y(r[key]).toFixed(1)).join(' ');
+  const totalPoints = rows.map((r, i) => '<circle class="traffic-dot" data-day="' + esc(r.date) + '" data-requests="' + esc(r.requests) + '" data-paid="' + esc(r.paid_requests) + '" cx="' + x(i).toFixed(1) + '" cy="' + y(r.requests).toFixed(1) + '" r="5" tabindex="0" role="button" aria-label="' + esc(r.date) + ': ' + esc(r.requests) + ' requests, ' + esc(r.paid_requests) + ' paid' + (r.date === state.selected_day ? '" aria-pressed="true' : '') + '"/>').join('');
+  const paidPoints = rows.map((r, i) => '<circle class="paid-dot" cx="' + x(i).toFixed(1) + '" cy="' + y(r.paid_requests).toFixed(1) + '" r="3"/>').join('');
+  const hitAreas = rows.map((r, i) => '<rect class="chart-hit" data-day="' + esc(r.date) + '" x="' + (x(i) - 20).toFixed(1) + '" y="' + top + '" width="40" height="' + plotHeight + '" fill="transparent" tabindex="-1"/>').join('');
+  const selectedHighlight = state.selected_day
+    ? '<rect class="chart-selected" x="0" y="' + top + '" width="' + width + '" height="' + plotHeight + '" fill="transparent" />'
+      + '<line class="chart-cursor" x1="' + x(rows.findIndex((r) => r.date === state.selected_day)).toFixed(1) + '" y1="' + top + '" x2="' + x(rows.findIndex((r) => r.date === state.selected_day)).toFixed(1) + '" y2="' + (top + plotHeight).toFixed(1) + '"/>'
+    : '';
   const labels = rows.map((r, i) => i === 0 || i === rows.length - 1 || i % Math.ceil(rows.length / 6) === 0
     ? '<text class="axis-label" x="' + x(i).toFixed(1) + '" y="' + (height - 8) + '" text-anchor="middle">' + esc(String(r.date).slice(5)) + '</text>' : '').join('');
   const grid = [0, .5, 1].map((fraction) => '<line class="grid-line" x1="' + left + '" x2="' + (width - right) + '" y1="' + y(max * fraction).toFixed(1) + '" y2="' + y(max * fraction).toFixed(1) + '" />' +
     '<text class="axis-label" x="' + (left - 8) + '" y="' + (y(max * fraction) + 4).toFixed(1) + '" text-anchor="end">' + Math.round(max * fraction) + '</text>').join('');
-  const table = '<details class="traffic-data"><summary>View daily values</summary><table><caption>Daily traffic values</caption><thead><tr><th scope="col">Date</th><th scope="col" class="num">Requests</th><th scope="col" class="num">Paid</th></tr></thead><tbody>' + rows.map((r) => '<tr><td>' + esc(r.date) + '</td><td class="num">' + esc(r.requests) + '</td><td class="num">' + esc(r.paid_requests) + '</td></tr>').join('') + '</tbody></table></details>';
-  return '<figure class="traffic-chart" aria-labelledby="traffic-chart-title" aria-describedby="traffic-chart-description"><svg viewBox="0 0 ' + width + ' ' + height + '" role="img"><title id="traffic-chart-title">Daily endpoint traffic</title><desc id="traffic-chart-description">Total requests and paid requests by UTC day.</desc>' + grid + '<polyline class="traffic-line" points="' + line('requests', 'traffic-line') + '" /><polyline class="paid-line" points="' + line('paid_requests', 'paid-line') + '" />' + labels + '</svg><figcaption class="traffic-legend"><span class="total"><strong>Total requests</strong></span><span class="paid"><strong>Paid requests</strong></span><span>UTC dates</span></figcaption>' + table + '</figure>';
+  const tooltip = '<div id="traffic-tooltip" class="chart-tooltip" role="status" aria-live="polite" hidden></div>';
+  const filterBanner = state.selected_day
+    ? '<p class="chart-filter-banner">Filtered to <strong>' + esc(state.selected_day) + '</strong> · <a href="#" id="clear-day-filter">clear filter</a></p>'
+    : '';
+  const hint = '<p class="chart-hint muted">Click a data point to filter recent activity to that day. Click again to clear.</p>';
+  return filterBanner
+    + '<figure class="traffic-chart" aria-labelledby="traffic-chart-title" aria-describedby="traffic-chart-description">'
+    + '<svg id="traffic-chart-svg" viewBox="0 0 ' + width + ' ' + height + '" role="img" preserveAspectRatio="xMidYMid meet">'
+    + '<title id="traffic-chart-title">Daily endpoint traffic</title>'
+    + '<desc id="traffic-chart-description">Total requests and paid requests by UTC day. Click a data point to filter the endpoint list to that day.</desc>'
+    + grid
+    + selectedHighlight
+    + '<polyline class="traffic-line" points="' + rows.map((r, i) => x(i).toFixed(1) + ',' + y(r.requests).toFixed(1)).join(' ') + '" />'
+    + '<polyline class="paid-line" points="' + rows.map((r, i) => x(i).toFixed(1) + ',' + y(r.paid_requests).toFixed(1)).join(' ') + '" />'
+    + labels
+    + paidPoints
+    + totalPoints
+    + hitAreas
+    + '</svg>'
+    + tooltip
+    + '<figcaption class="traffic-legend"><span class="total"><strong>Total requests</strong></span><span class="paid"><strong>Paid requests</strong></span><span>UTC dates</span></figcaption>'
+    + hint
+    + '</figure>';
+}
+
+function renderEndpointBars(rows) {
+  if (!rows.length) return '<p class="muted">No requests yet.</p>';
+  const sorted = rows.slice().sort((a, b) => Number(b.requests || 0) - Number(a.requests || 0));
+  const total = sorted.reduce((s, r) => s + Number(r.requests || 0), 0);
+  const max = Math.max(1, ...sorted.map((r) => Number(r.requests || 0)));
+  const shown = sorted.slice(0, state.endpoint_limit);
+  const rest = sorted.length - shown.length;
+  const bars = shown.map((r) => {
+    const visits = Number(r.requests) || 0;
+    const paid = Number(r.paid_requests) || 0;
+    const rate = visits > 0 ? paid / visits : 0;
+    const widthPct = (visits / max) * 100;
+    const sharePct = total > 0 ? (visits / total) * 100 : 0;
+    const isPaid = paid > 0;
+    const color = isPaid ? 'var(--color-brand)' : 'var(--color-muted)';
+    return '<button type="button" class="endpoint-bar" data-endpoint="' + esc(r.endpoint) + '"' + (state.recent_endpoint && r.endpoint.toLowerCase().includes(state.recent_endpoint.toLowerCase()) ? ' aria-pressed="true"' : '') + '>'
+      + '<span class="endpoint-bar-label"><code>' + esc(r.endpoint) + '</code></span>'
+      + '<span class="endpoint-bar-track"><span class="endpoint-bar-fill" style="width:' + widthPct.toFixed(1) + '%; background:' + color + '"></span></span>'
+      + '<span class="endpoint-bar-stats">'
+        + '<span class="endpoint-bar-visits">' + esc(visits.toLocaleString()) + '</span>'
+        + '<span class="endpoint-bar-share">' + sharePct.toFixed(1) + '%</span>'
+        + (isPaid ? '<span class="endpoint-bar-rate">' + (rate * 100).toFixed(0) + '% paid</span>' : '<span class="endpoint-bar-rate endpoint-bar-rate--free">free</span>')
+      + '</span>'
+      + '</button>';
+  }).join('');
+  const restNotice = rest > 0
+    ? '<p class="endpoint-bars-rest muted">+ ' + rest + ' more endpoint' + (rest === 1 ? '' : 's') + ' · <button type="button" id="endpoint-bars-show-all" class="btn-sm">View all</button></p>'
+    : '';
+  return '<div class="endpoint-bars" role="list" aria-label="Top endpoints by visits">' + bars + '</div>' + restNotice;
 }
 
 function render(stats, recent) {
@@ -863,14 +965,7 @@ function render(stats, recent) {
   const byEp = (stats.requests_by_endpoint || [])
     .filter((r) => Number(r.requests || 0) > 0)
     .sort((a, b) => Number(b.paid_requests || 0) - Number(a.paid_requests || 0) || Number(b.requests || 0) - Number(a.requests || 0));
-  $('by-endpoint').innerHTML = byEp.length === 0
-    ? '<p class="muted">No requests yet.</p>'
-    : '<div class="endpoint-list" aria-label="Visited endpoints">' +
-      byEp.map((r) => '<article class="endpoint-card"><div class="endpoint-name"><code>' + esc(r.endpoint) + '</code></div>' +
-        '<div class="endpoint-stat"><span class="endpoint-stat-label">Visits</span><span class="endpoint-stat-value">' + esc(r.requests) + '</span></div>' +
-        '<div class="endpoint-stat"><span class="endpoint-stat-label">Paid</span><span class="endpoint-stat-value">' + esc(r.paid_requests) + '</span></div>' +
-        '<div class="endpoint-stat"><span class="endpoint-stat-label">Paid rate</span><span class="endpoint-stat-value">' + esc(pct(Number(r.requests) > 0 ? Number(r.paid_requests || 0) / Number(r.requests) : null)) + '</span></div></article>').join('') +
-      '</div>';
+  $('by-endpoint').innerHTML = renderEndpointBars(stats.requests_by_endpoint || []);
 
   const renderRecentRows = (rows) => rows.length === 0
     ? '<p class="muted">No requests logged yet.</p>'
@@ -898,14 +993,19 @@ function render(stats, recent) {
   const recentFiltered = recent.filter((r) => {
     const status = Number(r.status || 0);
     const statusClass = status >= 500 ? '5xx' : status >= 400 ? '4xx' : status >= 200 && status < 300 ? '2xx' : '';
+    const rDate = r.ts ? String(r.ts).slice(0, 10) : '';
     return (!state.recent_endpoint || String(r.endpoint || '').toLowerCase().includes(state.recent_endpoint.toLowerCase())) &&
       (!state.recent_source || r.source === state.recent_source) &&
       (!state.recent_paid || (state.recent_paid === 'paid' ? Boolean(r.paid) : !r.paid)) &&
-      (!state.recent_status || state.recent_status === statusClass);
+      (!state.recent_status || state.recent_status === statusClass) &&
+      (!state.selected_day || rDate === state.selected_day);
   });
+  const dayFilterBanner = state.selected_day
+    ? '<p class="chart-filter-banner">Recent activity filtered to <strong>' + esc(state.selected_day) + '</strong> · <a href="#" id="clear-day-filter-recent">clear filter</a></p>'
+    : '';
   $('recent-result-count').textContent = recentFiltered.length + ' matching requests';
-  $('recent').innerHTML = renderRecentRows(pageRows(recentFiltered, Number(state.page) || 1));
-  bindPager('recent', recentFiltered, (rows) => { $('recent').innerHTML = renderRecentRows(rows); });
+  $('recent').innerHTML = dayFilterBanner + renderRecentRows(pageRows(recentFiltered, Number(state.page) || 1));
+  bindPager('recent', recentFiltered, (rows) => { $('recent').innerHTML = dayFilterBanner + renderRecentRows(rows); });
 
   const repeatTop = (stats.repeat_clients || {}).top || [];
   $('repeat-clients').innerHTML = repeatTop.length === 0
@@ -1077,6 +1177,95 @@ document.querySelectorAll('[data-tab-button]').forEach((button) => button.addEve
 document.querySelectorAll('[data-tab-button]').forEach((button) => button.addEventListener('keydown', (event) => { const buttons = [...document.querySelectorAll('[data-tab-button]')]; const i = buttons.indexOf(button); const next = event.key === 'ArrowRight' ? buttons[(i + 1) % buttons.length] : event.key === 'ArrowLeft' ? buttons[(i - 1 + buttons.length) % buttons.length] : event.key === 'Home' ? buttons[0] : event.key === 'End' ? buttons.at(-1) : null; if (next) { event.preventDefault(); next.focus(); selectTab(next.dataset.tabButton); } }));
 ['from', 'to'].forEach((id) => $(id).addEventListener('change', () => { state.page = '1'; syncUrl(state.tab); load(); }));
 window.addEventListener('popstate', () => { restoreUrl(); selectTab(state.tab, false); load(); });
+
+// Event delegation for the interactive traffic chart (clickable data points + tooltip)
+const trafficChart = $('traffic-by-day');
+const trafficTooltip = () => document.getElementById('traffic-tooltip');
+const trafficSvg = () => document.getElementById('traffic-chart-svg');
+const showTooltip = (target) => {
+  const tip = trafficTooltip();
+  if (!tip || !trafficSvg()) return;
+  const day = target.getAttribute('data-day');
+  const requests = target.getAttribute('data-requests');
+  const paid = target.getAttribute('data-paid');
+  const svgRect = trafficSvg().getBoundingClientRect();
+  const dotRect = target.getBoundingClientRect();
+  tip.innerHTML = '<strong>' + esc(day) + '</strong><span>' + Number(requests).toLocaleString() + ' requests</span><span>' + Number(paid).toLocaleString() + ' paid</span>';
+  tip.hidden = false;
+  tip.style.left = (dotRect.left - svgRect.left + dotRect.width / 2) + 'px';
+  tip.style.top = (dotRect.top - svgRect.top - 8) + 'px';
+};
+const hideTooltip = () => { const tip = trafficTooltip(); if (tip) tip.hidden = true; };
+trafficChart.addEventListener('click', (event) => {
+  const target = event.target.closest('[data-day]');
+  if (!target) return;
+  const day = target.getAttribute('data-day');
+  if (!day) return;
+  state.selected_day = state.selected_day === day ? '' : day;
+  state.page = '1';
+  syncUrl(state.tab);
+  load();
+});
+trafficChart.addEventListener('mouseover', (event) => {
+  const target = event.target.closest('.traffic-dot');
+  if (target) showTooltip(target);
+});
+trafficChart.addEventListener('mouseout', (event) => {
+  const target = event.target.closest('.traffic-dot');
+  if (target) hideTooltip();
+});
+trafficChart.addEventListener('focusin', (event) => {
+  const target = event.target.closest('.traffic-dot');
+  if (target) showTooltip(target);
+});
+trafficChart.addEventListener('focusout', () => hideTooltip());
+trafficChart.addEventListener('keydown', (event) => {
+  if (event.key !== 'Enter' && event.key !== ' ') return;
+  const target = event.target.closest('.traffic-dot');
+  if (!target) return;
+  event.preventDefault();
+  const day = target.getAttribute('data-day');
+  if (!day) return;
+  state.selected_day = state.selected_day === day ? '' : day;
+  state.page = '1';
+  syncUrl(state.tab);
+  load();
+});
+trafficChart.addEventListener('click', (event) => {
+  if (event.target.closest('#clear-day-filter')) {
+    event.preventDefault();
+    state.selected_day = '';
+    state.page = '1';
+    syncUrl(state.tab);
+    load();
+  }
+});
+const recentContainer = $('recent');
+recentContainer.addEventListener('click', (event) => {
+  if (event.target.closest('#clear-day-filter-recent')) {
+    event.preventDefault();
+    state.selected_day = '';
+    state.page = '1';
+    syncUrl(state.tab);
+    load();
+  }
+});
+
+// Event delegation for the endpoint bars (click to filter recent activity, or expand all)
+const byEndpoint = $('by-endpoint');
+byEndpoint.addEventListener('click', (event) => {
+  const showAll = event.target.closest('#endpoint-bars-show-all');
+  if (showAll) { event.preventDefault(); state.endpoint_limit = 1000; load(); return; }
+  const bar = event.target.closest('.endpoint-bar');
+  if (!bar) return;
+  const endpoint = bar.getAttribute('data-endpoint');
+  if (!endpoint) return;
+  state.recent_endpoint = state.recent_endpoint === endpoint ? '' : endpoint;
+  $('recent-endpoint').value = state.recent_endpoint;
+  state.page = '1';
+  syncUrl(state.tab);
+  load();
+});
 
 updateTimer();
 restoreUrl();
