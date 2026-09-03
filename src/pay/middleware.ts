@@ -24,6 +24,14 @@ import type { RequestPayment } from '../api/routes/common.js';
 declare module 'fastify' {
   interface FastifyRequest {
     payment?: RequestPayment;
+    /**
+     * Granular reason a paid endpoint rejected the request. Surfaces in
+     * `request_logs.error` for the operator dashboard so the "Payment health"
+     * card can distinguish "no proof sent" from "proof rejected by verify"
+     * and "facilitator unreachable". The public 402 envelope still says
+     * `code: 'payment_required'` (OpenAPI) — this is a per-request tag.
+     */
+    paymentFailureKind?: 'payment_required' | 'verify_failed' | 'facilitator_unavailable';
   }
 }
 
@@ -205,6 +213,7 @@ export function paymentPreHandler(endpointKey: string): preHandlerHookHandler {
     if (typeof proof !== 'string' || proof.length === 0) {
       const requirement = provider.requiredResponse(endpointKey);
       req.errorCode = 'payment_required';
+      req.paymentFailureKind = 'payment_required';
       const message =
         `Payment required: ${endpointKey} costs $${price} per call.` +
         (canDebit
@@ -220,9 +229,15 @@ export function paymentPreHandler(endpointKey: string): preHandlerHookHandler {
     const verification = await rt.provider.verify(proof, endpointKey);
     if (!verification.ok) {
       req.errorCode = 'payment_required';
+      // Map the provider's granular reason to the per-request log tag. The
+      // provider returns 'verify_failed' (protocol rejection), 'replay'
+      // (proof already used), or 'facilitator_unavailable' (network/timeout).
+      const reason = verification.reason ?? 'verify_failed';
+      req.paymentFailureKind =
+        reason === 'facilitator_unavailable' ? 'facilitator_unavailable' : 'verify_failed';
       rt.log.info('payment_attempt_failed', {
         endpoint: endpointKey,
-        reason: verification.reason ?? 'invalid',
+        reason,
         ...(verification.attempts ? { attempts: verification.attempts } : {}),
       });
       const requirement = rt.provider.requiredResponse(endpointKey);

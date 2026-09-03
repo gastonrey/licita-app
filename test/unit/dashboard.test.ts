@@ -70,4 +70,39 @@ describe('GET /dashboard', () => {
     expect(html).toMatch(/params\.set\(.day.|params\.delete\(.day.\)/);
     await app.close();
   });
+
+  it('renders the Payment health card on the Overview tab with all four tiles', async () => {
+    const app = buildApp();
+    const res = await app.inject({ method: 'GET', url: '/dashboard' });
+    const html = res.body;
+    // Section + tile container + four labels.
+    expect(html).toContain('<h2>Payment health</h2>');
+    expect(html).toContain('id="payment-health-tiles"');
+    expect(html).toContain('id="payment-health-failures"');
+    expect(html).toContain('Settled');
+    expect(html).toContain('Verify failed');
+    expect(html).toContain('Payment required (no proof)');
+    expect(html).toContain('Facilitator unavailable');
+    expect(html).toContain('Recent payment failures');
+    // CSS hooks for tile states and the responsive collapse.
+    expect(html).toContain('.payment-health-grid');
+    expect(html).toContain('.payment-tile');
+    expect(html).toContain('.payment-tile.is-ok');
+    expect(html).toContain('.payment-tile.is-warn');
+    expect(html).toContain('.payment-tile.is-err');
+    await app.close();
+  });
+
+  it('renderPaymentHealth tiles have id hooks so a future build that omits the field renders empty', async () => {
+    // The Payment health container is wired even when the stats payload
+    // predates the field — older envelopes must render zero state, not 500.
+    const app = buildApp();
+    const res = await app.inject({ method: 'GET', url: '/dashboard' });
+    const html = res.body;
+    expect(html).toContain('id="payment-health-summary"');
+    expect(html).toContain('aria-live="polite"');
+    // All four tile labels exist regardless of payload.
+    expect(html).toMatch(/Settled.*Verify failed.*Payment required \(no proof\).*Facilitator unavailable/s);
+    await app.close();
+  });
 });

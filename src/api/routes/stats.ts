@@ -78,6 +78,25 @@ const PAYMENTS_SQL = `
 SELECT status, count(*)::int AS n, coalesce(sum(amount_usd), 0) AS amount
 FROM payments GROUP BY status ORDER BY status
 `;
+// Payment health: granular failure reasons from request_logs.error.
+// These values are set by pay/middleware.ts via paymentFailureKind.
+// 'verify_failed'       — proof rejected by x402 verify (bad sig, expired, replay)
+// 'facilitator_unavailable' — x402 facilitator/RPC unreachable/timeout
+// 'payment_required'    — no proof header sent at all
+// The requests table is authoritative for 402/error counts; payments.settled
+// is authoritative for on-chain settlement revenue.
+const PAYMENT_HEALTH_ERROR_SQL = `
+SELECT error, count(*)::int AS n
+FROM request_logs
+WHERE error IN ('verify_failed','facilitator_unavailable','payment_required')
+GROUP BY error ORDER BY n DESC
+`;
+const PAYMENT_HEALTH_RECENT_FAILURES_SQL = `
+SELECT ts, endpoint, method, status, error, paid
+FROM request_logs
+WHERE error IN ('verify_failed','facilitator_unavailable','payment_required')
+ORDER BY ts DESC LIMIT 10
+`;
 const PAYMENTS_BY_NETWORK_SQL = `
 SELECT provider, coalesce(network, provider) AS network,
        count(*)::int AS n, coalesce(sum(amount_usd), 0) AS amount
@@ -503,7 +522,10 @@ export function statsHandler(ctx: RouteCtx) {
     // Queries are optional for old test fixtures and pre-007 databases.
     const reqRange = range ? ' WHERE ts >= $1 AND ts < $2' : '';
     const reqArgs = rangeValues;
-    const [caq, demos, statuses, economics, gaps, paymentTimeline, paidByEndpoint] = await Promise.all([
+    const paymentHealthFilter = `error IN ('verify_failed','facilitator_unavailable','payment_required')`;
+    const reqHealthRange = range ? ` WHERE ${paymentHealthFilter} AND ts >= $1 AND ts < $2` : ` WHERE ${paymentHealthFilter}`;
+    const [caq, demos, statuses, economics, gaps, paymentTimeline, paidByEndpoint,
+           paymentHealthErrors, paymentHealthRecent] = await Promise.all([
       optionalQuery(db, `SELECT source AS channel, count(*)::int AS requests,
         sum(CASE WHEN paid THEN 1 ELSE 0 END)::int AS paid_requests,
         count(DISTINCT client_key)::int AS unique_clients FROM request_logs${reqRange} GROUP BY source ORDER BY source`, reqArgs),
@@ -521,6 +543,11 @@ export function statsHandler(ctx: RouteCtx) {
         ORDER BY payer_address,created_at`, rangeValues),
        optionalQuery(db, `SELECT endpoint, sum(amount_usd) AS revenue
          FROM payments WHERE status = 'settled'${range ? ' AND created_at >= $1 AND created_at < $2' : ''} GROUP BY endpoint`, rangeValues),
+       // Payment health queries — granular 402/facilitator/verify counters
+       // and the newest failure rows. Scoped to the same date range as
+       // request_logs when ?from/?to are present.
+       optionalQuery(db, `SELECT error, count(*)::int AS n FROM request_logs${reqHealthRange} GROUP BY error ORDER BY n DESC`, reqArgs),
+       optionalQuery(db, `SELECT ts, endpoint, method, status, error, paid FROM request_logs${reqHealthRange} ORDER BY ts DESC LIMIT 10`, reqArgs),
     ]);
     const byStatus: Record<string, number> = { new: 0, contacted: 0, used: 0, paid: 0 };
     for (const row of statuses.rows) if (row.status in byStatus) byStatus[String(row.status)] = Number(row.n);
@@ -565,6 +592,35 @@ export function statsHandler(ctx: RouteCtx) {
       return { endpoint, requests: usage.requests, paid_requests: usage.paid_requests, revenue_usd: Math.round(revenue * 100) / 100, revenue_per_call: usage.requests ? Math.round((revenue / usage.requests) * 10000) / 10000 : 0, paid_ratio: rate(usage.paid_requests, usage.requests) };
     });
     (data as Record<string, unknown>).zero_result_by_endpoint = gaps.rows.map((r) => ({ endpoint: String(r.endpoint), zero_result_requests: Number(r.zero_result_requests), total_requests: Number(r.total_requests) }));
+    // Payment health: surfaces the granular 402 / verify_failed / facilitator
+    // counts alongside the on-chain settled revenue, so the operator can tell
+    // "clients tried to pay and the proof was rejected" apart from "no proof
+    // sent" and from "facilitator down" without reading the JSON log stream.
+    const paymentHealthByError: Record<'verify_failed' | 'facilitator_unavailable' | 'payment_required', number> = {
+      verify_failed: 0, facilitator_unavailable: 0, payment_required: 0,
+    };
+    for (const r of paymentHealthErrors.rows) {
+      const key = String(r.error) as keyof typeof paymentHealthByError;
+      if (key in paymentHealthByError) paymentHealthByError[key] = Number(r.n);
+    }
+    const settled = paymentsByStatus.settled ?? { count: 0, amount_usd: 0 };
+    (data as Record<string, unknown>).payment_health = {
+      settled: {
+        count: settled.count,
+        amount_usd: Math.round(settled.amount_usd * 100) / 100,
+      },
+      verify_failed: paymentHealthByError.verify_failed,
+      payment_required: paymentHealthByError.payment_required,
+      facilitator_unavailable: paymentHealthByError.facilitator_unavailable,
+      recent_failures: paymentHealthRecent.rows.map((r) => ({
+        ts: r.ts instanceof Date ? r.ts.toISOString() : String(r.ts),
+        endpoint: String(r.endpoint),
+        method: String(r.method),
+        status: Number(r.status),
+        error: String(r.error),
+        paid: r.paid === true,
+      })),
+    };
 
     return reply.send(envelope(req, data));
   };
