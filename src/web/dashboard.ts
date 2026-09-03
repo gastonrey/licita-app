@@ -364,6 +364,40 @@ button:focus-visible { outline: 3px solid var(--color-brand); outline-offset: 3p
   line-height: 1.2;
 }
 
+/* === PAYMENT HEALTH === */
+.payment-health-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+.payment-tile {
+  background: var(--kpi-bg);
+  border: 1px solid var(--kpi-border);
+  border-radius: var(--radius-default);
+  padding: var(--space-3) var(--space-4);
+  transition: border-color .15s ease;
+}
+.payment-tile.is-ok   { border-left: 3px solid var(--color-success); }
+.payment-tile.is-warn { border-left: 3px solid var(--color-warning); }
+.payment-tile.is-err  { border-left: 3px solid var(--color-destructive); }
+.payment-tile-label {
+  font-size: var(--text-xs);
+  color: var(--kpi-label-color);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+  margin-bottom: var(--space-1);
+}
+.payment-tile-val {
+  font-size: 1.5rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-foreground);
+  line-height: 1.2;
+}
+.payment-failures-table { margin-top: var(--space-3); }
+
 /* === TABLES === */
 table { border-collapse: collapse; width: 100%; font-size: var(--text-base); }
 thead th {
@@ -581,6 +615,7 @@ section[role="tabpanel"] > :first-child:is(h2) { margin-top: 0; }
   .content-area { padding: var(--space-4); }
   .period-bar { padding: var(--space-2) var(--space-4); }
   .kpis { grid-template-columns: 1fr; }
+  .payment-health-grid { grid-template-columns: 1fr; }
   .grid2, .grid3 { grid-template-columns: 1fr; }
   .endpoint-card { grid-template-columns: minmax(0, 1fr) repeat(2, minmax(4rem, .8fr)); }
   .endpoint-card .endpoint-stat:last-child { grid-column: 2 / -1; }
@@ -665,6 +700,14 @@ section[hidden] { display: none; }
         <div class="card">
           <h2>KPIs</h2>
           <div id="kpis" class="kpis"></div>
+        </div>
+
+        <div class="card">
+          <h2>Payment health</h2>
+          <p class="muted" id="payment-health-summary" aria-live="polite"></p>
+          <div id="payment-health-tiles" class="payment-health-grid" aria-label="Payment health tiles"></div>
+          <h3 class="h3">Recent payment failures</h3>
+          <div id="payment-health-failures"></div>
         </div>
 
         <div class="card">
@@ -919,6 +962,48 @@ function renderEndpointBars(rows) {
 
 }
 
+function renderPaymentHealth(ph) {
+  // Defensive defaults: an older stats payload (pre-payment_health) still
+  // renders cleanly. Zero everything, then map severity for each tile.
+  ph = ph || {};
+  const settled = ph.settled || { count: 0, amount_usd: 0 };
+  const verifyFailed = Number(ph.verify_failed ?? 0);
+  const paymentRequired = Number(ph.payment_required ?? 0);
+  const facilitatorUnavailable = Number(ph.facilitator_unavailable ?? 0);
+  const tiles = [
+    { label: 'Settled',        value: esc(settled.count + ' · $' + money(settled.amount_usd)), state: 'ok' },
+    { label: 'Verify failed',  value: esc(verifyFailed),          state: verifyFailed > 0 ? 'err' : 'ok' },
+    { label: 'Payment required (no proof)', value: esc(paymentRequired), state: paymentRequired > 0 ? 'warn' : 'ok' },
+    { label: 'Facilitator unavailable',    value: esc(facilitatorUnavailable), state: facilitatorUnavailable > 0 ? 'err' : 'ok' },
+  ];
+  $('payment-health-tiles').innerHTML = tiles.map((t) =>
+    '<div class="payment-tile is-' + t.state + '">' +
+    '<div class="payment-tile-label">' + t.label + '</div>' +
+    '<div class="payment-tile-val">' + t.value + '</div>' +
+    '</div>'
+  ).join('');
+  const totalFailures = verifyFailed + paymentRequired + facilitatorUnavailable;
+  $('payment-health-summary').textContent =
+    totalFailures === 0
+      ? 'No payment failures in the selected range.'
+      : totalFailures + ' payment failure' + (totalFailures === 1 ? '' : 's') + ' in the selected range.';
+  const rows = (ph.recent_failures || []).map((f) => {
+    const ts = f.ts ? dateFormat.format(new Date(f.ts)) : '—';
+    const badgeColor = f.error === 'facilitator_unavailable' || f.error === 'verify_failed'
+      ? 'var(--color-destructive)'
+      : 'var(--color-warning)';
+    return '<tr>' +
+      '<td class="num">' + esc(ts) + '</td>' +
+      '<td>' + esc(f.method || '') + ' ' + esc(f.endpoint || '') + '</td>' +
+      '<td class="num">' + esc(f.status ?? '') + '</td>' +
+      '<td><span style="color:' + badgeColor + ';font-weight:600;font-size:var(--text-xs)">' + esc(f.error || '') + '</span></td>' +
+      '</tr>';
+  }).join('');
+  $('payment-health-failures').innerHTML = rows === ''
+    ? '<p class="muted">No payment failures recorded yet.</p>'
+    : '<div class="payment-failures-table"><table><thead><tr><th class="num">Time</th><th>Endpoint</th><th class="num">Status</th><th>Reason</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+}
+
 function render(stats, recent) {
   const paidTotal = (stats.requests_by_endpoint || []).reduce((s, r) => s + Number(r.paid_requests || 0), 0);
   const kpis = [
@@ -933,6 +1018,11 @@ function render(stats, recent) {
     .map((p) => '<div class="kpi"><div class="kpi-label">' + p[0] + '</div><div class="kpi-val">' + p[1] + '</div></div>')
     .join('');
   $('traffic-by-day').innerHTML = renderTrafficChart(stats.daily_traffic || []);
+
+  // --- Payment health (Overview) -------------------------------------------------
+  // Distinguishes on-chain settlement from the three operator-actionable failure
+  // modes: no proof sent, proof rejected at verify, facilitator unreachable.
+  renderPaymentHealth(stats.payment_health);
 
   const g = stats.growth || {};
   $('nsm').textContent = esc(g.weekly_active_paying_agents ?? 0);

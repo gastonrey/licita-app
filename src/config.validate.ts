@@ -88,6 +88,11 @@ export function validateConfig(config: AppConfig): void {
     if (PLACEHOLDER_SECRETS.has(config.operatorKey)) {
       violations.push('OPERATOR_KEY must not be a known placeholder value ("change-me").');
     }
+    // RESEND_API_KEY is optional (lead notification is best-effort). When
+    // present in production it must look like a real Resend key.
+    if (config.nodeEnv === 'production' && config.resendApiKey.length > 0 && !config.resendApiKey.startsWith('re_')) {
+      violations.push('RESEND_API_KEY looks invalid: Resend API keys start with "re_". Leave it empty to disable lead notifications.');
+    }
   }
 
   if (violations.length > 0) {

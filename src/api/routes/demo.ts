@@ -9,6 +9,7 @@ import type { Db } from '../../db/client.js';
 import { priceOverrides } from '../../pay/prices.js';
 import { dateStr, envelope, num, tedUrl, type RouteCtx, validate } from './common.js';
 import { z } from 'zod';
+import { notifyNewLead } from '../../obs/notify.js';
 
 export const demoRequestSchema = z.object({ email: z.string().trim().toLowerCase().email('invalid email') });
 export const demoRequestValidation = validate(demoRequestSchema, 'body');
@@ -31,6 +32,13 @@ export function demoRequestHandler(ctx: RouteCtx) {
        RETURNING id, email, channel, source_url, status, created_at`,
       [body.email, channelFor(query, referer), sourceUrl],
     );
+    const lead = result.rows[0] as { id: number; email: string; channel: string; source_url: string | null };
+    // Fire-and-forget: never block the request, never throw.
+    notifyNewLead(ctx.db, req.log, lead, {
+      notifyEmail: ctx.config.notifyEmail,
+      resendApiKey: ctx.config.resendApiKey,
+      resendFrom: ctx.config.resendFrom,
+    });
     if (String(req.headers['content-type'] ?? '').startsWith('application/x-www-form-urlencoded')) {
       return reply.code(303).header('location', '/?demo=success').send();
     }

@@ -107,7 +107,10 @@ export async function buildServer(config: AppConfig, db: Db): Promise<FastifyIns
         (typeof routeUrl === 'string' && routeUrl.startsWith('/v1/companies/')
           ? strField(String(params.id ?? ''))
           : null),
-      error: req.errorCode ?? null,
+      // `paymentFailureKind` (set by the pay middleware) carries the granular
+      // payment-rejection reason — falls back to the public `errorCode` for
+      // non-payment failures (rate limit, internal, etc.). Operator-only.
+      error: req.paymentFailureKind ?? req.errorCode ?? null,
       paid: req.payment?.paid ?? false,
       q: strField(query.q),
       zero_result: req.zeroResult === true,

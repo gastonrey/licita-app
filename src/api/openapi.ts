@@ -390,6 +390,33 @@ const statsData = {
       properties: { count: { type: 'integer' }, rate: { type: 'number', nullable: true } },
     },
     payment_required_responses: { type: 'integer' },
+    payment_health: {
+      type: 'object',
+      description: 'Operator-only payment health breakdown. Distinguishes settled on-chain revenue from verify rejections, no-proof 402s, and facilitator unavailability.',
+      properties: {
+        settled: {
+          type: 'object',
+          properties: { count: { type: 'integer' }, amount_usd: { type: 'number' } },
+        },
+        verify_failed: { type: 'integer', description: 'Payment proof rejected by x402 verify (bad sig, expired, replay).' },
+        payment_required: { type: 'integer', description: 'No proof header sent — client did not attempt payment.' },
+        facilitator_unavailable: { type: 'integer', description: 'x402 facilitator/RPC unreachable or timed out.' },
+        recent_failures: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              ts: { type: 'string', format: 'date-time' },
+              endpoint: { type: 'string' },
+              method: { type: 'string' },
+              status: { type: 'integer' },
+              error: { type: 'string' },
+              paid: { type: 'boolean' },
+            },
+          },
+        },
+      },
+    },
     payments: {
       type: 'object',
       properties: {
@@ -966,7 +993,7 @@ function paths(): Record<string, unknown> {
         operationId: 'getStats',
         summary: 'Operator observability aggregates',
         description:
-          'Free, operator-only. Requires header x-operator-key. One JSON document aggregating request_logs and payments: unique clients, requests by endpoint and by source (rest/mcp), zero-result queries, payment-required responses, payment attempts/successes, revenue (by status and by network/provider), repeat paid clients, top searches, unique user agents, top requested CPVs/buyers/companies, failed queries + rate, data-null rates.',
+          'Free, operator-only. Requires header x-operator-key. One JSON document aggregating request_logs and payments: unique clients, requests by endpoint and by source (rest/mcp), zero-result queries, payment-required responses, payment health (settled/verify_failed/payment_required/facilitator_unavailable + recent failures), payment attempts/successes, revenue (by status and by network/provider), repeat paid clients, top searches, unique user agents, top requested CPVs/buyers/companies, failed queries + rate, data-null rates.',
         parameters: [
           {
             name: 'x-operator-key',

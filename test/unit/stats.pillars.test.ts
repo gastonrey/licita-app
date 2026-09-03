@@ -120,4 +120,63 @@ describe('product-quality stats pillars', () => {
     expect(data.requests_by_endpoint).toEqual([{ endpoint: 'GET /inside', requests: 1, paid_requests: 1 }]);
     expect(data.daily_traffic).toEqual([{ date: '2026-08-15', requests: 1, paid_requests: 0, rest_requests: 1, mcp_requests: 0 }]);
   });
+
+  // === Payment health (overview card) ============================================
+  it('payment_health zeroes out on an empty database', async () => {
+    const data = await stats(await dbWithTables());
+    expect(data.payment_health).toEqual({
+      settled: { count: 0, amount_usd: 0 },
+      verify_failed: 0,
+      payment_required: 0,
+      facilitator_unavailable: 0,
+      recent_failures: [],
+    });
+  });
+
+  it('payment_health settles payments aggregate and granular failure reasons', async () => {
+    const db = await dbWithTables();
+    const inside = new Date('2026-08-15T12:00:00Z');
+    const old = new Date('2026-07-15T12:00:00Z');
+    // Settled payments (2 inside range, 1 outside) → 2 inside, $1.50.
+    await db.query("INSERT INTO payments (endpoint,amount_usd,provider,proof,status,payer_address,created_at) VALUES ('POST /v1/research','0.50','x402','p1','settled','a',$1),('POST /v1/research','1.00','x402','p2','settled','b',$1),('GET /old','9.00','x402','p3','settled','old',$2)", [inside, old]);
+    // Granular payment failures (4 inside range, 1 outside).
+    for (const row of [
+      ['POST /v1/research', 'verify_failed',       inside, 402],
+      ['POST /v1/research', 'verify_failed',       inside, 402],
+      ['POST /v1/research', 'payment_required',    inside, 402],
+      ['POST /v1/research', 'facilitator_unavailable', inside, 502],
+      ['GET /old',          'verify_failed',       old,    402],
+    ]) {
+      await db.query('INSERT INTO request_logs (endpoint,method,error,paid,status,ts,source) VALUES ($1,\'POST\',$2,false,$3,$4,\'rest\')',
+        [row[0], row[1], row[3], row[2]]);
+    }
+    const data = await stats(db, { from: '2026-08-01', to: '2026-08-31' });
+    expect(data.payment_health.settled).toEqual({ count: 2, amount_usd: 1.5 });
+    expect(data.payment_health.verify_failed).toBe(2);
+    expect(data.payment_health.payment_required).toBe(1);
+    expect(data.payment_health.facilitator_unavailable).toBe(1);
+    // recent_failures lists newest rows first and is bounded to 10.
+    expect(data.payment_health.recent_failures).toHaveLength(4);
+    expect(data.payment_health.recent_failures[0].error).toMatch(/verify_failed|payment_required|facilitator_unavailable/);
+    expect(data.payment_health.recent_failures[0].ts).toBeTypeOf('string');
+    expect(new Date(data.payment_health.recent_failures[0].ts).getTime()).toBeGreaterThanOrEqual(new Date(data.payment_health.recent_failures[3].ts).getTime());
+  });
+
+  it('payment_health.recent_failures is bounded to 10 even with many rows', async () => {
+    const db = await dbWithTables();
+    for (let i = 0; i < 25; i++) {
+      await db.query("INSERT INTO request_logs (endpoint,method,error,paid,status,source) VALUES ('POST /v1/research','POST','verify_failed',false,402,'rest')");
+    }
+    const data = await stats(db);
+    expect(data.payment_health.recent_failures).toHaveLength(10);
+    expect(data.payment_health.verify_failed).toBe(25);
+  });
+
+  it('payment_health ignores failure reasons outside the date range', async () => {
+    const db = await dbWithTables();
+    await db.query("INSERT INTO request_logs (endpoint,method,error,paid,status,ts,source) VALUES ('POST /v1/research','POST','verify_failed',false,402,'2026-07-01','rest'),('POST /v1/research','POST','verify_failed',false,402,'2026-07-15','rest')");
+    const data = await stats(db, { from: '2026-08-01', to: '2026-08-31' });
+    expect(data.payment_health.verify_failed).toBe(0);
+    expect(data.payment_health.recent_failures).toEqual([]);
+  });
 });
