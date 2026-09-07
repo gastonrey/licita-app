@@ -3,6 +3,11 @@
 // with the OPERATOR_KEY (stored in sessionStorage) and polls /v1/stats and
 // /v1/stats/recent. It is deliberately NOT linked from the public NAV or
 // /llms.txt — the operator types the URL; the data it shows is operator-only.
+//
+// Redesign (2026-10): dark operator theme following the approved Penpot
+// "Dashboard UI Starter Kit" mockup — top bar with range presets, 4-col KPI
+// rows with deltas, alert banners, funnel, drill-down detail views via the
+// `detail` URL param (shareable, back/forward works through history.pushState).
 
 import type { FastifyInstance } from 'fastify';
 import type { AppConfig } from '../config.js';
@@ -17,23 +22,24 @@ const PAGE = `<!doctype html>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=Source+Serif+4:wght@400;600;700&display=swap" rel="stylesheet">
 <style>
-/* === PRIMITIVES === */
+/* === PRIMITIVES (dark operator theme) === */
 :root {
-  color-scheme: light;
-  --color-ink: #16232B;
-  --color-ink-light: #2a3242;
-  --color-ink-mid: #4a5468;
-  --color-paper: #F6F3EA;
-  --color-surface: #FFFFFF;
-  --color-rule: #C9C3B5;
-  --color-grid-line: #e3e6eb;
-  --color-signal: #B9472E;
-  --color-signal-hover: #8f321f;
-  --color-verified: #356B52;
-  --color-green-600: #1a7f37;
-  --color-amber-600: #9a6700;
-  --color-red-600: #cf222e;
-  --color-muted: #5B6870;
+  color-scheme: dark;
+  --color-ink: #0d1117;
+  --color-ink-light: #161b22;
+  --color-ink-mid: #2b313c;
+  --color-paper: #1c2129;
+  --color-surface: #161b22;
+  --color-rule: #2b313c;
+  --color-grid-line: #232a33;
+  --color-signal: #d97a52;
+  --color-signal-hover: #e89a6d;
+  --color-verified: #3fb950;
+  --color-green-600: #3fb950;
+  --color-amber-600: #d29922;
+  --color-red-600: #f85149;
+  --color-info: #58a6ff;
+  --color-muted: #8b949e;
   --space-1: 0.25rem;
   --space-2: 0.5rem;
   --space-3: 0.75rem;
@@ -48,28 +54,30 @@ const PAGE = `<!doctype html>
   --text-base: 0.85rem;
   --text-lg: 1.1rem;
   --text-xl: 1.35rem;
-  --text-2xl: clamp(2rem,5vw,3.5rem);
-  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.05);
-  --shadow-md: 0 4px 12px rgb(0 0 0 / 0.08);
-  --shadow-lg: 0 8px 24px rgb(0 0 0 / 0.12);
+  --text-2xl: clamp(1.6rem, 3vw, 2.4rem);
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
+  --shadow-md: 0 4px 12px rgb(0 0 0 / 0.5);
+  --shadow-lg: 0 8px 24px rgb(0 0 0 / 0.55);
   --transition-fast: 120ms ease;
   --transition-base: 200ms ease;
-  --radius-sm: 0.25rem;
-  --radius-default: 0.5rem;
+  --radius-sm: 0.375rem;
+  --radius-default: 0.75rem;
 }
 
 /* === SEMANTIC === */
 :root {
-  --color-foreground: var(--color-ink);
-  --color-background: var(--color-paper);
-  --color-surface-alt: var(--color-surface);
+  --color-foreground: #e6edf3;
+  --color-background: var(--color-ink);
+  --color-surface-alt: var(--color-paper);
   --color-border: var(--color-rule);
   --color-brand: var(--color-signal);
   --color-brand-hover: var(--color-signal-hover);
+  --color-brand-soft: rgba(217, 122, 82, 0.14);
   --color-success: var(--color-green-600);
   --color-warning: var(--color-amber-600);
   --color-destructive: var(--color-red-600);
   --color-muted-foreground: var(--color-muted);
+  --color-focus-ring: var(--color-signal);
 }
 
 /* === COMPONENTS === */
@@ -82,11 +90,11 @@ const PAGE = `<!doctype html>
   --endpoint-bg: var(--color-surface-alt);
   --chart-bg: var(--color-surface-alt);
   --btn-bg: var(--color-brand);
-  --btn-fg: #FFFFFF;
+  --btn-fg: #0d1117;
   --tab-bg: var(--color-surface-alt);
   --tab-active-border: var(--color-brand);
-  --link-color: var(--color-success);
-  --chart-line: var(--color-verified);
+  --link-color: var(--color-brand);
+  --chart-line: #58a6ff;
   --chart-paid: var(--color-brand);
 }
 
@@ -128,12 +136,12 @@ input[type="date"], input[type="password"], input[type="search"], select {
 input:focus-visible, select:focus-visible {
   outline: none;
   border-color: var(--color-brand);
-  box-shadow: 0 0 0 3px rgba(185, 71, 46, 0.15);
+  box-shadow: 0 0 0 3px rgba(217, 122, 82, 0.25);
 }
 button {
   cursor: pointer;
   touch-action: manipulation;
-  min-height: 44px;
+  min-height: 36px;
   border: none;
   border-radius: var(--radius-default);
   padding: 0 var(--space-4);
@@ -150,18 +158,19 @@ button:focus-visible { outline: 3px solid var(--color-brand); outline-offset: 3p
   left: 0;
   width: 240px;
   height: 100vh;
-  background: var(--color-ink);
+  background: #0a0d12;
   display: flex;
   flex-direction: column;
   z-index: 100;
   overflow-y: auto;
+  border-right: 1px solid var(--color-border);
 }
 .sidebar-logo {
   padding: var(--space-5) var(--space-5) var(--space-4);
   border-bottom: 1px solid rgba(255,255,255,0.06);
 }
 .sidebar-logo a {
-  color: var(--color-surface);
+  color: var(--color-foreground);
   text-decoration: none;
   font-family: var(--font-heading);
   font-size: var(--text-lg);
@@ -198,12 +207,12 @@ button:focus-visible { outline: 3px solid var(--color-brand); outline-offset: 3p
   transition: color .15s ease, background .15s ease, border-color .15s ease;
 }
 .sidebar-nav [role="tab"]:hover {
-  color: var(--color-surface);
+  color: var(--color-foreground);
   background: rgba(255,255,255,0.04);
 }
 .sidebar-nav [role="tab"][aria-selected="true"] {
-  color: var(--color-surface);
-  background: rgba(255,255,255,0.07);
+  color: var(--color-brand);
+  background: var(--color-brand-soft);
   border-left-color: var(--color-brand);
   font-weight: 600;
 }
@@ -224,7 +233,7 @@ button:focus-visible { outline: 3px solid var(--color-brand); outline-offset: 3p
   cursor: pointer;
   text-decoration: none;
 }
-.sidebar-footer .logout-link:hover { color: var(--color-surface); }
+.sidebar-footer .logout-link:hover { color: var(--color-foreground); }
 
 /* === MAIN CONTENT === */
 .main-content {
@@ -242,8 +251,24 @@ button:focus-visible { outline: 3px solid var(--color-brand); outline-offset: 3p
   padding: var(--space-3) var(--space-6);
   background: var(--color-surface);
   border-bottom: 1px solid var(--color-border);
-  min-height: 56px;
+  min-height: 64px;
 }
+.header-bar .page-title-wrap { min-width: 220px; }
+.header-bar .page-title-wrap h1 { font-size: var(--text-xl); line-height: 1.2; }
+.header-bar .page-title-wrap .page-sub { color: var(--color-muted-foreground); font-size: var(--text-xs); margin-top: 2px; }
+.header-bar .range-chips { display: flex; gap: 6px; }
+.header-bar .chip {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--color-border);
+  border-radius: 9999px;
+  padding: 4px 12px;
+  background: var(--color-surface-alt);
+  font-size: var(--text-xs);
+  color: var(--color-muted-foreground);
+}
+.header-bar .chip:hover { border-color: var(--color-brand); color: var(--color-foreground); }
+.header-bar .chip[aria-pressed="true"] { color: var(--color-brand); border-color: var(--color-brand); background: var(--color-brand-soft); }
 .header-bar label {
   display: flex;
   align-items: center;
@@ -272,13 +297,13 @@ button:focus-visible { outline: 3px solid var(--color-brand); outline-offset: 3p
   padding: 0 var(--space-3);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
-  background: var(--color-surface);
+  background: var(--color-surface-alt);
   color: var(--color-foreground);
   font-size: var(--text-sm);
 }
 .header-bar .btn-refresh:hover { border-color: var(--color-brand); color: var(--color-brand); }
 .header-bar .last-updated { font-size: var(--text-xs); color: var(--color-muted-foreground); white-space: nowrap; }
-.content-area { padding: var(--space-5) var(--space-6) var(--space-6); }
+.content-area { padding: var(--space-5) var(--space-6) var(--space-6); max-width: 1600px; }
 
 /* === MOBILE TAB BAR (visible < 768px, replaces sidebar) === */
 .mobile-tabs {
@@ -322,6 +347,7 @@ button:focus-visible { outline: 3px solid var(--color-brand); outline-offset: 3p
   display: flex;
   align-items: center;
   gap: var(--space-3);
+  flex-wrap: wrap;
 }
 
 /* === CARDS === */
@@ -332,11 +358,24 @@ button:focus-visible { outline: 3px solid var(--color-brand); outline-offset: 3p
   padding: var(--space-6);
   margin-bottom: var(--space-6);
 }
+.card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+.card-head .link { font-size: var(--text-sm); cursor: pointer; white-space: nowrap; }
+.card-head .link:hover { text-decoration: underline; }
+
+/* === GRID LAYOUTS === */
+.grid2 { display: grid; grid-template-columns: 1.45fr 1fr; gap: var(--space-5); align-items: start; }
+.grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: var(--space-5); align-items: start; }
 
 /* === KPI GRID === */
 .kpis {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
   gap: var(--space-3);
 }
 .kpi {
@@ -363,6 +402,11 @@ button:focus-visible { outline: 3px solid var(--color-brand); outline-offset: 3p
   color: var(--color-foreground);
   line-height: 1.2;
 }
+.kpi-val .unit { font-size: 0.9rem; color: var(--color-muted-foreground); font-weight: 500; }
+.kpi-delta { font-size: var(--text-xs); margin-top: var(--space-1); }
+.kpi-delta.up { color: var(--color-success); }
+.kpi-delta.down { color: var(--color-destructive); }
+.kpi-delta .flat { color: var(--color-muted-foreground); }
 
 /* === PAYMENT HEALTH === */
 .payment-health-grid {
@@ -402,7 +446,7 @@ button:focus-visible { outline: 3px solid var(--color-brand); outline-offset: 3p
 table { border-collapse: collapse; width: 100%; font-size: var(--text-base); }
 thead th {
   background: var(--color-ink-light);
-  color: var(--color-paper);
+  color: var(--color-muted-foreground);
   font-weight: 600;
   font-size: var(--text-xs);
   text-transform: uppercase;
@@ -416,13 +460,27 @@ tbody td {
   border-bottom: 1px solid var(--color-grid-line);
   vertical-align: top;
 }
-tbody tr:hover { background: rgba(185, 71, 46, 0.03); }
+tbody tr:hover { background: rgba(217, 122, 82, 0.06); }
 td.num, th.num { font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
 
 /* === SECTION SPACING === */
 section[role="tabpanel"] h2 { margin-top: var(--space-5); }
 section[role="tabpanel"] > :first-child { margin-top: 0; }
 section[role="tabpanel"] > :first-child:is(h2) { margin-top: 0; }
+
+/* === ALERT BANNER === */
+.banner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--text-sm);
+  margin-bottom: var(--space-5);
+}
+.banner.err { background: rgba(248, 81, 73, 0.1); border: 1px solid rgba(248, 81, 73, 0.4); color: #ffb3ae; }
+.banner.warn { background: rgba(210, 153, 34, 0.1); border: 1px solid rgba(210, 153, 34, 0.4); color: #e3c077; }
+.banner strong { color: inherit; text-decoration: underline; }
 
 /* === TRAFFIC CHART === */
 .traffic-chart { position: relative; padding: var(--space-3) var(--space-4); background: var(--chart-bg); border-radius: var(--radius-default); }
@@ -439,7 +497,7 @@ section[role="tabpanel"] > :first-child:is(h2) { margin-top: 0; }
 .traffic-chart .chart-hit { cursor: pointer; }
 .traffic-chart .chart-cursor { stroke: var(--color-brand); stroke-width: 1; stroke-dasharray: 3 3; pointer-events: none; opacity: .5; }
 .traffic-chart .chart-selected { pointer-events: none; }
-.chart-tooltip { position: absolute; transform: translate(-50%, -100%); background: var(--color-foreground); color: var(--color-paper); padding: .4rem .6rem; border-radius: var(--radius-sm); font-size: var(--text-sm); line-height: 1.4; display: flex; flex-direction: column; gap: .1rem; pointer-events: none; box-shadow: 0 4px 12px rgba(0, 0, 0, .15); white-space: nowrap; z-index: 10; }
+.chart-tooltip { position: absolute; transform: translate(-50%, -100%); background: var(--color-foreground); color: var(--color-ink); padding: .4rem .6rem; border-radius: var(--radius-sm); font-size: var(--text-sm); line-height: 1.4; display: flex; flex-direction: column; gap: .1rem; pointer-events: none; box-shadow: 0 4px 12px rgba(0, 0, 0, .4); white-space: nowrap; z-index: 10; }
 .chart-tooltip strong { font-weight: 600; }
 .chart-tooltip::after { content: ''; position: absolute; bottom: -4px; left: 50%; transform: translateX(-50%) rotate(45deg); width: 8px; height: 8px; background: var(--color-foreground); }
 .chart-hint { font-size: var(--text-sm); margin: var(--space-2) 0 0; }
@@ -473,13 +531,13 @@ section[role="tabpanel"] > :first-child:is(h2) { margin-top: 0; }
 .endpoint-bar[aria-pressed="true"] { background: var(--color-brand-soft); border-color: var(--color-brand); }
 .endpoint-bar-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .endpoint-bar-label code { font-family: var(--font-mono); font-size: var(--text-sm); color: var(--color-foreground); background: transparent; padding: 0; }
-.endpoint-bar-track { position: relative; height: 8px; background: var(--color-muted); border-radius: 4px; overflow: hidden; min-width: 3rem; }
+.endpoint-bar-track { position: relative; height: 8px; background: var(--color-ink-mid); border-radius: 4px; overflow: hidden; min-width: 3rem; }
 .endpoint-bar-fill { display: block; height: 100%; border-radius: 4px; transition: width .3s ease; }
 .endpoint-bar-stats { display: flex; gap: var(--space-3); align-items: baseline; font-size: var(--text-sm); color: var(--color-muted-foreground); justify-content: flex-end; }
 .endpoint-bar-visits { font-weight: 600; color: var(--color-foreground); font-variant-numeric: tabular-nums; }
 .endpoint-bar-share { font-variant-numeric: tabular-nums; }
 .endpoint-bar-rate { font-size: var(--text-xs); font-weight: 600; color: var(--color-brand); background: var(--color-brand-soft); padding: .1rem .4rem; border-radius: 999px; }
-.endpoint-bar-rate--free { color: var(--color-muted-foreground); background: var(--color-muted); }
+.endpoint-bar-rate--free { color: var(--color-muted-foreground); background: var(--color-ink-mid); }
 .endpoint-bars-rest { font-size: var(--text-sm); margin: var(--space-2) 0 0; padding: 0 var(--space-3); }
 .endpoint-bars-rest .btn-sm { font: inherit; font-size: var(--text-sm); color: var(--color-brand); background: none; border: 1px solid var(--color-border); border-radius: var(--radius-sm); padding: .2rem .6rem; cursor: pointer; }
 .endpoint-bars-rest .btn-sm:hover { border-color: var(--color-brand); }
@@ -539,7 +597,7 @@ section[role="tabpanel"] > :first-child:is(h2) { margin-top: 0; }
   padding: 0 var(--space-3);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
-  background: var(--color-surface);
+  background: var(--color-surface-alt);
   color: var(--color-foreground);
   font-size: var(--text-sm);
   font-weight: 500;
@@ -552,10 +610,6 @@ section[role="tabpanel"] > :first-child:is(h2) { margin-top: 0; }
 }
 .btn-brand:hover { background: var(--color-brand-hover); }
 
-/* === GRID LAYOUTS === */
-.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-5); }
-.grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: var(--space-5); }
-
 /* === STATUS CLASSES === */
 .st-2 { color: var(--color-success); font-weight: 600; }
 .st-4 { color: var(--color-warning); font-weight: 600; }
@@ -565,7 +619,68 @@ section[role="tabpanel"] > :first-child:is(h2) { margin-top: 0; }
 .bar { background: var(--color-success); height: 8px; min-width: 2px; }
 
 /* === WARNING === */
-.warning { color: #7b351f; background: #fff4ce; border: 1px solid #c98b63; padding: var(--space-3) var(--space-4); border-radius: var(--radius-sm); font-size: var(--text-sm); }
+.warning { color: #e3c077; background: rgba(210, 153, 34, 0.1); border: 1px solid rgba(210, 153, 34, 0.4); padding: var(--space-3) var(--space-4); border-radius: var(--radius-sm); font-size: var(--text-sm); }
+
+/* === FUNNEL (growth) === */
+.funnel { display: flex; flex-direction: column; gap: var(--space-2); margin: var(--space-2) 0 var(--space-4); }
+.funnel-row { display: grid; grid-template-columns: 9rem 1fr 5rem; align-items: center; gap: var(--space-3); font-size: var(--text-sm); }
+.funnel-row .f-label { color: var(--color-muted-foreground); text-align: right; font-weight: 500; }
+.funnel-track { height: 22px; background: var(--color-ink-mid); border-radius: 6px; overflow: hidden; }
+.funnel-fill {
+  height: 100%; border-radius: 6px; display: flex; align-items: center; justify-content: flex-end;
+  padding-right: 8px; font-size: 11px; font-weight: 700; color: #0d1117; min-width: 2.25rem;
+}
+.funnel-fill.s1 { background: #8b949e; }
+.funnel-fill.s2 { background: #58a6ff; }
+.funnel-fill.s3 { background: #e89a6d; }
+.funnel-fill.s4 { background: #d97a52; }
+.funnel-fill.s5 { background: #e3c077; }
+.funnel-fill.s6 { background: #3fb950; }
+.funnel-fill.s7 { background: #d29922; }
+.funnel-row .f-val { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+
+/* === LIST BARS (top N with horizontal bars) === */
+.list-bars { display: flex; flex-direction: column; gap: var(--space-3); }
+.lb-row .lb-top { display: flex; justify-content: space-between; font-size: var(--text-sm); margin-bottom: 4px; gap: var(--space-2); }
+.lb-row .lb-name { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lb-row .lb-val { color: var(--color-muted-foreground); font-variant-numeric: tabular-nums; flex-shrink: 0; }
+.lb-track { height: 7px; background: var(--color-ink-mid); border-radius: 6px; overflow: hidden; }
+.lb-fill { height: 100%; background: var(--color-info); border-radius: 6px; }
+
+/* === COHORT ROWS === */
+.cohort-wrap { overflow-x: auto; }
+.cohort-grid { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; min-width: 640px; }
+.cohort-row { display: grid; grid-template-columns: 110px repeat(6, 1fr); gap: 8px; align-items: center; font-size: 12.5px; }
+.cohort-row.head { color: var(--color-muted-foreground); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
+.cohort-cell { text-align: right; font-variant-numeric: tabular-nums; }
+.cohort-cell:first-child { text-align: left; }
+
+/* === DETAIL VIEW (drill-down) === */
+.detail-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-5);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--color-border);
+  flex-wrap: wrap;
+}
+.detail-head .breadcrumb { color: var(--color-muted-foreground); font-size: var(--text-sm); }
+.detail-head .breadcrumb strong { color: var(--color-foreground); font-weight: 600; }
+.detail-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-alt);
+  color: var(--color-foreground);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+.detail-back:hover { border-color: var(--color-brand); color: var(--color-brand); }
 
 /* === OVERRIDES FOR JS-GENERATED CONTENT INSIDE CARDS === */
 .card .traffic-chart { margin: 0; padding: 0; background: none; border: none; }
@@ -607,6 +722,9 @@ section[role="tabpanel"] > :first-child:is(h2) { margin-top: 0; }
 #login-msg { font-size: var(--text-sm); margin: 0; }
 
 /* === RESPONSIVE === */
+@media (max-width: 1100px) {
+  .grid3 { grid-template-columns: 1fr; }
+}
 @media (max-width: 768px) {
   .sidebar { display: none; }
   .mobile-tabs { display: flex; }
@@ -619,6 +737,8 @@ section[role="tabpanel"] > :first-child:is(h2) { margin-top: 0; }
   .grid2, .grid3 { grid-template-columns: 1fr; }
   .endpoint-card { grid-template-columns: minmax(0, 1fr) repeat(2, minmax(4rem, .8fr)); }
   .endpoint-card .endpoint-stat:last-child { grid-column: 2 / -1; }
+  .funnel-row { grid-template-columns: 6.5rem 1fr 3.5rem; gap: var(--space-2); }
+  .header-bar .page-title-wrap { min-width: 0; }
 }
 
 /* === ACCESSIBILITY === */
@@ -650,7 +770,6 @@ section[hidden] { display: none; }
   </nav>
   <div class="sidebar-footer">
     <div class="key-status">Key: <strong>active</strong></div>
-
   </div>
 </aside>
 
@@ -667,8 +786,17 @@ section[hidden] { display: none; }
   </div>
 
   <div id="dash" hidden>
-    <!-- Sticky header bar with date controls -->
+    <!-- Sticky header bar: page title, range presets, date controls, refresh -->
     <div class="header-bar">
+      <div class="page-title-wrap">
+        <h1>Operator Dashboard</h1>
+        <div class="page-sub">TED + PLACSP intelligence · operator-only</div>
+      </div>
+      <div class="range-chips" aria-label="Preset ranges">
+        <button type="button" class="chip" data-preset="7">7d</button>
+        <button type="button" class="chip" data-preset="30" aria-pressed="true">30d</button>
+        <button type="button" class="chip" data-preset="90">90d</button>
+      </div>
       <label>From <input type="date" id="from"></label>
       <label>To <input type="date" id="to"></label>
       <span class="header-spacer"></span>
@@ -693,10 +821,18 @@ section[hidden] { display: none; }
       <button id="retry" class="btn-sm" type="button">Retry</button>
     </div>
 
+    <!-- Drill-down detail header (hidden unless a detail view is open) -->
+    <div id="detail-head" class="detail-head" hidden>
+      <button id="detail-back" class="detail-back" type="button" aria-label="Back to the full view">← Volver</button>
+      <span id="detail-breadcrumb" class="breadcrumb"></span>
+    </div>
+
     <div class="content-area">
 
       <!-- Overview panel -->
       <section id="panel-overview" role="tabpanel" data-tab="overview" aria-label="Overview">
+        <div id="overview-alert" class="banner err" hidden role="alert">⚠️ Payment facilitator degraded: payments in "need_manual_verify" have not self-verified in the last hours. <strong>Review now ↓</strong></div>
+
         <div class="card">
           <h2>KPIs</h2>
           <div id="kpis" class="kpis"></div>
@@ -710,18 +846,28 @@ section[hidden] { display: none; }
           <div id="payment-health-failures"></div>
         </div>
 
-        <div class="card">
-          <h2>Traffic by day</h2>
-          <div id="traffic-by-day"></div>
+        <div class="grid2">
+          <div class="card">
+            <div class="card-head">
+              <h2>Traffic by day</h2>
+            </div>
+            <div id="traffic-by-day"></div>
+          </div>
+
+          <div class="card">
+            <div class="card-head">
+              <h2>Traffic by endpoint</h2>
+              <button type="button" class="link" data-detail="endpoints">View all →</button>
+            </div>
+            <div id="by-endpoint"></div>
+          </div>
         </div>
 
         <div class="card">
-          <h2>Traffic by endpoint</h2>
-          <div id="by-endpoint"></div>
-        </div>
-
-        <div class="card">
-          <h2>Recent activity</h2>
+          <div class="card-head">
+            <h2>Recent activity</h2>
+            <button type="button" class="link" data-detail="recent">View all →</button>
+          </div>
           <div class="recent-filters-wrap">
             <form id="recent-filters" class="filters" aria-label="Filter recent activity">
               <label>Endpoint <input id="recent-endpoint" name="recent_endpoint" type="search" placeholder="/v1/search"></label>
@@ -735,12 +881,17 @@ section[hidden] { display: none; }
           <div id="recent"></div>
           <div id="pager-recent" class="pagination" aria-label="Recent activity pagination"></div>
         </div>
+
+        <div id="detail-view" class="card" hidden></div>
       </section>
 
       <!-- Growth panel -->
       <section id="panel-growth" role="tabpanel" data-tab="growth" aria-label="Growth" hidden>
         <div class="card">
-          <h2>Growth cohorts</h2>
+          <div class="card-head">
+            <h2>Growth cohorts</h2>
+            <button type="button" class="link" data-detail="funnel">Funnel detail →</button>
+          </div>
           <div class="kpis">
             <div class="kpi"><div class="kpi-label">Weekly active paying agents</div><div class="kpi-val" id="nsm"></div></div>
           </div>
@@ -750,9 +901,14 @@ section[hidden] { display: none; }
         </div>
 
         <div class="card">
-          <h2>MCP discovery</h2>
+          <div class="card-head">
+            <h2>MCP discovery</h2>
+            <button type="button" class="link" data-detail="mcp-discovery">View detail →</button>
+          </div>
           <div id="mcp-discovery"></div>
         </div>
+
+        <div id="detail-view" class="card" hidden></div>
       </section>
 
       <!-- Leads panel -->
@@ -773,7 +929,10 @@ section[hidden] { display: none; }
         </div>
 
         <div class="card">
-          <h2>Who accessed</h2>
+          <div class="card-head">
+            <h2>Who accessed</h2>
+            <button type="button" class="link" data-detail="who-accessed">View detail →</button>
+          </div>
           <div class="grid2">
             <div><h3 class="h3">Repeat paid clients</h3><div id="repeat-clients"></div></div>
             <div><h3 class="h3">User agents</h3><div id="user-agents"></div></div>
@@ -795,6 +954,8 @@ section[hidden] { display: none; }
             <div><h3 class="h3">By network / provider</h3><div id="payments-net"></div></div>
           </div>
         </div>
+
+        <div id="detail-view" class="card" hidden></div>
       </section>
 
       <!-- Data quality panel -->
@@ -817,10 +978,14 @@ const KEY = 'licita_operator_key';
 const LS = sessionStorage;
 const $ = (id) => document.getElementById(id);
 const initialParams = new URLSearchParams(location.search);
-const state = { timer: null, tab: initialParams.get('view') === 'data-quality' ? 'gaps' : initialParams.get('view') || initialParams.get('tab') || 'overview', page: initialParams.get('page') || '1', recent_endpoint: '', recent_source: '', recent_paid: '', recent_status: '', selected_day: initialParams.get('day') || '', endpoint_limit: 10 };
+const state = { timer: null, tab: initialParams.get('view') === 'data-quality' ? 'gaps' : initialParams.get('view') || initialParams.get('tab') || 'overview', page: initialParams.get('page') || '1', recent_endpoint: '', recent_source: '', recent_paid: '', recent_status: '', selected_day: initialParams.get('day') || '', detail: initialParams.get('detail') || '', endpoint_limit: 10 };
 const validTabs = ['overview', 'growth', 'leads', 'economics', 'gaps'];
-function syncUrl(tab) { const params = new URLSearchParams(location.search); params.set('view', tab === 'gaps' ? 'data-quality' : tab); if ($('from').value) params.set('from', $('from').value); else params.delete('from'); if ($('to').value) params.set('to', $('to').value); else params.delete('to'); if (state.page !== '1') params.set('page', state.page); else params.delete('page'); if (state.selected_day) params.set('day', state.selected_day); else params.delete('day'); [['recent_endpoint', state.recent_endpoint], ['recent_source', state.recent_source], ['recent_paid', state.recent_paid], ['recent_status', state.recent_status]].forEach(([key, value]) => value ? params.set(key, value) : params.delete(key)); history.pushState({}, '', location.pathname + '?' + params.toString()); renderFilters(); }
-function restoreUrl() { const params = new URLSearchParams(location.search); const view = params.get('view'); state.tab = view === 'data-quality' ? 'gaps' : validTabs.includes(view) ? view : 'overview'; const page = Number(params.get('page')); state.page = Number.isInteger(page) && page > 0 ? String(page) : '1'; state.recent_endpoint = params.get('recent_endpoint') || ''; state.recent_source = params.get('recent_source') || ''; state.recent_paid = params.get('recent_paid') || ''; state.recent_status = params.get('recent_status') || ''; state.selected_day = params.get('day') || ''; $('from').value = params.get('from') || ''; $('to').value = params.get('to') || ''; $('recent-endpoint').value = state.recent_endpoint; $('recent-source').value = state.recent_source; $('recent-paid').value = state.recent_paid; $('recent-status').value = state.recent_status; }
+// Detail views are scoped to a tab: { tab: [detail tokens] }
+const detailMap = { overview: ['endpoints', 'recent'], growth: ['funnel', 'mcp-discovery'], economics: ['who-accessed'] };
+const detailTitle = { endpoints: 'Traffic by endpoint', recent: 'Recent activity', funnel: 'Growth funnel', 'mcp-discovery': 'MCP discovery', 'who-accessed': 'Who accessed' };
+const tabLabel = { overview: 'Overview', growth: 'Growth', leads: 'Leads', economics: 'Endpoint Economics', gaps: 'Data Quality' };
+function syncUrl(tab) { const params = new URLSearchParams(location.search); params.set('view', tab === 'gaps' ? 'data-quality' : tab); if ($('from').value) params.set('from', $('from').value); else params.delete('from'); if ($('to').value) params.set('to', $('to').value); else params.delete('to'); if (state.page !== '1') params.set('page', state.page); else params.delete('page'); if (state.selected_day) params.set('day', state.selected_day); else params.delete('day'); if (state.detail && (detailMap[tab] || []).includes(state.detail)) params.set('detail', state.detail); else params.delete('detail'); [['recent_endpoint', state.recent_endpoint], ['recent_source', state.recent_source], ['recent_paid', state.recent_paid], ['recent_status', state.recent_status]].forEach(([key, value]) => value ? params.set(key, value) : params.delete(key)); history.pushState({}, '', location.pathname + '?' + params.toString()); renderFilters(); }
+function restoreUrl() { const params = new URLSearchParams(location.search); const view = params.get('view'); state.tab = view === 'data-quality' ? 'gaps' : validTabs.includes(view) ? view : 'overview'; const page = Number(params.get('page')); state.page = Number.isInteger(page) && page > 0 ? String(page) : '1'; state.recent_endpoint = params.get('recent_endpoint') || ''; state.recent_source = params.get('recent_source') || ''; state.recent_paid = params.get('recent_paid') || ''; state.recent_status = params.get('recent_status') || ''; state.selected_day = params.get('day') || ''; state.detail = (detailMap[state.tab] || []).includes(params.get('detail')) ? params.get('detail') : ''; $('from').value = params.get('from') || ''; $('to').value = params.get('to') || ''; $('recent-endpoint').value = state.recent_endpoint; $('recent-source').value = state.recent_source; $('recent-paid').value = state.recent_paid; $('recent-status').value = state.recent_status; }
 
 // Escape every dynamic value before it touches innerHTML — user_agent / q /
 // client_key come from clients and must never execute as markup.
@@ -880,6 +1045,9 @@ function bindPager(id, rows, renderRows) {
     state.page = String(Number(button.getAttribute('data-page')) || 1);
     syncUrl(state.tab);
     renderRows(pageRows(rows, Number(state.page)));
+    // Re-render + re-bind the pager so the counter, disabled state and
+    // data-page attributes track the current page for the NEXT click.
+    bindPager(id, rows, renderRows);
   }));
 }
 
@@ -987,6 +1155,8 @@ function renderPaymentHealth(ph) {
     totalFailures === 0
       ? 'No payment failures in the selected range.'
       : totalFailures + ' payment failure' + (totalFailures === 1 ? '' : 's') + ' in the selected range.';
+  const alert = $('overview-alert');
+  if (alert) alert.hidden = totalFailures === 0;
   const rows = (ph.recent_failures || []).map((f) => {
     const ts = f.ts ? dateFormat.format(new Date(f.ts)) : '—';
     const badgeColor = f.error === 'facilitator_unavailable' || f.error === 'verify_failed'
@@ -1004,7 +1174,13 @@ function renderPaymentHealth(ph) {
     : '<div class="payment-failures-table"><table><thead><tr><th class="num">Time</th><th>Endpoint</th><th class="num">Status</th><th>Reason</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
 }
 
+// Latest payloads so drill-down detail views can re-render without a refetch.
+let lastStats = null;
+let lastRecent = [];
+
 function render(stats, recent) {
+  lastStats = stats;
+  lastRecent = recent;
   const paidTotal = (stats.requests_by_endpoint || []).reduce((s, r) => s + Number(r.paid_requests || 0), 0);
   const kpis = [
       ['Revenue', esc(money((stats.payments || {}).revenue_usd))],
@@ -1167,6 +1343,91 @@ function render(stats, recent) {
     '</div>';
   const gaps = stats.zero_result_by_endpoint || [];
   $('zero-result-by-endpoint').innerHTML = gaps.length === 0 ? '' : '<h3 class="h3">Zero-result rate by endpoint</h3><table><thead><tr><th>Endpoint</th><th class="num">Zero results</th><th class="num">Usage</th></tr></thead><tbody>' + gaps.map((r) => '<tr><td><code>' + esc(r.endpoint) + '</code></td><td class="num">' + esc(r.zero_result_requests) + '</td><td class="num">' + esc(r.total_requests) + '</td></tr>').join('') + '</tbody></table>';
+  renderDetail();
+}
+
+// --- Drill-down detail views ----------------------------------------------------
+// One level deep, scoped to the active tab, shareable via the \`detail\` URL param.
+// The sub-view re-uses already-rendered regions from the last payload (no refetch).
+function renderDetail() {
+  const panel = $('panel-' + state.tab);
+  if (!panel) return;
+  const detailView = panel.querySelector('#detail-view');
+  const head = $('detail-head');
+  const show = state.detail && (detailMap[state.tab] || []).includes(state.detail);
+
+  // Hide the tab's regular cards while a detail view is open.
+  Array.from(panel.querySelectorAll(':scope > .card')).forEach((card) => { card.hidden = show; });
+  if (!detailView) return;
+
+  if (!show) {
+    detailView.hidden = true;
+    if (head) head.hidden = true;
+    return;
+  }
+  detailView.hidden = false;
+  if (head) {
+    head.hidden = false;
+    $('detail-breadcrumb').textContent = tabLabel[state.tab] + ' / ' + detailTitle[state.detail];
+  }
+
+  const d = state.detail;
+  if (state.tab === 'overview' && d === 'endpoints') {
+    state.endpoint_limit = 1000;
+    detailView.innerHTML = '<h2>All endpoints by visits</h2>' + renderEndpointBars(lastStats.requests_by_endpoint || []);
+  } else if (state.tab === 'overview' && d === 'recent') {
+    const renderRows = (rows) => rows.length === 0
+      ? '<p class="muted">No requests logged yet.</p>'
+      : '<table><thead><tr><th>Time</th><th>Client</th><th>Endpoint</th><th class="num">Status</th><th>Paid</th><th>Source</th><th>User agent</th><th class="num">Latency ms</th><th>Context</th></tr></thead><tbody>' +
+        rows.map((r) => {
+          const ctxParts = [];
+          if (r.q) ctxParts.push('q=' + r.q);
+          if (r.cpv) ctxParts.push('cpv=' + r.cpv);
+          if (r.buyer) ctxParts.push('buyer=' + r.buyer);
+          if (r.company) ctxParts.push('company=' + r.company);
+          const when = r.ts ? dateFormat.format(new Date(r.ts)) : '—';
+          return '<tr>' +
+            '<td class="num">' + esc(when) + '</td>' +
+            '<td title="' + esc(r.client_key) + '"><code>' + esc(short(r.client_key, 10)) + '</code></td>' +
+            '<td><code>' + esc(r.endpoint) + '</code></td>' +
+            '<td class="num ' + statusClass(r.status) + '">' + esc(r.status ?? '') + '</td>' +
+            '<td>' + (r.paid ? 'yes' : 'no') + '</td>' +
+            '<td>' + esc(r.source) + '</td>' +
+            '<td title="' + esc(r.user_agent) + '">' + esc(short(r.user_agent, 40)) + '</td>' +
+            '<td class="num">' + esc(r.latency_ms) + '</td>' +
+            '<td class="muted">' + esc(ctxParts.join(' · ')) + '</td>' +
+            '</tr>';
+        }).join('') + '</tbody></table>';
+    detailView.innerHTML = '<h2>All recent activity</h2>' + renderRows(lastRecent);
+  } else if (state.tab === 'growth' && d === 'funnel') {
+    detailView.innerHTML = '<h2>Growth funnel detail</h2>' +
+      ($('growth-funnel') ? $('growth-funnel').innerHTML : '<p class="muted">No growth data yet.</p>') +
+      ($('growth-rows') ? $('growth-rows').innerHTML : '');
+  } else if (state.tab === 'growth' && d === 'mcp-discovery') {
+    detailView.innerHTML = '<h2>MCP discovery detail</h2>' +
+      ($('mcp-discovery') ? $('mcp-discovery').innerHTML : '<p class="muted">No MCP data yet.</p>');
+  } else if (state.tab === 'economics' && d === 'who-accessed') {
+    detailView.innerHTML = '<h2>Who accessed — detail</h2>' +
+      '<h3 class="h3">Repeat paid clients</h3>' + ($('repeat-clients') ? $('repeat-clients').innerHTML : '<p class="muted">None.</p>') +
+      '<h3 class="h3">User agents</h3>' + ($('user-agents') ? $('user-agents').innerHTML : '<p class="muted">None.</p>');
+  } else {
+    detailView.hidden = true;
+    if (head) head.hidden = true;
+  }
+}
+
+function openDetail(detail) {
+  state.detail = detail;
+  state.page = '1';
+  syncUrl(state.tab);
+  renderDetail();
+}
+
+function closeDetail() {
+  state.detail = '';
+  state.page = '1';
+  syncUrl(state.tab);
+  renderDetail();
 }
 
 function setLastUpdated(err) {
@@ -1217,6 +1478,7 @@ function renderLeads(data) {
 
 function selectTab(tab, push = true) {
   state.tab = tab;
+  if (!(detailMap[tab] || []).includes(state.detail)) state.detail = '';
   document.querySelectorAll('[data-tab]').forEach((section) => { section.hidden = section.dataset.tab !== tab; });
   document.querySelectorAll('[data-tab-button]').forEach((button) => {
     const active = button.dataset.tabButton === tab;
@@ -1225,6 +1487,7 @@ function selectTab(tab, push = true) {
     button.setAttribute('tabindex', active ? '0' : '-1');
   });
   if (push) syncUrl(tab);
+  renderDetail();
 }
 
 function showLogin(msg) {
@@ -1243,6 +1506,19 @@ function updateTimer() {
   if ($('auto-refresh').checked) state.timer = setInterval(load, 15000);
 }
 
+function setRangePreset(days) {
+  const to = new Date();
+  const from = new Date();
+  from.setDate(to.getDate() - (days - 1));
+  const iso = (d) => d.toISOString().slice(0, 10);
+  $('from').value = iso(from);
+  $('to').value = iso(to);
+  document.querySelectorAll('.range-chips .chip').forEach((chip) => chip.setAttribute('aria-pressed', String(chip.dataset.preset === String(days))));
+  state.page = '1';
+  syncUrl(state.tab);
+  load();
+}
+
 $('login-form').addEventListener('submit', (e) => {
   e.preventDefault();
   const v = $('key').value.trim();
@@ -1256,6 +1532,9 @@ $('retry').addEventListener('click', load);
 $('open-details').addEventListener('click', () => { const open = $('leads').hidden; $('leads').hidden = !open; $('open-details').setAttribute('aria-expanded', String(open)); $('open-details').textContent = open ? 'Hide details' : 'Open details'; });
 $('clear-filters').addEventListener('click', () => { $('from').value = ''; $('to').value = ''; state.page = '1'; syncUrl(state.tab); load(); });
 $('auto-refresh').addEventListener('change', updateTimer);
+document.querySelectorAll('.range-chips .chip').forEach((chip) => chip.addEventListener('click', () => setRangePreset(Number(chip.dataset.preset))));
+document.querySelectorAll('[data-detail]').forEach((link) => link.addEventListener('click', () => openDetail(link.dataset.detail)));
+$('detail-back').addEventListener('click', closeDetail);
 ['recent-endpoint', 'recent-source', 'recent-paid', 'recent-status'].forEach((id) => $(id).addEventListener('input', () => {
   state[id.replace('recent-', 'recent_')] = $(id).value;
   state.page = '1';
