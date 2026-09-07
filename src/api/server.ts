@@ -34,7 +34,7 @@ import { researchHandler, researchBodyValidation } from './routes/research.js';
 import { demoHandler, demoRequestHandler, demoRequestValidation } from './routes/demo.js';
 import { pricingHandler } from './routes/pricing.js';
 import { billingAmountValidation, billingGetHandler, billingPurchaseHandler } from './routes/billing.js';
-import { demoStatsHandler, recentStatsHandler, statsAuth, statsHandler, statsQueryValidation } from './routes/stats.js';
+import { demoStatsHandler, paymentsStatsHandler, recentStatsHandler, statsAuth, statsHandler, statsQueryValidation } from './routes/stats.js';
 
 /** Rate-limit identity: X-PAYMENT-derived (proof hash) when present, else client IP. */
 export function rateLimitKey(req: FastifyRequest): string {
@@ -233,6 +233,7 @@ export async function buildServer(config: AppConfig, db: Db): Promise<FastifyIns
   app.get('/v1/stats', { preHandler: [statsAuth(config.operatorKey), statsQueryValidation] }, statsHandler(ctx));
   app.get('/v1/stats/demo', { preHandler: [statsAuth(config.operatorKey)] }, demoStatsHandler(ctx));
   app.get('/v1/stats/recent', { preHandler: [statsAuth(config.operatorKey)] }, recentStatsHandler(ctx));
+  app.get('/v1/stats/payments', { preHandler: [statsAuth(config.operatorKey)] }, paymentsStatsHandler(ctx));
   app.get('/openapi.json', async (_req, reply) => reply.send(buildOpenApi()));
 
   // Liveness/readiness: 200 when `SELECT 1` succeeds within a short timeout,

@@ -490,6 +490,27 @@ const statsData = {
   },
 } as const;
 
+/** GET /v1/stats/payments row — one payment attempt (operator dashboard feed). */
+const paymentAttemptRow = {
+  type: 'object',
+  properties: {
+    ts: { type: 'string', format: 'date-time' },
+    kind: { type: 'string', enum: ['payment', 'failure'] },
+    endpoint: { type: 'string' },
+    method: { type: ['string', 'null'] },
+    provider: { type: ['string', 'null'] },
+    status: { type: ['string', 'integer'] },
+    error: { type: ['string', 'null'] },
+    paid: { type: ['boolean'] },
+    amount_usd: { type: ['number', 'null'] },
+    payer_address: { type: ['string', 'null'] },
+    tx_hash: { type: ['string', 'null'] },
+    network: { type: ['string', 'null'] },
+    client_key: { type: ['string', 'null'] },
+    source: { type: ['string', 'null'], enum: ['rest', 'mcp'] },
+  },
+} as const;
+
 /** GET /v1/stats/recent row — one request_logs entry (operator dashboard feed). */
 const recentStatsRow = {
   type: 'object',
@@ -1046,6 +1067,38 @@ function paths(): Record<string, unknown> {
             description: 'Observability envelope',
             content: {
               'application/json': { schema: envelopeOf({ type: 'array', items: recentStatsRow }) },
+            },
+          },
+          '401': errResp('Missing/invalid operator key'),
+        },
+      },
+    },
+    '/v1/stats/payments': {
+      get: {
+        operationId: 'getPaymentAttempts',
+        summary: 'Payment attempt feed (operator only)',
+        description:
+          'Free, operator-only. Requires header x-operator-key. Unified newest-first list of EVERY payment attempt: successes from payments (ts, kind=payment, endpoint, provider, status, amount_usd, payer_address, tx_hash, network) plus failures from request_logs (ts, kind=failure, endpoint, method, status, error, paid, client_key, source) where error is verify_failed | payment_required | facilitator_unavailable. Feeds the operator dashboard Payments tab; not part of the public price ladder.',
+        parameters: [
+          {
+            name: 'x-operator-key',
+            in: 'header',
+            required: true,
+            schema: { type: 'string' },
+          },
+          {
+            name: 'limit',
+            in: 'query',
+            required: false,
+            description: 'Max attempts to return (default 50, clamped to 200).',
+            schema: { type: 'integer', minimum: 1, maximum: 200, default: 50 },
+          },
+        ],
+        responses: {
+          '200': {
+            description: 'Observability envelope',
+            content: {
+              'application/json': { schema: envelopeOf({ type: 'object', properties: { attempts: { type: 'array', items: paymentAttemptRow } } }) },
             },
           },
           '401': errResp('Missing/invalid operator key'),

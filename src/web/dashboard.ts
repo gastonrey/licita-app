@@ -694,7 +694,7 @@ section[role="tabpanel"] > :first-child:is(h2) { margin-top: 0; }
 
 /* === SCROLLABLE REGIONS === */
 .table-wrap { overflow-x: auto; max-width: 100%; }
-#recent, #leads, #by-endpoint, #endpoint-economics, #zero-result, #zero-result-by-endpoint, #repeat-clients, #user-agents, #mcp-discovery { overflow-x: auto; }
+#recent, #leads, #by-endpoint, #endpoint-economics, #zero-result, #zero-result-by-endpoint, #repeat-clients, #user-agents, #mcp-discovery, #payment-attempts { overflow-x: auto; }
 
 /* === LOGIN === */
 #login { display: flex; align-items: center; justify-content: center; min-height: 60vh; }
@@ -763,6 +763,7 @@ section[hidden] { display: none; }
   </div>
   <nav class="sidebar-nav" role="tablist" aria-label="Dashboard sections">
     <button role="tab" aria-controls="panel-overview" type="button" data-tab-button="overview" data-view="overview" aria-selected="true" tabindex="0">Overview</button>
+    <button role="tab" aria-controls="panel-payments" type="button" data-tab-button="payments" data-view="payments" aria-selected="false" tabindex="-1">Payments</button>
     <button role="tab" aria-controls="panel-growth" type="button" data-tab-button="growth" data-view="growth" aria-selected="false" tabindex="-1">Growth</button>
     <button role="tab" aria-controls="panel-leads" type="button" data-tab-button="leads" data-view="leads" aria-selected="false" tabindex="-1">Leads</button>
     <button role="tab" aria-controls="panel-economics" type="button" data-tab-button="economics" data-view="economics" aria-selected="false" tabindex="-1">Endpoint Economics</button>
@@ -808,6 +809,7 @@ section[hidden] { display: none; }
     <!-- Mobile tab bar (hidden on desktop) -->
     <nav class="mobile-tabs" role="tablist" aria-label="Dashboard sections">
       <button role="tab" aria-controls="panel-overview" type="button" data-tab-button="overview" data-view="overview">Overview</button>
+      <button role="tab" aria-controls="panel-payments" type="button" data-tab-button="payments" data-view="payments">Payments</button>
       <button role="tab" aria-controls="panel-growth" type="button" data-tab-button="growth" data-view="growth">Growth</button>
       <button role="tab" aria-controls="panel-leads" type="button" data-tab-button="leads" data-view="leads">Leads</button>
       <button role="tab" aria-controls="panel-economics" type="button" data-tab-button="economics" data-view="economics">Endpoint Economics</button>
@@ -831,7 +833,7 @@ section[hidden] { display: none; }
 
       <!-- Overview panel -->
       <section id="panel-overview" role="tabpanel" data-tab="overview" aria-label="Overview">
-        <div id="overview-alert" class="banner err" hidden role="alert">⚠️ Payment facilitator degraded: payments in "need_manual_verify" have not self-verified in the last hours. <strong>Review now ↓</strong></div>
+        <div id="overview-alert" class="banner err" hidden role="alert">⚠️ Payment failures: proof rejected, no proof sent, or payment facilitator unavailable. <a href="/dashboard?view=payments" class="link">Review now ↓</a></div>
 
         <div class="card">
           <h2>KPIs</h2>
@@ -883,6 +885,19 @@ section[hidden] { display: none; }
         </div>
 
         <div id="detail-view" class="card" hidden></div>
+      </section>
+
+      <!-- Payments panel -->
+      <section id="panel-payments" role="tabpanel" data-tab="payments" aria-label="Payments" hidden>
+        <div class="card">
+          <div class="card-head">
+            <h2>Payment attempts</h2>
+          </div>
+          <p class="muted" aria-live="polite">Every payment attempt: settled payments and failed attempts (proof rejected, no proof sent, facilitator unavailable), newest first.</p>
+          <p id="payment-attempts-summary" class="muted" aria-live="polite"></p>
+          <div id="payment-attempts" class="table-wrap"></div>
+          <div id="pager-attempts" class="pagination" aria-label="Payment attempts pagination"></div>
+        </div>
       </section>
 
       <!-- Growth panel -->
@@ -979,11 +994,11 @@ const LS = sessionStorage;
 const $ = (id) => document.getElementById(id);
 const initialParams = new URLSearchParams(location.search);
 const state = { timer: null, tab: initialParams.get('view') === 'data-quality' ? 'gaps' : initialParams.get('view') || initialParams.get('tab') || 'overview', page: initialParams.get('page') || '1', recent_endpoint: '', recent_source: '', recent_paid: '', recent_status: '', selected_day: initialParams.get('day') || '', detail: initialParams.get('detail') || '', endpoint_limit: 10 };
-const validTabs = ['overview', 'growth', 'leads', 'economics', 'gaps'];
+const validTabs = ['overview', 'payments', 'growth', 'leads', 'economics', 'gaps'];
 // Detail views are scoped to a tab: { tab: [detail tokens] }
 const detailMap = { overview: ['endpoints', 'recent'], growth: ['funnel', 'mcp-discovery'], economics: ['who-accessed'] };
 const detailTitle = { endpoints: 'Traffic by endpoint', recent: 'Recent activity', funnel: 'Growth funnel', 'mcp-discovery': 'MCP discovery', 'who-accessed': 'Who accessed' };
-const tabLabel = { overview: 'Overview', growth: 'Growth', leads: 'Leads', economics: 'Endpoint Economics', gaps: 'Data Quality' };
+const tabLabel = { overview: 'Overview', payments: 'Payments', growth: 'Growth', leads: 'Leads', economics: 'Endpoint Economics', gaps: 'Data Quality' };
 function syncUrl(tab) { const params = new URLSearchParams(location.search); params.set('view', tab === 'gaps' ? 'data-quality' : tab); if ($('from').value) params.set('from', $('from').value); else params.delete('from'); if ($('to').value) params.set('to', $('to').value); else params.delete('to'); if (state.page !== '1') params.set('page', state.page); else params.delete('page'); if (state.selected_day) params.set('day', state.selected_day); else params.delete('day'); if (state.detail && (detailMap[tab] || []).includes(state.detail)) params.set('detail', state.detail); else params.delete('detail'); [['recent_endpoint', state.recent_endpoint], ['recent_source', state.recent_source], ['recent_paid', state.recent_paid], ['recent_status', state.recent_status]].forEach(([key, value]) => value ? params.set(key, value) : params.delete(key)); history.pushState({}, '', location.pathname + '?' + params.toString()); renderFilters(); }
 function restoreUrl() { const params = new URLSearchParams(location.search); const view = params.get('view'); state.tab = view === 'data-quality' ? 'gaps' : validTabs.includes(view) ? view : 'overview'; const page = Number(params.get('page')); state.page = Number.isInteger(page) && page > 0 ? String(page) : '1'; state.recent_endpoint = params.get('recent_endpoint') || ''; state.recent_source = params.get('recent_source') || ''; state.recent_paid = params.get('recent_paid') || ''; state.recent_status = params.get('recent_status') || ''; state.selected_day = params.get('day') || ''; state.detail = (detailMap[state.tab] || []).includes(params.get('detail')) ? params.get('detail') : ''; $('from').value = params.get('from') || ''; $('to').value = params.get('to') || ''; $('recent-endpoint').value = state.recent_endpoint; $('recent-source').value = state.recent_source; $('recent-paid').value = state.recent_paid; $('recent-status').value = state.recent_status; }
 
@@ -1174,9 +1189,56 @@ function renderPaymentHealth(ph) {
     : '<div class="payment-failures-table"><table><thead><tr><th class="num">Time</th><th>Endpoint</th><th class="num">Status</th><th>Reason</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
 }
 
+function renderPaymentAttempts(attempts) {
+  const rows = Array.isArray(attempts) ? attempts : [];
+  const summary = $('payment-attempts-summary');
+  if (summary) {
+    const settled = rows.filter((a) => a.kind === 'payment').length;
+    const failed = rows.filter((a) => a.kind === 'failure').length;
+    summary.textContent = rows.length === 0
+      ? 'No payment attempts recorded yet.'
+      : rows.length + ' attempt' + (rows.length === 1 ? '' : 's') + ' shown · ' + settled + ' settled · ' + failed + ' failed';
+  }
+  const renderAttemptRows = (pageRows2) => pageRows2.length === 0
+    ? '<p class="muted">No payment attempts recorded yet.</p>'
+    : '<table><thead><tr><th class="num">Time</th><th>Kind</th><th>Endpoint</th><th>Provider / source</th><th class="num">Status</th><th>Reason / tx</th><th class="num">Amount</th><th>Payer / client</th><th>Network</th></tr></thead><tbody>' +
+       pageRows2.map((a) => {
+        const when = a.ts ? dateFormat.format(new Date(a.ts)) : '—';
+        const endpoint = a.method && !String(a.endpoint).startsWith(a.method) ? a.method + ' ' + a.endpoint : a.endpoint;
+        const provider = a.kind === 'payment' ? a.provider : a.source;
+        const statusCell = a.kind === 'failure'
+          ? '<span class="payment-badge is-err">' + esc(statusClass(a.status)) + '</span>'
+          : '<span class="payment-badge is-ok">' + esc(a.status) + '</span>';
+        const reason = a.kind === 'failure'
+          ? '<span style="color:var(--color-destructive);font-weight:600">' + esc(a.error || '') + '</span>'
+          : a.tx_hash
+            ? '<span title="' + esc(a.tx_hash) + '">' + esc(short(a.tx_hash, 12)) + '</span>'
+            : '—';
+        const payer = a.kind === 'payment' ? a.payer_address : a.client_key;
+        return '<tr>' +
+          '<td class="num">' + esc(when) + '</td>' +
+          '<td>' + esc(a.kind) + '</td>' +
+          '<td title="' + esc(endpoint) + '"><code>' + esc(short(endpoint, 40)) + '</code></td>' +
+          '<td>' + esc(provider ?? '—') + '</td>' +
+          '<td class="num">' + statusCell + '</td>' +
+          '<td>' + reason + '</td>' +
+          '<td class="num">' + (a.kind === 'payment' ? esc(money(a.amount_usd)) : '—') + '</td>' +
+          '<td title="' + esc(payer) + '"><code>' + esc(payer ? short(payer, 12) : '—') + '</code></td>' +
+          '<td>' + esc(a.network ?? '—') + '</td>' +
+          '</tr>';
+      }).join('') +
+      '</tbody></table>';
+  const table = $('payment-attempts');
+  if (table) {
+    table.innerHTML = renderAttemptRows(pageRows(rows, Number(state.page) || 1));
+    bindPager('attempts', rows, (pageRows2) => { table.innerHTML = renderAttemptRows(pageRows2); });
+  }
+}
+
 // Latest payloads so drill-down detail views can re-render without a refetch.
 let lastStats = null;
 let lastRecent = [];
+let lastPaymentAttempts = [];
 
 function render(stats, recent) {
   lastStats = stats;
@@ -1199,6 +1261,7 @@ function render(stats, recent) {
   // Distinguishes on-chain settlement from the three operator-actionable failure
   // modes: no proof sent, proof rejected at verify, facilitator unreachable.
   renderPaymentHealth(stats.payment_health);
+  renderPaymentAttempts(lastPaymentAttempts);
 
   const g = stats.growth || {};
   $('nsm').textContent = esc(g.weekly_active_paying_agents ?? 0);
@@ -1443,16 +1506,20 @@ async function load() {
     const from = $('from').value, to = $('to').value;
      const range = from || to ? '?from=' + encodeURIComponent(from) + '&to=' + encodeURIComponent(to) : '';
      renderFilters(); $('load-state').textContent = 'Loading selected period…';
-    const [s, r, d] = await Promise.all([
+    const [s, r, d, p] = await Promise.all([
       fetch('/v1/stats' + range, { headers: { 'x-operator-key': key } }),
         fetch('/v1/stats/recent?limit=200' + (range ? '&' + range.slice(1) : ''), { headers: { 'x-operator-key': key } }),
        fetch('/v1/stats/demo?limit=200' + (range ? '&' + range.slice(1) : ''), { headers: { 'x-operator-key': key } }),
+       fetch('/v1/stats/payments?limit=200' + (range ? '&' + range.slice(1) : ''), { headers: { 'x-operator-key': key } }),
     ]);
-    if (s.status === 401 || r.status === 401 || d.status === 401) { invalidKey(); return; }
+    if (s.status === 401 || r.status === 401 || d.status === 401 || p.status === 401) { invalidKey(); return; }
     if (!s.ok) throw new Error('GET /v1/stats → ' + s.status);
     if (!r.ok) throw new Error('GET /v1/stats/recent → ' + r.status);
+    if (!p.ok) throw new Error('GET /v1/stats/payments → ' + p.status);
     const stats = await s.json();
     const recent = await r.json();
+    const payments = await p.json();
+    lastPaymentAttempts = payments.data && payments.data.attempts !== undefined ? payments.data.attempts : [];
     render(stats.data, recent.data);
      renderLeads(d.data);
      selectTab(state.tab || 'overview');
