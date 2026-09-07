@@ -14,7 +14,7 @@ The primary product outcome is helping a professional decide where to focus proc
 
 ## Engineering conventions
 
-- Runtime: Node.js 20+, TypeScript, ESM, Fastify, PostgreSQL, raw SQL, and Zod validation.
+- Runtime: Node.js 22+, TypeScript, ESM, Fastify, PostgreSQL, raw SQL, and Zod validation. (Floor set by `engines`; jsdom/undici 8 in the test stack requires Node ≥ 22.19.)
 - Public web surfaces live in `src/web/`; API routes live in `src/api/routes/`; payments live in `src/pay/`; migrations live in `migrations/`; tests live in `test/`.
 - Preserve REST envelopes, MCP contracts, provenance, and explicit nulls. Never fabricate data.
 - Validate untrusted input at the route boundary and enforce authorization server-side.
