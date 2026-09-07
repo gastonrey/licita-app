@@ -29,6 +29,14 @@ describe('dashboard tabs', () => {
     expect(html).toContain('table-wrap');
     expect(html).toContain('Not available');
     expect(html).toContain('Loading…');
+    expect(html).toContain('Payments');
+    expect(html).toContain('data-tab="payments"');
+    expect(html).toContain('data-tab-button="payments"');
+    expect(html).toContain('id="panel-payments"');
+    expect(html).toContain('aria-controls="panel-payments"');
+    expect(html).toContain("fetch('/v1/stats/payments");
+    expect(html).toContain('Review now ↓');
+    expect(html).toContain('href="/dashboard?view=payments"');
     await app.close();
   });
 

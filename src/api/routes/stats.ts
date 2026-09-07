@@ -233,6 +233,25 @@ LIMIT $1
 `;
 
 const EMPTY_DEMO = { rows: [] as Record<string, unknown>[] };
+
+// GET /v1/stats/payments — operator-only payment-attempt feed. Successes live in
+// `payments` (inserted only on settlement/debit: amount, provider, status,
+// payer, tx, network) and failures live in `request_logs` (error IN the three
+// payment_failure_kind values set by pay/middleware.ts). The handler merges both
+// newest-first so the operator sees EVERY attempt, not just health aggregates.
+const PAYMENT_ATTEMPTS_SUCCESS_SQL = `
+SELECT created_at AS ts, endpoint, amount_usd, provider, status, payer_address, tx_hash, network
+FROM payments
+ORDER BY created_at DESC
+LIMIT $1
+`;
+const PAYMENT_ATTEMPTS_FAILURE_SQL = `
+SELECT ts, endpoint, method, status, error, paid, client_key, source
+FROM request_logs
+WHERE error IN ('verify_failed','facilitator_unavailable','payment_required')
+ORDER BY ts DESC
+LIMIT $1
+`;
 async function optionalQuery(db: RouteCtx['db'], sql: string, values: unknown[] = []) {
   try { const result = await db.query(sql, values); return { rows: result.rows, missing: false }; }
   catch { return { ...EMPTY_DEMO, missing: true }; }
@@ -663,5 +682,53 @@ export function recentStatsHandler(ctx: RouteCtx) {
     }
     const { rows } = await ctx.db.query(sql, values);
     return reply.send(envelope(req, rows));
+  };
+}
+
+/** GET /v1/stats/payments — newest payment attempts (free, operator-only auth). */
+export function paymentsStatsHandler(ctx: RouteCtx) {
+  return async (req: FastifyRequest, reply: FastifyReply) => {
+    const query = (req.query as { limit?: unknown; from?: string; to?: string } | undefined) ?? {};
+    const limit = parseRecentLimit(query.limit);
+    const values: unknown[] = [limit];
+    let successSql = PAYMENT_ATTEMPTS_SUCCESS_SQL;
+    let failureSql = PAYMENT_ATTEMPTS_FAILURE_SQL;
+    if (query.from || query.to) {
+      const from = query.from ? new Date(`${query.from}T00:00:00.000Z`) : new Date(0);
+      const to = query.to ? new Date(`${query.to}T00:00:00.000Z`) : new Date('9999-12-31T00:00:00.000Z');
+      to.setUTCDate(to.getUTCDate() + 1);
+      successSql = successSql.replace('ORDER BY', 'WHERE created_at >= $2 AND created_at < $3 ORDER BY');
+      failureSql = failureSql.replace('ORDER BY', 'AND ts >= $2 AND ts < $3 ORDER BY');
+      values.push(from, to);
+    }
+    const [payments, failures] = await Promise.all([
+      ctx.db.query(successSql, values),
+      ctx.db.query(failureSql, values),
+    ]);
+    const attempts = [
+      ...payments.rows.map((r) => ({
+        ts: r.ts instanceof Date ? r.ts.toISOString() : String(r.ts),
+        kind: 'payment' as const,
+        endpoint: String(r.endpoint),
+        provider: String(r.provider),
+        status: String(r.status),
+        amount_usd: Number(r.amount_usd),
+        payer_address: r.payer_address == null ? null : String(r.payer_address),
+        tx_hash: r.tx_hash == null ? null : String(r.tx_hash),
+        network: r.network == null ? null : String(r.network),
+      })),
+      ...failures.rows.map((r) => ({
+        ts: r.ts instanceof Date ? r.ts.toISOString() : String(r.ts),
+        kind: 'failure' as const,
+        endpoint: String(r.endpoint),
+        method: r.method == null ? null : String(r.method),
+        status: Number(r.status),
+        error: String(r.error),
+        paid: r.paid === true,
+        client_key: r.client_key == null ? null : String(r.client_key),
+        source: r.source == null ? null : String(r.source),
+      })),
+    ].sort((a, b) => (a.ts < b.ts ? 1 : a.ts > b.ts ? -1 : 0)).slice(0, limit);
+    return reply.send(envelope(req, { attempts }));
   };
 }
