@@ -20,7 +20,7 @@ function page(title: string, body: string, head = ''): string {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="theme-color" content="#16232B">
+<meta name="theme-color" content="#F6F3EA">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=Source+Serif+4:wght@400;600;700&display=swap" rel="stylesheet">
@@ -30,16 +30,27 @@ ${head}
 <style>${CSS}</style>
 </head>
 <body>
-${NAV}
+${nav()}
 <main id="main-content">
 ${body}
 </main>
+${footer()}
+<script>(function(){var b=document.getElementById('burger'),n=document.getElementById('primary-nav');if(b&&n){b.addEventListener('click',function(){var o=n.classList.toggle('open');b.setAttribute('aria-expanded',o?'true':'false');b.textContent=o?'✕':'☰';});}})();</script>
 </body></html>`;
 }
 
-const NAV = `<a class="skip-link" href="#main-content">Skip to content</a>
-<header class="site-header"><a class="site-brand" href="/">Licita</a>
-<nav class="site-nav" aria-label="Primary"><a href="/">Home</a><a href="/use-cases">Use cases</a><a href="/data">Coverage &amp; methodology</a><a href="/pricing">Pricing</a><a href="/docs">Docs</a><a href="/mcp">MCP</a></nav></header>`;
+/** Header Charlie (static, single header) — shared across every public page. */
+function nav(): string {
+  return `<a class="skip-link" href="#main-content">Skip to content</a>
+<header class="site-header">
+<div class="header-bar">
+<a class="site-brand" href="/">Licita</a>
+<nav class="site-nav" id="primary-nav" aria-label="Primary"><a href="/">Home</a><a href="/use-cases">Use cases</a><a href="/data">Coverage &amp; methodology</a><a href="/pricing">Pricing</a><a href="/docs">Docs</a><a href="/mcp">MCP</a></nav>
+<button class="burger" id="burger" type="button" aria-expanded="false" aria-controls="primary-nav" aria-label="Toggle menu">☰</button>
+<span class="header-cta"><a class="btn btn-sm" href="/#demo">Request demo</a></span>
+</div>
+</header>`;
+}
 
 /** ENDPOINT_PRICES rows (Research is config-owned and rendered separately). */
 const ENDPOINT_ROWS = Object.entries(ENDPOINT_PRICES)
@@ -123,80 +134,10 @@ const MCP_TOOLS = [
 // Demand-capture CTA: lightweight mailto, no signup/DB/RGPD.
 const CONTACT_EMAIL = 'eutendersai@gmail.com';
 
-
-function homePage(config: AppConfig, demoStatus = false): string {
-  return page(
-    'Licita — know which public contracts deserve your next conversation',
-    `
-<section class="hero">
-<p class="hero-eyebrow">EU Public Procurement Intelligence · Evidence First</p>
-<h1>Know which public contracts deserve your next conversation.</h1>
-<p class="hero-subtitle">Licita turns indexed procurement notices into evidence-backed opportunities, buyers, suppliers and deterministic renewal signals for professional teams.</p>
-</section>
-
-<section>
-<h2>Scope at a glance</h2>
-<div class="scope-grid">
-  <div class="scope-card"><h3>TED</h3><p>EU award notices. Enabled — freshness shown at ingestion.</p></div>
-  <div class="scope-card"><h3>PLACSP</h3><p>Spain contracts when enabled. Status is operational, not assumed.</p></div>
-  <div class="scope-card"><h3>Dates</h3><p>Publication date set to Not reported when unknown.</p></div>
-</div>
-</section>
-
-<section>
-<h2>Current index sample</h2>
-<article id="demo-sample" class="evidence-rail" data-state="loading" aria-live="polite"><p>Loading…</p><p class="source-stamp">GET /v1/demo · sample status</p></article>
-<p class="muted">A free labeled sample from the live index—recent tender and renewal signal, with evidence.</p>
-</section>
-
-<section class="cta-section">
-<h2>See your next opportunity in context.</h2>
-<p>A free labeled sample from the current index, followed by a guided review of your market. We retain demo emails for 30 days unless the lead advances to contacted, used or paid.</p>
-<form id="demo-request" class="cta-form" method="post" action="/v1/demo/request">
-<label for="demo-email" class="visually-hidden">Work email</label>
-<input id="demo-email" name="email" type="email" inputmode="email" autocomplete="email" spellcheck="false" required placeholder="name@company.com">
-<button class="btn" type="submit">Request the product demo</button>
-<p id="demo-message" class="cta-message" role="status" aria-live="polite">${demoStatus ? 'Demo request received. We will follow up by email; no meeting was booked.' : ''}</p>
-</form>
-<noscript><p>Email <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a> to request a demo.</p></noscript>
-</section>
-
-<section>
-<h2>Use cases</h2>
-<div class="usecase-grid">
-  <a class="usecase-card" href="/use-cases/tender-intelligence"><h3>Tender intelligence</h3><p>Find recent tenders and who won, with provenance.</p></a>
-  <a class="usecase-card" href="/use-cases/company-research"><h3>Company research</h3><p>Track record and live matching opportunities.</p></a>
-  <a class="usecase-card" href="/use-cases/buyer-intelligence"><h3>Buyer intelligence</h3><p>Activity, supplier concentration, recurrence.</p></a>
-  <a class="usecase-card" href="/use-cases/renewals-forecasting"><h3>Renewals forecasting</h3><p>Which contracts will be re-tendered, with evidence.</p></a>
-</div>
-</section>
-
-<section>
-<h2>Pricing</h2>
-<p class="muted">Pay per call with <strong>USDC via x402</strong> — no subscriptions, no signup, machine-to-machine. Start at <a href="/v1/pricing">GET /v1/pricing</a> for the full ladder.</p>
-<div class="card card-flush">${priceTable(config)}</div>
-</section>
-
-<section class="grid-2">
-<div>
-<h2>Coverage &amp; methodology</h2>
-<p class="muted">Coverage is strongest in the indexed IT, software and cyber vertical. See <a href="/data">source scope and methodology</a> for enabled sources, date ranges and last successful ingestion. Every finding carries a source reference and upstream link where known.</p>
-<p class="muted"><a href="/data/spain">Spain (PLACSP)</a> · <a href="/data/eu">EU (TED)</a> · <a href="/data">Data overview</a></p>
-</div>
-<div>
-<h2>For developers</h2>
-<p class="muted">Priced REST, x402-compatible. Start at <a href="/llms.txt">/llms.txt</a> → <a href="/openapi.json">/openapi.json</a> → <a href="/v1/pricing">/v1/pricing</a>. Streamable-HTTP MCP server at <a href="/mcp">/mcp</a>.</p>
-</div>
-</section>
-
-<section class="cta-section">
-<h2>Connectable right now.</h2>
-<p>Point an MCP client at <code>https://eutenders.duckdns.org/mcp</code> and try the free demo before paying.</p>
-<p><a class="btn btn-secondary" href="/docs">Read the docs</a> <a class="btn btn-secondary" href="/v1/demo">GET /v1/demo</a></p>
-</section>
-
-<footer class="site-footer">
-<div class="footer-inner">
+/** Footer Alfa (paper) — shared across every public page. */
+function footer(): string {
+  return `<footer class="site-footer">
+<div class="footer-top">
   <div>
     <div class="footer-brand">Licita</div>
     <p class="footer-desc">Evidence-backed EU public procurement intelligence for professional teams and AI agents.</p>
@@ -233,7 +174,124 @@ function homePage(config: AppConfig, demoStatus = false): string {
   <span>&copy; ${new Date().getFullYear()} Licita</span>
   <span>Provenance: every data row exposes <code>meta.provenance</code> as <code>[{ source, source_ref, url }]</code>.</span>
 </div>
-</footer>
+</footer>`;
+}
+
+
+function homePage(config: AppConfig, demoStatus = false): string {
+  return page(
+    'Licita — know which public contracts deserve your next conversation',
+    `
+<header class="hero-grid">
+<div class="hero-copy">
+<p class="hero-eyebrow">EU Public Procurement Intelligence<span class="eyebrow-dot">·</span>Evidence First</p>
+<h1>Know which public contracts deserve your next conversation.</h1>
+<p class="hero-subtitle">Licita turns indexed procurement notices into evidence-backed opportunities, buyers, suppliers and deterministic renewal signals for professional teams.</p>
+<div class="hero-ctas">
+<a class="btn btn-lg" href="#demo">Request the product demo</a>
+<a class="btn btn-secondary btn-lg" href="/v1/demo">GET /v1/demo — free sample</a>
+</div>
+<p class="hero-caption">A free labeled sample from the live index—recent tender and renewal signal, with evidence.</p>
+</div>
+<aside class="evidence-card" aria-label="Live sample — GET /v1/demo">
+<div class="evidence-card-head"><span class="title"><span class="live-dot" aria-hidden="true"></span>Live sample — GET /v1/demo</span><span class="stamp">Sample</span></div>
+<article id="demo-sample" class="evidence-body evidence-rail" data-state="loading" aria-live="polite"><p>Loading…</p><p class="source-stamp">GET /v1/demo · sample status</p></article>
+</aside>
+</header>
+
+<section>
+<h2>Built on primary sources</h2>
+<div class="trust-strip">
+  <a class="chip" href="/data/eu"><span class="chip-kicker">EU — TED</span>Tenders Electronic Daily</a>
+  <a class="chip" href="/data/spain"><span class="chip-kicker">ES — PLACSP</span>Spain contracts when enabled</a>
+  <a class="chip" href="/data"><span class="chip-kicker">Dates</span>Not reported when unknown</a>
+</div>
+</section>
+
+<section class="cta-section" id="demo">
+<h2>See your next opportunity in context.</h2>
+<p>A free labeled sample from the current index, followed by a guided review of your market. We retain demo emails for 30 days unless the lead advances to contacted, used or paid.</p>
+<form id="demo-request" class="cta-form" method="post" action="/v1/demo/request">
+<label for="demo-email">Work email</label>
+<input id="demo-email" name="email" type="email" inputmode="email" autocomplete="email" spellcheck="false" required placeholder="name@company.com">
+<button class="btn" type="submit">Request the product demo</button>
+<p id="demo-message" class="cta-message" role="status" aria-live="polite">${demoStatus ? 'Demo request received. We will follow up by email; no meeting was booked.' : ''}</p>
+</form>
+<noscript><p>Email <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a> to request a demo.</p></noscript>
+</section>
+
+<section>
+<h2>Use cases</h2>
+<div class="usecase-grid">
+  <a class="usecase-card" href="/use-cases/tender-intelligence"><h3>Tender intelligence</h3><p>Find recent tenders and who won, with provenance.</p></a>
+  <a class="usecase-card" href="/use-cases/company-research"><h3>Company research</h3><p>Track record and live matching opportunities.</p></a>
+  <a class="usecase-card" href="/use-cases/buyer-intelligence"><h3>Buyer intelligence</h3><p>Activity, supplier concentration, recurrence.</p></a>
+  <a class="usecase-card" href="/use-cases/renewals-forecasting"><h3>Renewals forecasting</h3><p>Which contracts will be re-tendered, with evidence.</p></a>
+</div>
+</section>
+
+<section>
+<h2>Pricing</h2>
+<p class="muted">Pay per call with <strong>USDC via x402</strong> — no subscriptions, no signup, machine-to-machine. Start at <a href="/v1/pricing">GET /v1/pricing</a> for the full ladder.</p>
+<div class="pricing-grid">
+  <div class="price-card">
+    <span class="plan">Research brief</span>
+    <div class="amount"><span class="n">$${config.researchPriceUsd}</span><span class="u">USDC per call</span></div>
+    <p class="desc">One paid call turns a topic into a deterministic, evidence-backed research brief. NO LLM, fully auditable.</p>
+    <span class="tag">POST /v1/research</span>
+  </div>
+  <div class="price-card featured">
+    <span class="plan">Core endpoints</span>
+    <div class="amount"><span class="n">from $0.02</span><span class="u">per call</span></div>
+    <p class="desc">Contract data, renewals signals, buyer and supplier profiles — every row carries provenance.</p>
+    <span class="tag">GET /v1/search</span>
+  </div>
+  <div class="price-card">
+    <span class="plan">Credits</span>
+    <div class="amount"><span class="n">$5–$25</span><span class="u">packs</span></div>
+    <p class="desc">Dollar-denominated credits for convenience. No signup, no seats, no subscriptions.</p>
+    <span class="tag">x402</span>
+  </div>
+</div>
+<p class="pricing-note">Transparent per-call pricing — see the full ladder at <a href="/v1/pricing">GET /v1/pricing</a>.</p>
+</section>
+
+<section class="grid-2">
+<div>
+<h2>Coverage &amp; methodology</h2>
+<p class="muted">Coverage is strongest in the indexed IT, software and cyber vertical. See <a href="/data">source scope and methodology</a> for enabled sources, date ranges and last successful ingestion. Every finding carries a source reference and upstream link where known.</p>
+<p class="muted"><a href="/data/spain">Spain (PLACSP)</a> · <a href="/data/eu">EU (TED)</a> · <a href="/data">Data overview</a></p>
+</div>
+<div>
+<h2>For developers</h2>
+<p class="muted">Priced REST, x402-compatible. Start at <a href="/llms.txt">/llms.txt</a> → <a href="/openapi.json">/openapi.json</a> → <a href="/v1/pricing">/v1/pricing</a>. Streamable-HTTP MCP server at <a href="/mcp">/mcp</a>.</p>
+</div>
+</section>
+
+<section>
+<h2>FAQ</h2>
+<div class="faq-list">
+  <details class="faq-item" open>
+    <summary>Do I need an account or subscription?<span class="chev" aria-hidden="true">▾</span></summary>
+    <p class="answer">No. Licita is pay-per-call with USDC via x402 — no signup, no seats, no subscriptions.</p>
+  </details>
+  <details class="faq-item">
+    <summary>How do credits or client keys work?<span class="chev" aria-hidden="true">▾</span></summary>
+    <p class="answer">Buy dollar-denominated credits in $5–$25 packs; each paid call returns a client id for continuity on multi-step research jobs.</p>
+  </details>
+  <details class="faq-item">
+    <summary>How long do you keep demo emails?<span class="chev" aria-hidden="true">▾</span></summary>
+    <p class="answer">Demo emails are retained for <strong>30 days</strong> unless the lead advances to contacted, used or paid.</p>
+  </details>
+</div>
+</section>
+
+<section class="cta-section">
+<h2>Connectable right now.</h2>
+<p>Point an MCP client at <code>https://eutenders.duckdns.org/mcp</code> and try the free demo before paying.</p>
+<p><a class="btn btn-secondary" href="/docs">Read the docs</a> <a class="btn btn-secondary" href="/v1/demo">GET /v1/demo</a></p>
+</section>
+
  <script>const sample=document.getElementById('demo-sample');const safe=(v)=>String(v??'Not reported').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));const lines=(xs)=>'<ul class="evidence-lines">'+(xs||[]).map(x=>'<li>'+safe(x)+'</li>').join('')+'</ul>';fetch('/v1/demo').then(r=>{if(!r.ok)throw new Error('sample unavailable');return r.json()}).then(({data,meta})=>{const t=data.tender,r=data.renewal;sample.dataset.state='ready';sample.innerHTML=(t?'<h3>'+safe(t.title)+'</h3><p><strong>Buyer:</strong> '+safe(t.buyer?.name)+' · <strong>Value:</strong> '+safe(t.estimated_value)+' '+safe(t.currency||'')+' · <strong>Published:</strong> '+safe(t.published_at)+'</p>'+lines(t.evidence):'<p>No current sample is available.</p>')+(r?'<p><strong>Renewal signal:</strong> '+safe(r.signal_type)+' · '+safe(r.confidence)+' confidence · '+safe(r.contract?.end_date)+'</p>'+lines(r.evidence):'<p>No current renewal sample is available.</p>')+'<p class="source-stamp">'+safe(t?.source||r?.source||'source')+' · '+safe(t?.source_ref||r?.source_ref)+' · generated '+safe(meta?.generated_at)+'</p>'+((t?.url||r?.url)?'<p><a class="upstream" href="'+safe(t?.url||r?.url)+'" target="_blank" rel="noreferrer">Open upstream source</a></p>':'')+'<p class="source-stamp">source_metadata: '+safe(JSON.stringify(data.source_metadata||[]))+'</p>'}).catch(()=>{sample.dataset.state='error';sample.innerHTML='<p>Sample unavailable. <a href="/docs">Read the methodology</a>.</p>'});document.getElementById('demo-request').addEventListener('submit',async(e)=>{e.preventDefault();const f=e.currentTarget,m=document.getElementById('demo-message'),b=f.querySelector('button');m.textContent='Requesting a demo…';b.disabled=true;try{const r=await fetch('/v1/demo/request?source=homepage',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({email:f.email.value})});if(!r.ok){const body=await r.json().catch(()=>({}));throw new Error(body.error?.hint||'Check your email and try again.')}m.textContent='Request received. We will follow up by email; no meeting was booked.';f.reset()}catch(err){m.textContent=err.message+' You can also email ${CONTACT_EMAIL}.'}finally{b.disabled=false}})</script>`,
   );
 }

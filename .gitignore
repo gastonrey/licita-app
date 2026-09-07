@@ -6,3 +6,15 @@ dist/
 coverage/
 
 .DS_Store
+
+# Local agent/skill/artifact dirs (never commit)
+.agents/
+.atl/
+.claude/
+.interface-design/
+.playwright-mcp/
+skills-lock.json
+*.mockup-*.png
+dashboard-mockup-*.png
+home-v2-*.png
+mockup-*.png
