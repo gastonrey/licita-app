@@ -12,6 +12,7 @@
 //   succeeded (the lead was inserted), so the email is best-effort.
 
 import type { Db } from '../db/client.js';
+import { absoluteUrl } from '../config.js';
 
 /** Minimal log surface we depend on. Compatible with the project Logger and
  *  with Fastify's FastifyBaseLogger (which has debug/info/warn/error methods). */
@@ -35,6 +36,9 @@ export interface NotifyConfig {
   resendFrom: string;
   /** DEMO_AUTOREPLY_ENABLED gate for the lead confirmation email (default true). */
   demoAutoReplyEnabled?: boolean;
+  /** Deployment origin (env BASE_URL) for links inside emails. Empty when
+   *  unset — links fall back to root-relative form, never a hardcoded host. */
+  baseUrl?: string;
 }
 
 interface ResendPayload {
@@ -115,7 +119,7 @@ export function notifyNewLead(_db: Db, log: NotifyLogger, lead: NotifyLead, cfg:
     log.debug('lead notification skipped: RESEND_API_KEY is empty', { leadId: lead.id });
     return;
   }
-  const html = buildHtml(lead, 'https://licita.app/dashboard?view=leads');
+  const html = buildHtml(lead, absoluteUrl(cfg.baseUrl ?? '', '/dashboard?view=leads'));
   resendSend(log, 'lead notification', lead.id, cfg.resendApiKey, {
     from: cfg.resendFrom,
     to: [cfg.notifyEmail],
@@ -124,8 +128,10 @@ export function notifyNewLead(_db: Db, log: NotifyLogger, lead: NotifyLead, cfg:
   });
 }
 
-function buildAckHtml(email: string): string {
+function buildAckHtml(email: string, baseUrl: string): string {
   const safeEmail = escapeHtml(email);
+  const demoUrl = absoluteUrl(baseUrl, '/v1/demo');
+  const docsUrl = absoluteUrl(baseUrl, '/docs');
   return `<!doctype html>
 <html><body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 560px; margin: 0 auto; padding: 24px; color: #1a1a1a;">
 <h1 style="font-size: 18px; margin: 0 0 16px;">Your Licita demo request is in</h1>
@@ -137,8 +143,8 @@ function buildAckHtml(email: string): string {
 </ul>
 <p style="font-size: 14px; line-height: 1.6;">In the meantime you can get instant value without signup:</p>
 <ul style="font-size: 14px; line-height: 1.6;">
-  <li>Free sample endpoint: <a href="https://licita.app/v1/demo">https://licita.app/v1/demo</a></li>
-  <li>Developer docs: <a href="https://licita.app/docs">https://licita.app/docs</a></li>
+  <li>Free sample endpoint: <a href="${demoUrl}">${demoUrl}</a></li>
+  <li>Developer docs: <a href="${docsUrl}">${docsUrl}</a></li>
 </ul>
 <p style="font-size: 14px; line-height: 1.6;">To schedule your review, simply reply to this email.</p>
 <p style="font-size: 13px; color: #666;">— The Licita team · Public procurement intelligence for professionals</p>
@@ -164,7 +170,7 @@ export function notifyLeadAck(log: NotifyLogger, lead: NotifyLead, cfg: NotifyCo
     from: cfg.resendFrom,
     to: [lead.email],
     subject: 'Licita demo request received — what happens next',
-    html: buildAckHtml(lead.email),
+    html: buildAckHtml(lead.email, cfg.baseUrl ?? ''),
     reply_to: cfg.notifyEmail,
   });
 }

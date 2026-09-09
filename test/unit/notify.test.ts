@@ -183,4 +183,28 @@ describe('notifyLeadAck (lead auto-reply)', () => {
     await new Promise((r) => setTimeout(r, 5));
     expect(warnSpy).toHaveBeenCalled();
   });
+
+  it('derives email links from baseUrl (absolute when set, root-relative when unset)', async () => {
+    let capturedInit: RequestInit | undefined;
+    globalThis.fetch = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      capturedInit = init;
+      return new Response('{"id":"ack"}', { status: 200 });
+    }) as unknown as typeof globalThis.fetch;
+
+    // Absolute when baseUrl is set.
+    notifyLeadAck(log, baseLead, cfg({ baseUrl: 'https://licita.test' }));
+    await new Promise((r) => setTimeout(r, 5));
+    let body = JSON.parse(String(capturedInit?.body));
+    expect(body.html).toContain('https://licita.test/v1/demo');
+    expect(body.html).toContain('https://licita.test/docs');
+    expect(body.html).not.toContain('licita.app');
+
+    // Root-relative fallback when baseUrl is unset — no hardcoded host.
+    notifyLeadAck(log, baseLead, cfg({ baseUrl: '' }));
+    await new Promise((r) => setTimeout(r, 5));
+    body = JSON.parse(String(capturedInit?.body));
+    expect(body.html).toContain('href="/v1/demo"');
+    expect(body.html).toContain('href="/docs"');
+    expect(body.html).not.toMatch(/duckdns|licita\.app/);
+  });
 });

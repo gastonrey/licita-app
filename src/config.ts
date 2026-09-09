@@ -68,6 +68,18 @@ function parseTrustProxy(raw: string): boolean | number {
 }
 
 /**
+ * Join a root-relative path onto the deployment origin (config.baseUrl).
+ * When BASE_URL is unset (dev/test — it is required in production by
+ * validateConfig), this returns the path unchanged: absolute-URL features
+ * fall back to safe root-relative form, never to a hardcoded host.
+ * Trailing slashes on the base are normalized away.
+ */
+export function absoluteUrl(baseUrl: string, path: string): string {
+  const base = baseUrl.replace(/\/+$/, '');
+  return base ? `${base}${path}` : path;
+}
+
+/**
  * Load raw config from env. Secrets have NO defaults — boot-time enforcement
  * lives in validateConfig (src/config.validate.ts), called from src/index.ts.
  */

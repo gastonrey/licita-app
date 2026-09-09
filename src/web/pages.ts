@@ -5,7 +5,7 @@
 
 import type { FastifyInstance } from 'fastify';
 import { CREDIT_BUNDLES, ENDPOINT_PRICES } from '../domain/types.js';
-import type { AppConfig } from '../config.js';
+import { absoluteUrl, type AppConfig } from '../config.js';
 import { registerDevFaucet } from '../pay/devProvider.js';
 import { HUMAN_CSS } from './site.css.js';
 
@@ -14,7 +14,44 @@ const CSS = `
 main > *:first-child { margin-top: 0; }
 `;
 
-function page(title: string, body: string, head = ''): string {
+/** Escape a string for safe interpolation into HTML attribute values. */
+function escapeAttr(s: string): string {
+  return s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] ?? c));
+}
+
+/** Escape a string for safe interpolation into XML text nodes. */
+function escapeXml(s: string): string {
+  return s.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c] ?? c));
+}
+
+/** Fallback meta description for pages without a dedicated one. */
+const SITE_DESCRIPTION =
+  'Licita — evidence-backed public procurement intelligence: EU (TED) and Spain (PLACSP) tenders, buyers, suppliers and deterministic renewal signals, queryable over REST and MCP.';
+
+/**
+ * SEO/social head extras for a human page (spec DR4): per-path canonical,
+ * og:type/site_name/title/url and meta description, all derived from
+ * config.baseUrl (root-relative fallback when BASE_URL is unset — dev/test).
+ */
+function pageMeta(config: AppConfig, path: string, title: string, description?: string): string {
+  const url = escapeAttr(absoluteUrl(config.baseUrl, path));
+  return [
+    `<link rel="canonical" href="${url}">`,
+    '<meta property="og:type" content="website">',
+    '<meta property="og:site_name" content="Licita">',
+    `<meta property="og:title" content="${escapeAttr(`${title} — Licita`)}">`,
+    `<meta property="og:url" content="${url}">`,
+    `<meta name="description" content="${escapeAttr(description ?? SITE_DESCRIPTION)}">`,
+  ].join('\n');
+}
+
+function page(
+  title: string,
+  body: string,
+  opts: { config?: AppConfig; path?: string; description?: string } = {},
+): string {
+  const meta =
+    opts.config && opts.path !== undefined ? pageMeta(opts.config, opts.path, title, opts.description) : '';
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -25,7 +62,7 @@ function page(title: string, body: string, head = ''): string {
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=Source+Serif+4:wght@400;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/styles.css">
-${head}
+${meta}
 <title>${title} — Licita</title>
 <style>${CSS}</style>
 </head>
@@ -179,6 +216,7 @@ function footer(): string {
 
 
 function homePage(config: AppConfig, demoStatus = false): string {
+  const mcpEndpoint = absoluteUrl(config.baseUrl, '/mcp');
   return page(
     'Licita — know which public contracts deserve your next conversation',
     `
@@ -288,11 +326,17 @@ function homePage(config: AppConfig, demoStatus = false): string {
 
 <section class="cta-section">
 <h2>Connectable right now.</h2>
-<p>Point an MCP client at <code>https://eutenders.duckdns.org/mcp</code> and try the free demo before paying.</p>
+<p>Point an MCP client at <code>${mcpEndpoint}</code> and try the free demo before paying.</p>
 <p><a class="btn btn-secondary" href="/docs">Read the docs</a> <a class="btn btn-secondary" href="/v1/demo">GET /v1/demo</a></p>
 </section>
 
  <script>const sample=document.getElementById('demo-sample');const safe=(v)=>String(v??'Not reported').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));const lines=(xs)=>'<ul class="evidence-lines">'+(xs||[]).map(x=>'<li>'+safe(x)+'</li>').join('')+'</ul>';fetch('/v1/demo').then(r=>{if(!r.ok)throw new Error('sample unavailable');return r.json()}).then(({data,meta})=>{const t=data.tender,r=data.renewal;sample.dataset.state='ready';sample.innerHTML=(t?'<h3>'+safe(t.title)+'</h3><p><strong>Buyer:</strong> '+safe(t.buyer?.name)+' · <strong>Value:</strong> '+safe(t.estimated_value)+' '+safe(t.currency||'')+' · <strong>Published:</strong> '+safe(t.published_at)+'</p>'+lines(t.evidence):'<p>No current sample is available.</p>')+(r?'<p><strong>Renewal signal:</strong> '+safe(r.signal_type)+' · '+safe(r.confidence)+' confidence · '+safe(r.contract?.end_date)+'</p>'+lines(r.evidence):'<p>No current renewal sample is available.</p>')+'<p class="source-stamp">'+safe(t?.source||r?.source||'source')+' · '+safe(t?.source_ref||r?.source_ref)+' · generated '+safe(meta?.generated_at)+'</p>'+((t?.url||r?.url)?'<p><a class="upstream" href="'+safe(t?.url||r?.url)+'" target="_blank" rel="noreferrer">Open upstream source</a></p>':'')+'<p class="source-stamp">source_metadata: '+safe(JSON.stringify(data.source_metadata||[]))+'</p>'}).catch(()=>{sample.dataset.state='error';sample.innerHTML='<p>Sample unavailable. <a href="/docs">Read the methodology</a>.</p>'});document.getElementById('demo-request').addEventListener('submit',async(e)=>{e.preventDefault();const f=e.currentTarget,m=document.getElementById('demo-message'),b=f.querySelector('button');m.textContent='Requesting a demo…';b.disabled=true;try{const r=await fetch('/v1/demo/request?source=homepage',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({email:f.email.value})});if(!r.ok){const body=await r.json().catch(()=>({}));throw new Error(body.error?.hint||'Check your email and try again.')}m.textContent='Request received. We will follow up by email; no meeting was booked.';f.reset()}catch(err){m.textContent=err.message+' You can also email ${CONTACT_EMAIL}.'}finally{b.disabled=false}})</script>`,
+    {
+      config,
+      path: '/',
+      description:
+        'Licita turns indexed EU and Spanish procurement notices into evidence-backed tenders, buyers, suppliers and deterministic renewal signals for professional teams.',
+    },
   );
 }
 
@@ -428,6 +472,7 @@ Read the card at <code>/.well-known/mcp/server-card.json</code> for the MCP surf
 and contract dates with confidence <code>low</code>/<code>medium</code>/<code>high</code> — not calibrated
 probabilities. Each signal exposes its full evidence in <code>basis</code>.</li>
 </ul>`,
+    { config, path: '/docs', description: 'How to call Licita: discovery order, x402 payment flow, credits, MCP tools, server card and response conventions.' },
   );
 }
 
@@ -472,6 +517,7 @@ describing the exact USDC requirement (scheme <code>exact</code>, EIP-3009 trans
 → <code>{ token, expires_at }</code>, then retry with <code>X-PAYMENT</code> (REST) or
 <code>payment_token</code> (MCP). Not available in production.</li>
 </ol>`,
+    { config, path: '/pricing', description: 'Per-call USD prices for every Licita endpoint, prepaid credit bundles, and how x402 USDC payment works.' },
   );
 }
 
@@ -585,7 +631,7 @@ ${lines}
 // not imported: pages.ts must stay dependency-free of the MCP module graph and
 // the inputSchema values here are plain JSON Schema mirrors of the zod shapes).
 
-const SERVER_CARD_URL = 'https://eutenders.duckdns.org/mcp';
+// SERVER_CARD_URL is derived from config.baseUrl at runtime (serverCard function).
 
 const PAYMENT_TOKEN_SCHEMA = {
   type: 'string',
@@ -863,7 +909,7 @@ ${USECASES.map(
 <p>Validate the data before paying: <a href="/v1/demo">GET /v1/demo</a> returns a labeled sample of the
 most recent tender + renewal signal at no cost.</p>`;
 
-function useCasePage(slug: string): string | null {
+function useCasePage(config: AppConfig, slug: string): string | null {
   const uc = USECASES.find((u) => u.slug === slug);
   if (!uc) return null;
   return page(
@@ -878,6 +924,7 @@ function useCasePage(slug: string): string | null {
 <h2>Honesty note</h2>
 <p class="muted">${uc.honestNote}</p>
 <p class="muted"><a href="/use-cases">all use cases</a></p>`,
+    { config, path: `/use-cases/${uc.slug}`, description: uc.problem },
   );
 }
 
@@ -926,14 +973,14 @@ derived from historical awards (deterministic heuristic, confidence low|medium|h
 </ul>
 <p class="muted"><a href="/data">data overview</a></p>`;
 
-function dataPage(kind: 'overview' | 'spain' | 'eu'): string {
+function dataPage(config: AppConfig, kind: 'overview' | 'spain' | 'eu'): string {
   const map = {
-    overview: ['Data', DATA_OVERVIEW],
-    spain: ['Data — Spain (PLACSP)', DATA_SPAIN],
-    eu: ['Data — EU (TED)', DATA_EU],
+    overview: ['Data', '/data', DATA_OVERVIEW],
+    spain: ['Data — Spain (PLACSP)', '/data/spain', DATA_SPAIN],
+    eu: ['Data — EU (TED)', '/data/eu', DATA_EU],
   } as const;
-  const [title, body] = map[kind];
-  return page(title, `\n${body}`);
+  const [title, path, body] = map[kind];
+  return page(title, `\n${body}`, { config, path });
 }
 
 const TRUST_PAGES: Record<string, [string, string]> = {
@@ -950,42 +997,78 @@ function serverCard(config: AppConfig): Record<string, unknown> {
     name: 'licita',
     description:
       'Public procurement intelligence for AI agents: EU tenders, renewal signals, company opportunities and buyer activity. Pay per call with USDC via x402.',
-    url: SERVER_CARD_URL,
+    url: absoluteUrl(config.baseUrl, '/mcp'),
     transports: ['sse'],
     tools: SERVER_CARD_TOOLS,
   };
 }
 
+// --- Sitemap (spec DR3) ----------------------------------------------------------
+// Public human-facing pages only: machine channels (/llms.txt, /openapi.json,
+// /mcp, /v1/*) are not indexable pages and are deliberately not listed.
+// URLs are derived from config.baseUrl (root-relative fallback when unset —
+// dev/test only; production requires https BASE_URL via validateConfig).
+
+const SITEMAP_PATHS = [
+  '/',
+  '/use-cases',
+  ...USECASES.map((uc) => `/use-cases/${uc.slug}`),
+  '/data',
+  '/data/spain',
+  '/data/eu',
+  '/pricing',
+  '/docs',
+  ...Object.keys(TRUST_PAGES).map((slug) => `/${slug}`),
+];
+
+function sitemapXml(config: AppConfig): string {
+  const urls = SITEMAP_PATHS.map(
+    (path) => `  <url><loc>${escapeXml(absoluteUrl(config.baseUrl, path))}</loc></url>`,
+  ).join('\n');
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}\n</urlset>\n`;
+}
+
 /**
  * Register web discovery surfaces: GET /, /docs, /pricing, /llms.txt,
- * /.well-known/mcp/server-card.json, /robots.txt — all free — plus the dev
- * faucet (POST /v1/dev-faucet).
+ * /.well-known/mcp/server-card.json, /robots.txt, /sitemap.xml — all free —
+ * plus the dev faucet (POST /v1/dev-faucet).
  */
 export function registerWeb(app: FastifyInstance, config: AppConfig): void {
   app.get('/', async (req, reply) => reply.type('text/html; charset=utf-8').send(homePage(config, (req.query as { demo?: string }).demo === 'success')));
   app.get('/styles.css', async (_req, reply) => reply.type('text/css; charset=utf-8').send(HUMAN_CSS));
   app.get('/docs', async (_req, reply) => reply.type('text/html; charset=utf-8').send(docsPage(config)));
   app.get('/use-cases', async (_req, reply) =>
-    reply.type('text/html; charset=utf-8').send(page('Use cases', `\n${USECASE_INDEX}`)),
+    reply
+      .type('text/html; charset=utf-8')
+      .send(
+        page('Use cases', `\n${USECASE_INDEX}`, {
+          config,
+          path: '/use-cases',
+          description: 'Concrete agent missions for Licita: exact endpoints, MCP tools, costs and real response shapes.',
+        }),
+      ),
   );
   app.get('/use-cases/:slug', async (req, reply) => {
     const slug = (req.params as { slug: string }).slug;
-    const html = useCasePage(slug);
+    const html = useCasePage(config, slug);
     if (!html) return reply.code(404).type('text/html; charset=utf-8').send(page('Not found', `\n<h1>Not found</h1>`));
     return reply.type('text/html; charset=utf-8').send(html);
   });
   app.get('/data', async (_req, reply) =>
-    reply.type('text/html; charset=utf-8').send(dataPage('overview')),
+    reply.type('text/html; charset=utf-8').send(dataPage(config, 'overview')),
   );
-  app.get('/data/spain', async (_req, reply) => reply.type('text/html; charset=utf-8').send(dataPage('spain')));
-  app.get('/data/eu', async (_req, reply) => reply.type('text/html; charset=utf-8').send(dataPage('eu')));
+  app.get('/data/spain', async (_req, reply) => reply.type('text/html; charset=utf-8').send(dataPage(config, 'spain')));
+  app.get('/data/eu', async (_req, reply) => reply.type('text/html; charset=utf-8').send(dataPage(config, 'eu')));
   for (const [slug, [title, body]] of Object.entries(TRUST_PAGES)) {
-    app.get(`/${slug}`, async (_req, reply) => reply.type('text/html; charset=utf-8').send(page(title, `\n<h1>${title}</h1>${body}<p><a href="/">Back to Licita</a></p>`)));
+    app.get(`/${slug}`, async (_req, reply) => reply.type('text/html; charset=utf-8').send(page(title, `\n<h1>${title}</h1>${body}<p><a href="/">Back to Licita</a></p>`, { config, path: `/${slug}` })));
   }
   app.get('/pricing', async (_req, reply) => reply.type('text/html; charset=utf-8').send(pricingPage(config)));
   app.get('/llms.txt', async (_req, reply) => reply.type('text/plain; charset=utf-8').send(llmsTxt(config)));
   app.get('/robots.txt', async (_req, reply) =>
     reply.type('text/plain; charset=utf-8').send('User-agent: *\nAllow: /\n'),
+  );
+  app.get('/sitemap.xml', async (_req, reply) =>
+    reply.type('application/xml; charset=utf-8').send(sitemapXml(config)),
   );
   app.get('/.well-known/mcp/server-card.json', async (_req, reply) =>
     reply.type('application/json; charset=utf-8').send(serverCard(config)),

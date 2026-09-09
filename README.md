@@ -128,6 +128,7 @@ missing/invalid variable (`src/config.validate.ts`, called from `src/index.ts`).
 | `NODE_ENV` | `development` | `production` enables the strict boot checks below |
 | `DATABASE_URL` | — | Admin Postgres URL; overrides the PG* parts. Used by migrations |
 | `APP_DATABASE_URL` | — | Optional low-privilege role URL for app traffic (falls back to `DATABASE_URL`) |
+| `BASE_URL` | `''` (root-relative output) | Public https origin of this deployment. Every server-emitted absolute URL is derived from it: sitemap `<loc>`s, page canonicals/OG, the MCP server card, and email links. **Required (`https://`) in production** — validated at boot |
 | `PGHOST` `PGPORT` `PGUSER` `PGPASSWORD` `PGDATABASE` | `db/5432/licita/licita/licita` | Connection parts (compose sets these) |
 | `LOG_LEVEL` | `info` | `error`/`info`/`debug` for structured JSON logs |
 | `TRUST_PROXY` | `false` | `true`/`false`/hop count → Fastify `trustProxy`. Set `true` only behind a reverse proxy |

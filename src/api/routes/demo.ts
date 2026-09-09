@@ -85,12 +85,14 @@ export function demoRequestHandler(ctx: RouteCtx) {
         notifyEmail: ctx.config.notifyEmail,
         resendApiKey: ctx.config.resendApiKey,
         resendFrom: ctx.config.resendFrom,
+        baseUrl: ctx.config.baseUrl,
       });
       notifyLeadAck(req.log, lead, {
         notifyEmail: ctx.config.notifyEmail,
         resendApiKey: ctx.config.resendApiKey,
         resendFrom: ctx.config.resendFrom,
         demoAutoReplyEnabled: ctx.config.demoAutoReplyEnabled,
+        baseUrl: ctx.config.baseUrl,
       });
     }
     if (String(req.headers['content-type'] ?? '').startsWith('application/x-www-form-urlencoded')) {
