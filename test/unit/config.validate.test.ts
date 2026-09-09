@@ -151,6 +151,54 @@ describe('validateConfig (production)', () => {
 
 // fiat-revenue-rails Slice A / domain-readiness DR1: baseUrl config with
 // fail-closed production https validation.
+describe('validateConfig (stripe fail-closed, B2.6)', () => {
+  const stripeOn = (overrides = {}) =>
+    makeTestConfig({
+      stripe: { enabled: true, secretKey: 'sk_test_placeholder', webhookSecret: 'whsec_test_placeholder', priceCents: 2900 },
+      ...overrides,
+    });
+
+  it('passes with a valid stripe-enabled config (dev mode)', () => {
+    expect(() => validateConfig(stripeOn())).not.toThrow();
+  });
+
+  it('passes with live-mode secrets', () => {
+    expect(() =>
+      validateConfig(stripeOn({ stripe: { enabled: true, secretKey: 'sk_live_abc123', webhookSecret: 'whsec_live_abc', priceCents: 2900 } })),
+    ).not.toThrow();
+  });
+
+  it('fails when STRIPE_ENABLED=true but STRIPE_SECRET_KEY is missing or malformed', () => {
+    expect(() => validateConfig(stripeOn({ stripe: { enabled: true, secretKey: '', webhookSecret: 'whsec_test_placeholder', priceCents: 2900 } }))).toThrow(
+      /STRIPE_SECRET_KEY/,
+    );
+    for (const bad of ['', 'nope', 'rk_live_abc', 'sk_']) {
+      expect(() =>
+        validateConfig(stripeOn({ stripe: { enabled: true, secretKey: bad, webhookSecret: 'whsec_test_placeholder', priceCents: 2900 } })),
+      ).toThrow(/STRIPE_SECRET_KEY/);
+    }
+  });
+
+  it('fails when STRIPE_WEBHOOK_SECRET is missing or does not start with whsec_', () => {
+    expect(() => validateConfig(stripeOn({ stripe: { enabled: true, secretKey: 'sk_test_x', webhookSecret: '', priceCents: 2900 } }))).toThrow(/STRIPE_WEBHOOK_SECRET/);
+    expect(() =>
+      validateConfig(stripeOn({ stripe: { enabled: true, secretKey: 'sk_test_x', webhookSecret: 'not-a-whsec' } })),
+    ).toThrow(/STRIPE_WEBHOOK_SECRET/);
+  });
+
+  it('fails when PRICE_CENTS is missing, zero, negative or non-integer', () => {
+    for (const bad of [0, -100, 29.5, NaN]) {
+      expect(() =>
+        validateConfig(stripeOn({ stripe: { enabled: true, secretKey: 'sk_test_x', webhookSecret: 'whsec_x', priceCents: bad } })),
+      ).toThrow(/PRICE_CENTS/);
+    }
+  });
+
+  it('stripe disabled with empty keys stays valid (opt-out deployments)', () => {
+    expect(() => validateConfig(makeTestConfig({ stripe: { enabled: false, secretKey: '', webhookSecret: '', priceCents: 2900 } }))).not.toThrow();
+  });
+});
+
 describe('validateConfig (production baseUrl)', () => {
   it('fails in production when BASE_URL is unset, naming BASE_URL', () => {
     expect(() => validateConfig(prodConfig({ baseUrl: '' }))).toThrow(/BASE_URL/);

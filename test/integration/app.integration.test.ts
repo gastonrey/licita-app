@@ -13,6 +13,7 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawn, type ChildProcess } from 'node:child_process';
+import { createHmac } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { FastifyInstance } from 'fastify';
@@ -305,5 +306,115 @@ describe.runIf(TED_OK)('integration: real app + real postgres + live TED slice',
     const text = ((called.result as Json).content as Array<{ text: string }>)[0].text;
     const parsed = JSON.parse(text) as Json;
     expect(Array.isArray((parsed.data as Json).endpoints)).toBe(true);
+  });
+
+  describe('integration: stripe zero-charge subscription on real schema (B2.6)', () => {
+    // Stripe dev-shaped config on the same real (already-migrated) database.
+    const STRIPE_SECRET = 'whsec_integration_test_placeholder';
+    const stripeConfig: AppConfig = {
+      ...loadConfig(),
+      databaseUrl: PG_URL,
+      paymentsMode: 'dev',
+      payHmacSecret: 'integration-secret',
+      operatorKey: 'integration-operator',
+      ingestOnBoot: false,
+      stripe: { enabled: true, secretKey: 'sk_test_placeholder', webhookSecret: STRIPE_SECRET, priceCents: 2900 },
+    };
+    let stripeApp: FastifyInstance | null = null;
+
+    /** Sign the RAW webhook payload exactly as Stripe does (t=<ts>,v1=<hmac>). */
+    function signWebhook(payload: string, timestamp: number): string {
+      const sig = createHmac('sha256', STRIPE_SECRET).update(`${timestamp}.${payload}`).digest('hex');
+      return `t=${timestamp},v1=${sig}`;
+    }
+
+    function completedEvent(email: string, id = 'cs_test_123'): { payload: string; signature: string } {
+      const event = {
+        id: 'evt_test_456',
+        type: 'checkout.session.completed',
+        data: { object: { id, customer_email: email, amount_total: 2900 } },
+      };
+      const payload = JSON.stringify(event);
+      return { payload, signature: signWebhook(payload, Math.floor(Date.now() / 1000)) };
+    }
+
+    beforeAll(async () => {
+      stripeApp = await buildServer(stripeConfig, db);
+    });
+
+    afterAll(async () => {
+      if (stripeApp) await stripeApp.close();
+    });
+
+    it('zero-charge completion upgrades the subscriber to kind=stripe (+30d) with NO credit row', async () => {
+      const email = 'e2e-subscriber@example.com';
+      const { payload, signature } = completedEvent(email);
+      const res = await stripeApp!.inject({
+        method: 'POST',
+        url: '/v1/stripe/webhook',
+        headers: { 'content-type': 'application/json', 'stripe-signature': signature },
+        payload,
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({ ok: true });
+
+      const row = await db.query(
+        `SELECT kind, email, calls_remaining, current_period_end FROM api_clients WHERE lower(email) = lower($1)`,
+        [email],
+      );
+      expect(row.rows).toHaveLength(1);
+      expect(row.rows[0]).toMatchObject({
+        kind: 'stripe',
+        email,
+        calls_remaining: null, // fresh row: no preserved quota
+      });
+      const period = new Date(row.rows[0].current_period_end as Date).getTime();
+      expect(period).toBeGreaterThan(Date.now() + 29 * 24 * 60 * 60 * 1000);
+      expect(period).toBeLessThan(Date.now() + 31 * 24 * 60 * 60 * 1000);
+
+      // Documented deviation: completeCheckout grants ZERO credits — the
+      // credit_accounts facade is untouched (migration 006 has no
+      // api_client_id/cents/kind columns; S1 forbids a redesign).
+      const credits = await db.query(`SELECT COUNT(*)::int AS n FROM credit_accounts WHERE client_key = $1`, [
+        'stripe:' + createHmac('sha256', email.toLowerCase()).digest('hex'),
+      ]);
+      expect(credits.rows).toEqual([{ n: 0 }]);
+    });
+
+    it('replaying the same completed event is idempotent — one row, still stripe', async () => {
+      const { payload, signature } = completedEvent('e2e-subscriber@example.com');
+      const res = await stripeApp!.inject({
+        method: 'POST',
+        url: '/v1/stripe/webhook',
+        headers: { 'content-type': 'application/json', 'stripe-signature': signature },
+        payload,
+      });
+      expect(res.statusCode).toBe(200);
+      const rows = await db.query(`SELECT COUNT(*)::int AS n, MIN(kind) AS kind FROM api_clients WHERE lower(email) = lower($1)`, [
+        'e2e-subscriber@example.com',
+      ]);
+      expect(rows.rows[0]).toEqual({ n: 1, kind: 'stripe' });
+    });
+
+    it('bad signature → 401 invalid_signature and no side effects', async () => {
+      const email = 'never-created@example.com';
+      const payload = JSON.stringify({ id: 'evt_bad', type: 'checkout.session.completed', data: { object: { id: 'cs_bad', customer_email: email, amount_total: 2900 } } });
+      const res = await stripeApp!.inject({
+        method: 'POST',
+        url: '/v1/stripe/webhook',
+        headers: { 'content-type': 'application/json', 'stripe-signature': 't=1,v1=deadbeef' },
+        payload,
+      });
+      expect(res.statusCode).toBe(401);
+      expect(res.json().error.code).toBe('invalid_signature');
+      const rows = await db.query(`SELECT COUNT(*)::int AS n FROM api_clients WHERE lower(email) = lower($1)`, [email]);
+      expect(rows.rows).toEqual([{ n: 0 }]);
+    });
+
+    it('stripe routes answer 404 on a stripe-disabled deployment (the main app)', async () => {
+      const res = await app.inject({ method: 'POST', url: '/v1/stripe/webhook', payload: '{}', headers: { 'content-type': 'application/json' } });
+      expect(res.statusCode).toBe(404);
+      expect(res.json().error.code).toBe('not_found');
+    });
   });
 });

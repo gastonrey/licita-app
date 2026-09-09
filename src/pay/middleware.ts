@@ -38,7 +38,8 @@ declare module 'fastify' {
       | 'verify_failed'
       | 'facilitator_unavailable'
       | 'quota_exhausted'
-      | 'key_expired';
+      | 'key_expired'
+      | 'payment_disabled';
   }
 }
 
@@ -92,11 +93,13 @@ export function getPaymentProvider(): PaymentProvider {
 export interface CreditDebitResult {
   ok: boolean;
   clientKey?: string;
-  /** 'credit' (prepaid account) or 'trial' (api_clients quota key). */
-  provider?: 'credit' | 'trial';
+  /** 'credit' (prepaid account), 'trial' (api_clients quota key) or
+   *  'stripe' (one-time credit debit for a stripe subscriber, B2.4). */
+  provider?: 'credit' | 'trial' | 'stripe';
   clientId?: number;
-  /** Set when an api_clients row exists but is exhausted/expired (B1.3). */
-  errorCode?: 'trial_exhausted';
+  /** Set when an api_clients row exists but is exhausted/expired (B1.3),
+   *  or when a stripe key's credit debit found nothing to debit (B2.4). */
+  errorCode?: 'trial_exhausted' | 'stripe_insufficient';
   kind?: 'quota_exhausted' | 'key_expired';
   message?: string;
   hint?: string;
@@ -120,9 +123,14 @@ export interface CreditDebitResult {
  *    label as clientKey (Decision 6 — never the raw secret);
  *  - exhausted/expired row → { ok:false, errorCode:'trial_exhausted', kind,
  *    message, hint } so callers can answer 403;
+ *  - kind='stripe' row → falls through to the credit UPDATE below (B2.4):
+ *    calls consume ONE-TIME credits keyed by the same lct_ key; the payment
+ *    row records provider 'stripe'. No (or insufficient) credit row → the
+ *    credit UPDATE matches nothing → { ok:false } → 402 (their choice to
+ *    refill). calls_remaining is never decremented for stripe.
  *  - unknown key or legacy agent row (quota columns NULL) → { ok:false } so
  *    callers keep the existing proof flow (402 for unknown keys in dev mode).
- *    lct_ keys never reach the credit balance path.
+ *    lct_ keys never reach the credit balance path except stripe fall-through.
  */
 export async function tryCreditDebit(
   db: Db,
@@ -143,69 +151,81 @@ export async function tryCreditDebit(
 
     // B1.3 trial api_clients branch — BEFORE the credit UPDATE so a trial key
     // can never be double-charged against a prepaid balance.
+    let stripeClientId: number | null = null;
     if (clientKey.startsWith(KEY_PREFIX)) {
       const row = await client.query(
-        `SELECT id, calls_remaining, expires_at FROM api_clients WHERE key_hash = $1`,
+        `SELECT id, kind, calls_remaining, expires_at FROM api_clients WHERE key_hash = $1`,
         [hashKey(clientKey)],
       );
       if (row.rows.length === 1) {
         const r = row.rows[0] as {
           id: number;
+          kind: string;
           calls_remaining: number | null;
           expires_at: Date | null;
         };
-        // Legacy agent rows (001 shape, quota columns NULL) keep the old flow.
-        const legacy = r.calls_remaining === null && r.expires_at === null;
-        if (!legacy) {
-          const failed = (
-            kind: 'quota_exhausted' | 'key_expired',
-            message: string,
-          ): CreditDebitResult => ({
-            ok: false,
-            errorCode: 'trial_exhausted',
-            kind,
-            message,
-            hint: `Upgrade: see ${baseUrl}/pricing or POST /v1/stripe/checkout`,
-          });
-          const expired = r.expires_at !== null && new Date(r.expires_at).getTime() <= Date.now();
-          const active = !expired && r.calls_remaining !== null && r.calls_remaining >= costCents;
-          if (!active) {
-            await client.query('ROLLBACK');
-            return expired
-              ? failed('key_expired', `Trial key expired: ${hashKeyLog(clientKey)} is no longer valid.`)
-              : failed(
-                  'quota_exhausted',
-                  `Trial quota exhausted: ${hashKeyLog(clientKey)} can no longer call ${endpointKey}.`,
-                );
-          }
-          const updated = await client.query(
-            `UPDATE api_clients
-             SET calls_remaining = calls_remaining - 1
-             WHERE key_hash = $1 AND calls_remaining >= $2
-             RETURNING id`,
-            [hashKey(clientKey), costCents],
-          );
-          if (updated.rows.length === 0) {
-            // lost a concurrent race for the last affordable call
-            await client.query('ROLLBACK');
-            return failed(
-              'quota_exhausted',
-              `Trial quota exhausted: ${hashKeyLog(clientKey)} can no longer call ${endpointKey}.`,
+        if (r.kind === 'stripe') {
+          // B2.4: stripe subscribers skip the trial gate entirely — calls
+          // consume ONE-TIME credits from the credit UPDATE below, keyed by
+          // this same lct_ key (their choice to refill). calls_remaining is
+          // NEVER decremented: one-time credits WIN vs the preserved 25 calls.
+          stripeClientId = r.id;
+        } else {
+          // Legacy agent rows (001 shape, quota columns NULL) keep the old flow.
+          const legacy = r.calls_remaining === null && r.expires_at === null;
+          if (!legacy) {
+            const failed = (
+              kind: 'quota_exhausted' | 'key_expired',
+              message: string,
+            ): CreditDebitResult => ({
+              ok: false,
+              errorCode: 'trial_exhausted',
+              kind,
+              message,
+              hint: `Upgrade: see ${baseUrl}/pricing or POST /v1/stripe/checkout`,
+            });
+            const expired = r.expires_at !== null && new Date(r.expires_at).getTime() <= Date.now();
+            const active = !expired && r.calls_remaining !== null && r.calls_remaining >= costCents;
+            if (!active) {
+              await client.query('ROLLBACK');
+              return expired
+                ? failed('key_expired', `Trial key expired: ${hashKeyLog(clientKey)} is no longer valid.`)
+                : failed(
+                    'quota_exhausted',
+                    `Trial quota exhausted: ${hashKeyLog(clientKey)} can no longer call ${endpointKey}.`,
+                  );
+            }
+            const updated = await client.query(
+              `UPDATE api_clients
+               SET calls_remaining = calls_remaining - 1
+               WHERE key_hash = $1 AND calls_remaining >= $2
+               RETURNING id`,
+              [hashKey(clientKey), costCents],
             );
+            if (updated.rows.length === 0) {
+              // lost a concurrent race for the last affordable call
+              await client.query('ROLLBACK');
+              return failed(
+                'quota_exhausted',
+                `Trial quota exhausted: ${hashKeyLog(clientKey)} can no longer call ${endpointKey}.`,
+              );
+            }
+            await client.query(
+              `INSERT INTO payments (client_id, endpoint, amount_usd, provider, proof, status)
+               VALUES ($1, $2, '0.00', 'trial', $3, 'success')`,
+              [r.id, endpointKey, proof],
+            );
+            await client.query('COMMIT');
+            return { ok: true, clientKey: hashKeyLog(clientKey), provider: 'trial', clientId: r.id };
           }
-          await client.query(
-            `INSERT INTO payments (client_id, endpoint, amount_usd, provider, proof, status)
-             VALUES ($1, $2, '0.00', 'trial', $3, 'success')`,
-            [r.id, endpointKey, proof],
-          );
-          await client.query('COMMIT');
-          return { ok: true, clientKey: hashKeyLog(clientKey), provider: 'trial', clientId: r.id };
         }
       }
-      // Unknown lct_ key or legacy agent row: roll back and let the caller use
-      // the proof flow. Never touch the credit account with an lct_ key.
-      await client.query('ROLLBACK');
-      return { ok: false };
+      if (stripeClientId === null) {
+        // Unknown lct_ key or legacy agent row: roll back and let the caller
+        // use the proof flow. Never touch the credit account with an lct_ key.
+        await client.query('ROLLBACK');
+        return { ok: false };
+      }
     }
 
     const updated = await client.query(
@@ -217,15 +237,29 @@ export async function tryCreditDebit(
     );
     if (updated.rows.length === 0) {
       await client.query('ROLLBACK');
+      if (stripeClientId !== null) {
+        // B2.4: a stripe subscriber with no (or insufficient) credits gets a
+        // clear 402 — their choice to refill — instead of a proof-flow error.
+        return {
+          ok: false,
+          errorCode: 'stripe_insufficient' as const,
+          message: `Payment required: ${endpointKey} costs $${price} per call. Prepaid balance insufficient — buy credits at POST /v1/billing/credits/5 (or /10 /25).`,
+        };
+      }
       return { ok: false };
     }
     await client.query(
       `INSERT INTO payments (client_id, endpoint, amount_usd, provider, proof, status)
-       VALUES (NULL, $1, $2, 'credit', $3, 'success')`,
-      [endpointKey, price, proof],
+       VALUES ($1, $2, $3, $4, $5, 'success')`,
+      [stripeClientId, endpointKey, price, stripeClientId !== null ? 'stripe' : 'credit', proof],
     );
     await client.query('COMMIT');
-    return { ok: true, clientKey };
+    return {
+      ok: true,
+      clientKey,
+      provider: stripeClientId !== null ? 'stripe' : 'credit',
+      ...(stripeClientId !== null ? { clientId: stripeClientId } : {}),
+    };
   } catch (err) {
     await client.query('ROLLBACK');
     throw err;
@@ -343,6 +377,23 @@ export function paymentPreHandler(endpointKey: string): preHandlerHookHandler {
           },
         });
         return; // halt: quota gate answered, no proof flow
+      }
+      if (debit.errorCode === 'stripe_insufficient' && debit.message) {
+        // B2.4: stripe subscriber's credits ran out — 402 with a refill
+        // message, NOT the proof flow (their lct_ key is not a proof).
+        const requirement = provider.requiredResponse(endpointKey);
+        req.errorCode = 'payment_required';
+        req.paymentFailureKind = 'payment_required';
+        rt.log.info('payment_attempt_failed', {
+          endpoint: endpointKey,
+          reason: 'stripe_insufficient',
+          client_key: hashKeyLog(trialKey),
+        });
+        await reply
+          .code(402)
+          .headers(paymentRequiredHeaders(requirement, debit.message))
+          .send(paymentRequiredBody(requirement, debit.message));
+        return; // halt: 402 answered, no proof flow
       }
       // unknown lct_ key or legacy agent row: { ok:false } without errorCode →
       // fall through to the existing proof flow (402 in dev mode).

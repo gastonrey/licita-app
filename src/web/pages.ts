@@ -422,6 +422,33 @@ content; proofs are single-use.</li>
 <code>X-PAYMENT: &lt;token&gt;</code>. The faucet is <strong>not available in production</strong>.</p>
 <pre>${DOCS_CURL_SEARCH}</pre>
 
+<h2>Billing — prepaid credits &amp; the stripe subscription arm</h2>
+<p>Per-call proofs are the default way to pay. For regular usage, prepaid
+<strong>credit bundles</strong> (5/10/25 USDC, one-time x402 purchase) are cheaper: send
+<code>x-client-key</code> on every priced request and calls debit the balance
+(<code>GET /v1/billing</code> reads it). Credits never expire and never touch the x402
+proof path.</p>
+${
+  config.stripe.enabled
+    ? `<p><strong>Monthly subscription (Stripe)</strong>: <code>POST /v1/stripe/checkout</code>
+with an email opens a Stripe Checkout session for <code>€${(config.stripe.priceCents / 100).toFixed(2)}/month</code>
+(config-driven — the price shown here is always the configured <code>PRICE_CENTS</code>). After payment,
+Stripe calls <code>POST /v1/stripe/webhook</code> (signature-verified) and the account is marked
+<code>kind=stripe</code> for 30 days.</p>
+<p class="muted">How subscriber calls are billed (honest description): a subscription grants
+<strong>one-time credits</strong>, not metered per-call billing — each priced call debits your credit
+balance, and running out simply returns <code>402</code> until you refill. Trial keys that upgrade
+preserve their remaining calls; credits are consumed first and the preserved 25 trial calls stay usable.
+Stripe handles the payment itself; Licita never sees a card number.</p>`
+    : `<p class="muted">Stripe billing is <strong>not enabled</strong> on this deployment
+(<code>STRIPE_ENABLED=false</code>), so no subscription is advertised here and
+<code>/v1/stripe/*</code> answers <code>404</code>. The prepaid credit path above is fully available.</p>`
+}
+<p class="muted"><strong>Known trade-off for trial keys (B1)</strong>: a trial key's quota is
+<code>calls_remaining</code> (25 calls), but the guard that prevents double-spending against credits
+also blocks the very last call — the 25th call answers <code>403 trial_exhausted</code> with 0 calls
+left. Effectively 24 of the 25 calls are usable; this is a conservative safety choice, documented openly.</p>
+
 <h2>Endpoints</h2>
 ${priceTable(config)}
 <p class="muted"><code>GET /v1/stats</code> additionally requires header

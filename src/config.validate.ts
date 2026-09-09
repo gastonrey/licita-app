@@ -104,6 +104,33 @@ export function validateConfig(config: AppConfig): void {
     }
   }
 
+  // Stripe (fiat-revenue-rails B2): STRIPE_ENABLED=true requires both secrets
+  // AND a valid key format — fail closed in ANY environment (including dev)
+  // so a misconfigured "stripe on" deployment never boot-succeeds half-wired.
+  // Validated secret formats: sk_test_ / sk_live_ (rejects metered or typo'd
+  // secrets proactively; webhook secrets must be whsec_).
+  if (config.stripe.enabled) {
+    if (config.stripe.secretKey.length === 0) {
+      violations.push(
+        'STRIPE_SECRET_KEY is required when STRIPE_ENABLED=true (it authenticates checkout/webhook API calls).',
+      );
+    } else if (!/^sk_(test|live)_/.test(config.stripe.secretKey)) {
+      violations.push(
+        'STRIPE_SECRET_KEY looks invalid: Stripe secret keys start with "sk_test_" or "sk_live_" (rejecting metered/unvalidated values).',
+      );
+    }
+    if (config.stripe.webhookSecret.length === 0) {
+      violations.push(
+        'STRIPE_WEBHOOK_SECRET is required when STRIPE_ENABLED=true (it verifies webhook signatures).',
+      );
+    } else if (!config.stripe.webhookSecret.startsWith('whsec_')) {
+      violations.push('STRIPE_WEBHOOK_SECRET looks invalid: Stripe webhook secrets start with "whsec_".');
+    }
+    if (!Number.isInteger(config.stripe.priceCents) || config.stripe.priceCents <= 0) {
+      violations.push('PRICE_CENTS must be a positive integer number of cents (e.g. 2900 = €29.00).');
+    }
+  }
+
   if (violations.length > 0) {
     throw new Error(
       `Invalid configuration — ${violations.length} violation(s):\n  - ${violations.join('\n  - ')}`,

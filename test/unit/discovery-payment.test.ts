@@ -13,9 +13,9 @@ import { makeTestConfig } from './testconfig.js';
 
 const config: AppConfig = makeTestConfig();
 
-async function webApp(mode: AppConfig['paymentsMode'] = 'dev'): Promise<FastifyInstance> {
+async function webApp(mode: AppConfig['paymentsMode'] = 'dev', overrides: Partial<AppConfig> = {}): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
-  registerWeb(app, { ...config, paymentsMode: mode });
+  registerWeb(app, { ...config, paymentsMode: mode, ...overrides });
   return app;
 }
 
@@ -63,6 +63,44 @@ describe('discovery surfaces teach the x402 v2 flow', () => {
     for (const needle of ['curl', 'PAYMENT-REQUIRED', 'PAYMENT-SIGNATURE', '/v1/dev-faucet', 'not available in production', 'X-PAYMENT']) {
       expect(res.body, `/docs missing "${needle}"`).toContain(needle);
     }
+    await app.close();
+  });
+
+  it('/docs is pricing-honest when stripe is DISABLED: not enabled, 404s, credits available (B2.6)', async () => {
+    const app = await webApp('dev', { stripe: { enabled: false, secretKey: '', webhookSecret: '', priceCents: 2900 } });
+    const res = await app.inject({ method: 'GET', url: '/docs' });
+    expect(res.statusCode).toBe(200);
+    for (const needle of [
+      'Stripe billing is <strong>not enabled</strong>',
+      'STRIPE_ENABLED=false',
+      'answers <code>404</code>',
+      'credit bundles',
+      'Known trade-off for trial keys (B1)',
+      '24 of the 25 calls are usable',
+    ]) {
+      expect(res.body, `/docs missing "${needle}"`).toContain(needle);
+    }
+    expect(res.body).not.toContain('€29.00/month'); // never advertise a subscription that is not deployed
+    await app.close();
+  });
+
+  it('/docs advertises the stripe arm with a config-derived price and honest credit mechanics (B2.6)', async () => {
+    const app = await webApp('dev', { stripe: { enabled: true, secretKey: 'sk_test_x', webhookSecret: 'whsec_x', priceCents: 4950 } });
+    const res = await app.inject({ method: 'GET', url: '/docs' });
+    expect(res.statusCode).toBe(200);
+    for (const needle of [
+      'POST /v1/stripe/checkout',
+      '€49.50/month', // derived from PRICE_CENTS=4950, never a hardcoded 29.00
+      'PRICE_CENTS',
+      'POST /v1/stripe/webhook',
+      'one-time credits',
+      '402',
+      'preserved 25 trial calls',
+      'never sees a card number',
+    ]) {
+      expect(res.body, `/docs missing "${needle}"`).toContain(needle);
+    }
+    expect(res.body).not.toContain('not enabled on this deployment');
     await app.close();
   });
 
@@ -131,6 +169,31 @@ describe('discovery surfaces teach the x402 v2 flow', () => {
       { amount_usd: '25.00', endpoint: 'POST /v1/billing/credits/25' },
     ]);
     expect(String(p.billing.usage)).toContain('x-client-key');
+  });
+
+  it('buildPricing is pricing-honest about the stripe subscription arm (B2.6): disabled → available=false', () => {
+    const p = buildPricing('dev'); // default: stripe disabled
+    expect(p.subscription).toMatchObject({
+      available: false,
+      provider: 'stripe',
+    });
+    expect(String(p.subscription.reason)).toContain('not enabled');
+    expect(p.subscription.price_monthly_cents).toBeUndefined();
+  });
+
+  it('buildPricing stripe arm derives the monthly price from config, never hardcodes it (B2.6)', () => {
+    const p = buildPricing('dev', { enabled: true, priceCents: 4950 });
+    expect(p.subscription).toMatchObject({
+      available: true,
+      provider: 'stripe',
+      currency: 'EUR',
+      price_monthly_cents: 4950,
+      price_monthly: '49.50',
+      checkout_endpoint: 'POST /v1/stripe/checkout',
+    });
+    // honesty contract: the displayed price is ALWAYS the configured cents / 100
+    expect(p.subscription.price_monthly).toBe((4950 / 100).toFixed(2));
+    expect(String(p.subscription.mechanics)).toContain('one-time credits');
   });
 });
 

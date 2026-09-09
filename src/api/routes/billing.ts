@@ -4,16 +4,114 @@
 // x402/dev proof and records the payment row; this handler then credits the
 // account. The bundle endpoints never debit (they top up) — replay is blocked
 // by the provider's unique payments.proof insert.
+//
+// B2.3/B2.5 (fiat-revenue-rails): Stripe surface, flag-gated by
+// STRIPE_ENABLED (off → 404):
+//  - POST /v1/stripe/webhook  — signature-verified checkout completion.
+//  - POST /v1/stripe/checkout — creates a Stripe Checkout Session (303 URL).
 
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { envelope, HttpError, validate, type RouteCtx } from './common.js';
+import { completeCheckout } from '../../pay/billing.js';
+import { checkoutCompleted, createCheckoutSession, verifyWebhookSignature } from '../../pay/stripe.js';
 
 export const billingAmountSchema = z.object({
   amount: z.enum(['5', '10', '25'], { errorMap: () => ({ message: 'amount must be 5, 10 or 25' }) }),
 });
 
 export const billingAmountValidation = validate(billingAmountSchema, 'params');
+
+// --- Stripe surface (B2.3/B2.5) ---------------------------------------------
+
+export const stripeCheckoutSchema = z.object({
+  email: z.string().trim().email('email must be a valid email address'),
+  /** Where Stripe returns the subscriber after payment. Defaults to
+   *  {baseUrl}/?checkout=success (Decision 8) when omitted. */
+  successUrl: z.string().url('successUrl must be an absolute URL').optional(),
+  /** Where Stripe returns the subscriber after cancel. Defaults to
+   *  {baseUrl}/pricing (Decision 8) when omitted. */
+  cancelUrl: z.string().url('cancelUrl must be an absolute URL').optional(),
+});
+
+export const stripeCheckoutValidation = validate(stripeCheckoutSchema, 'body');
+
+function stripeDisabled(): HttpError {
+  return new HttpError(404, 'not_found', 'Stripe billing is not enabled on this deployment.');
+}
+
+/**
+ * POST /v1/stripe/webhook — Stripe sends signed events here. Verifies the
+ * HMAC signature (timestamp + raw payload) against STRIPE_WEBHOOK_SECRET,
+ * then completes checkout for checkout.session.completed events. 200 {ok:true}
+ * after successful processing; 400 unparseable; 401 bad signature;
+ * 404 when STRIPE_ENABLED=false. Non-completed events are acknowledged
+ * without side effects.
+ */
+export function stripeWebhookHandler(ctx: RouteCtx) {
+  return async (req: FastifyRequest, reply: FastifyReply) => {
+    const stripe = ctx.config.stripe;
+    if (!stripe?.enabled) {
+      throw stripeDisabled();
+    }
+    const sig = req.headers['stripe-signature'];
+    const signature = Array.isArray(sig) ? sig[0] : sig;
+    if (!req.rawBody) {
+      throw new HttpError(400, 'invalid_query', 'Webhook requires a raw JSON body.');
+    }
+    let event: Record<string, unknown>;
+    try {
+      event = verifyWebhookSignature(req.rawBody, signature ?? '', stripe.webhookSecret);
+    } catch (err) {
+      if (err instanceof SyntaxError) {
+        throw new HttpError(400, 'invalid_query', 'Webhook body is not valid JSON.');
+      }
+      throw new HttpError(401, 'invalid_signature', 'Stripe webhook signature verification failed.');
+    }
+    if (event.type === 'checkout.session.completed') {
+      let completed;
+      try {
+        completed = checkoutCompleted(event);
+      } catch {
+        throw new HttpError(400, 'invalid_query', 'checkout.session.completed event is malformed.');
+      }
+      await completeCheckout(ctx.db, ctx.config, { email: completed.email, eventId: completed.eventId });
+      ctx.metrics.inc('subscription_activated_total');
+    }
+    return reply.send({ ok: true });
+  };
+}
+
+/**
+ * POST /v1/stripe/checkout — creates a Stripe Checkout Session for the
+ * configured monthly price (PRICE_CENTS, default 2900 = €29/mo) and returns
+ * the session URL as 303 {url}. 404 when STRIPE_ENABLED=false (tagged
+ * paymentFailureKind 'payment_disabled' for operator request logs).
+ */
+export function stripeCheckoutHandler(ctx: RouteCtx) {
+  return async (req: FastifyRequest, reply: FastifyReply) => {
+    const stripe = ctx.config.stripe;
+    if (!stripe?.enabled) {
+      req.paymentFailureKind = 'payment_disabled';
+      throw stripeDisabled();
+    }
+    const body = req.body as { email: string; successUrl?: string; cancelUrl?: string };
+    const url =
+      body.successUrl ??
+      `${ctx.config.baseUrl.replace(/\/+$/, '')}/?checkout=success`;
+    const cancelUrl =
+      body.cancelUrl ?? `${ctx.config.baseUrl.replace(/\/+$/, '')}/pricing`;
+    const sessionUrl = await createCheckoutSession(ctx.config, {
+      email: body.email,
+      priceCents: stripe.priceCents,
+      mode: 'subscription',
+      successUrl: url,
+      cancelUrl,
+    });
+    ctx.metrics.inc('checkout_started_total');
+    return reply.code(303).send(envelope(req, { url: sessionUrl }));
+  };
+}
 
 /** The x-client-key header, required on every billing call (422 when absent). */
 function clientKeyOf(req: FastifyRequest): string {
