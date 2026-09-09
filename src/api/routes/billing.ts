@@ -43,10 +43,18 @@ function creemDisabled(): HttpError {
 /**
  * POST /v1/creem/webhook — Creem sends signed events here. Verifies the
  * HMAC signature (raw-body HMAC-SHA256) against CREEM_WEBHOOK_SECRET,
- * then completes checkout for checkout.completed events. 200 {ok:true}
- * after successful processing; 400 unparseable; 401 bad signature;
- * 404 when CREEM_ENABLED=false. Non-completed events are acknowledged
- * without side effects.
+ * then completes checkout for checkout.completed events.
+ *
+ * Idempotency (C1.1): every verified event id is INSERTed into
+ * webhook_events (event_id UNIQUE) ON CONFLICT DO NOTHING before any side
+ * effect. First delivery inserts and processes; a duplicate delivery sees
+ * the existing row and returns 200 {ok:true, replay:true} without re-applying
+ * effects (no double-grant). Status is upserted to 'completed'/'failed' —
+ * never incremented.
+ *
+ * 200 {ok:true} / {ok:true, replay:true} after successful processing;
+ * 400 unparseable; 401 bad signature; 404 when CREEM_ENABLED=false.
+ * Non-completed events are acknowledged without side effects.
  */
 export function creemWebhookHandler(ctx: RouteCtx) {
   return async (req: FastifyRequest, reply: FastifyReply) => {
@@ -68,15 +76,48 @@ export function creemWebhookHandler(ctx: RouteCtx) {
       }
       throw new HttpError(401, 'invalid_signature', 'Creem webhook signature verification failed.');
     }
+const eventId = typeof event.id === 'string' ? event.id : '';
+    const eventType = typeof event.eventType === 'string' ? event.eventType : 'unknown';
+    const requestedAt = new Date().toISOString();
+
+    // INSERT-first idempotency: only the first delivery of an event_id
+    // proceeds. Duplicates short-circuit to an idempotent 200 replay ack.
+    // SELECT-first existence check (deterministic in pg-mem and real PG);
+    // the ON CONFLICT DO NOTHING insert is the race-safe backstop.
+    const existing = await ctx.db.query(
+      `SELECT event_id FROM webhook_events WHERE event_id = $1`,
+      [eventId],
+    );
+    const isReplay = existing.rows.length > 0;
+    if (!isReplay) {
+      await ctx.db.query(
+        `INSERT INTO webhook_events (event_id, type, status, requested_at)
+         VALUES ($1, $2, 'processing', $3)
+         ON CONFLICT (event_id) DO NOTHING`,
+        [eventId, eventType, requestedAt],
+      );
+    }
+
     if (event.eventType === 'checkout.completed') {
       let completed;
       try {
         completed = checkoutCompleted(event);
       } catch {
+        await ctx.db.query(
+          `UPDATE webhook_events SET status = 'failed', updated_at = now() WHERE event_id = $1`,
+          [eventId],
+        );
         throw new HttpError(400, 'invalid_query', 'checkout.completed event is malformed.');
       }
       await completeCheckout(ctx.db, ctx.config, { email: completed.email, eventId: completed.eventId });
       ctx.metrics.inc('subscription_activated_total');
+    }
+    await ctx.db.query(
+      `UPDATE webhook_events SET status = 'completed', updated_at = now() WHERE event_id = $1`,
+      [eventId],
+    );
+    if (isReplay) {
+      return reply.send({ ok: true, replay: true });
     }
     return reply.send({ ok: true });
   };

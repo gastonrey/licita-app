@@ -24,7 +24,12 @@ export function makeTestConfig(overrides: Partial<AppConfig> = {}): AppConfig {
     ingestOnBoot: false,
     ingestCronHour: 4,
     placsp: { enabled: false, maxPages: 5, delayMs: 500, schedule: false },
-    creem: { enabled: false, apiKey: '', webhookSecret: '', productId: '', priceCents: 2900 },
+creem: { enabled: false, apiKey: '', webhookSecret: '', productId: '', priceCents: 2900 },
+    scheduledGenerationEvents: true,
+    digestEnabled: false,
+    digestCron: '0 9 * * 1',
+    digestFromEmail: '',
+    digestBcc: '',
     ...overrides,
   };
 }

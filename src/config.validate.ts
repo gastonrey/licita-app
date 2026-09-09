@@ -128,6 +128,24 @@ export function validateConfig(config: AppConfig): void {
     }
   }
 
+  // Weekly digest (fiat-revenue-rails C1.2): DIGEST_ENABLED=true in
+  // production requires DIGEST_FROM_EMAIL and DIGEST_BCC — fail closed so a
+  // "digest on" deployment never boot-succeeds half-wired (a digest without
+  // recipients is silently broken). Outside production the digest's own
+  // rate-guard (send only to from/bcc) makes an empty recipient list inert.
+  if (config.nodeEnv === 'production' && config.digestEnabled) {
+    if (config.digestFromEmail.length === 0) {
+      violations.push(
+        'DIGEST_FROM_EMAIL is required when DIGEST_ENABLED=true in production (it is the digest sender — a verified Resend sender domain).',
+      );
+    }
+    if (config.digestBcc.length === 0) {
+      violations.push(
+        'DIGEST_BCC is required when DIGEST_ENABLED=true in production (comma-separated digest recipients, delivered as Bcc).',
+      );
+    }
+  }
+
   if (violations.length > 0) {
     throw new Error(
       `Invalid configuration — ${violations.length} violation(s):\n  - ${violations.join('\n  - ')}`,
