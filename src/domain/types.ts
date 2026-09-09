@@ -20,7 +20,13 @@ export interface Envelope<T> {
 
 export interface ApiError {
   error: {
-    code: 'invalid_query' | 'not_found' | 'payment_required' | 'rate_limited' | 'internal';
+    code:
+      | 'invalid_query'
+      | 'not_found'
+      | 'payment_required'
+      | 'rate_limited'
+      | 'internal'
+      | 'trial_exhausted';
     message: string;
     hint?: string;
   };

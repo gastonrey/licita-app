@@ -14,6 +14,7 @@ import { X402PaymentProvider } from '../../src/pay/provider.js';
 import { decodePaymentRequiredHeader } from '@x402/core/http';
 import type { FacilitatorClient } from '@x402/core/server';
 import { makeTestConfig } from './testconfig.js';
+import { generateKey, hashKey, hashKeyLog } from '../../src/pay/keys.js';
 
 const SECRET = 'mw-test-secret';
 
@@ -28,6 +29,26 @@ function makeDb(): Db {
 const PAYMENTS_DDL = `
 CREATE TABLE payments (
   id bigserial PRIMARY KEY, client_id bigint,
+  endpoint text NOT NULL, amount_usd numeric NOT NULL, provider text NOT NULL,
+  proof text UNIQUE NOT NULL, status text NOT NULL, created_at timestamptz DEFAULT now(),
+  payer_address text, tx_hash text, network text
+);
+`;
+
+// B1.3 seam fixture: api_clients (009 shape) + credit_accounts + payments with
+// the FK — mirrors migrations/001+009+006 for the trial-key describe block.
+const TRIAL_DDL = `
+CREATE TABLE api_clients (
+  id bigserial PRIMARY KEY, key_hash text UNIQUE NOT NULL,
+  kind text NOT NULL DEFAULT 'agent', created_at timestamptz DEFAULT now(),
+  email text, calls_remaining integer, expires_at timestamptz, current_period_end timestamptz
+);
+CREATE TABLE credit_accounts (
+  client_key text PRIMARY KEY, balance_cents integer NOT NULL DEFAULT 0,
+  created_at timestamptz DEFAULT now(), updated_at timestamptz DEFAULT now()
+);
+CREATE TABLE payments (
+  id bigserial PRIMARY KEY, client_id bigint REFERENCES api_clients(id),
   endpoint text NOT NULL, amount_usd numeric NOT NULL, provider text NOT NULL,
   proof text UNIQUE NOT NULL, status text NOT NULL, created_at timestamptz DEFAULT now(),
   payer_address text, tx_hash text, network text
@@ -479,5 +500,198 @@ describe('paymentPreHandler in x402 mode', () => {
     expect(res.statusCode).toBe(402);
     expect(res.json().error.message).toContain('facilitator_unavailable');
     await app.close();
+  });
+});
+
+// ─── B1.3/B1.5: trial api_clients seam (fiat-revenue-rails) ───────────────────
+//
+// Byte-goldens pinned BEFORE the seam lands (they must pass pre-change):
+//  - dev-mode 402 bodies for GET /v1/search must stay byte-for-byte identical.
+// Unknown lct_ keys keep the current 402 behavior; only rows that exist in
+// api_clients change the flow (403 trial_exhausted). The x402 v2 responses are
+// covered by the existing x402-mode describe above (decoded-object equality is
+// pinned there), so this block pins the v1 dev byte-goldens only.
+describe('paymentPreHandler trial-clients seam (B1.3)', () => {
+  let db: Db;
+  let app: FastifyInstance;
+
+  const trialConfig: AppConfig = makeTestConfig({
+    payHmacSecret: SECRET,
+    operatorKey: 'op',
+    baseUrl: 'https://licita.test',
+  });
+
+  // Byte-golden captures from the CURRENT byte stream (dev mode, no trial
+  // branch). Any change to these bodies is a regression.
+  const GOLDEN_ABSENT_BODY =
+    '{"x402Version":1,"accepts":[{"scheme":"exact","network":"dev","asset":"USD","amount":"0.02","payTo":"dev-faucet","resource":"GET /v1/search"}],"hint":"POST /v1/dev-faucet with {\\"endpoint\\":\\"GET /v1/search\\"} to get a dev token; retry with header X-PAYMENT: <token>","error":{"code":"payment_required","message":"Payment required: GET /v1/search costs $0.02 per call.","hint":"POST /v1/dev-faucet with {\\"endpoint\\":\\"GET /v1/search\\"} to get a dev token; retry with header X-PAYMENT: <token>"}}';
+  const GOLDEN_INSUFFICIENT_BODY =
+    '{"x402Version":1,"accepts":[{"scheme":"exact","network":"dev","asset":"USD","amount":"0.02","payTo":"dev-faucet","resource":"GET /v1/search"}],"hint":"POST /v1/dev-faucet with {\\"endpoint\\":\\"GET /v1/search\\"} to get a dev token; retry with header X-PAYMENT: <token>","error":{"code":"payment_required","message":"Payment required: GET /v1/search costs $0.02 per call. Prepaid balance insufficient — buy credits at POST /v1/billing/credits/5 (or /10 /25).","hint":"POST /v1/dev-faucet with {\\"endpoint\\":\\"GET /v1/search\\"} to get a dev token; retry with header X-PAYMENT: <token>"}}';
+
+  /** Seed an active trial client with @param callsRemaining and an expiry offset. */
+  async function seedTrialClient(
+    key: string,
+    opts: { callsRemaining?: number; expiresInDays?: number | null } = {},
+  ): Promise<number> {
+    const { callsRemaining = 25, expiresInDays = 14 } = opts;
+    const expires = expiresInDays === null ? 'NULL' : `now() + interval '${expiresInDays} days'`;
+    const res = await db.query(
+      `INSERT INTO api_clients (key_hash, kind, email, calls_remaining, expires_at)
+       VALUES ($1, 'trial', $2, $3, ${expires})
+       RETURNING id`,
+      [hashKey(key), `${key.slice(0, 10)}@example.com`, callsRemaining],
+    );
+    return Number((res.rows[0] as { id: number }).id);
+  }
+
+  async function buildTrialApp(): Promise<void> {
+    resetPayments();
+    db = makeDb();
+    await db.query(TRIAL_DDL);
+    initPayments(trialConfig, db);
+    app = buildApp();
+  }
+
+  beforeEach(async () => {
+    await buildTrialApp();
+  });
+
+  afterEach(async () => {
+    await app.close();
+    resetPayments();
+  });
+
+  describe('byte-goldens (pinned pre-change)', () => {
+    it('no payment header → 402 dev body byte-for-byte identical', async () => {
+      const res = await app.inject({ method: 'GET', url: '/v1/search' });
+      expect(res.statusCode).toBe(402);
+      expect(res.body).toBe(GOLDEN_ABSENT_BODY);
+    });
+
+    it('x-client-key without any account → 402 insufficient-balance body byte-for-byte identical', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/v1/search',
+        headers: { 'x-client-key': 'no-such-account' },
+      });
+      expect(res.statusCode).toBe(402);
+      expect(res.body).toBe(GOLDEN_INSUFFICIENT_BODY);
+    });
+
+    it('unknown lct_ key → still 402 (dev invalid_signature), not 403/500', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/v1/search',
+        headers: { 'x-payment': generateKey() },
+      });
+      expect(res.statusCode).toBe(402);
+      expect(res.json().error.code).toBe('payment_required');
+    });
+  });
+
+  describe('credit pre-pay path unchanged (B1.5 no-regression)', () => {
+    it('funded credit account + x-client-key → 200 credit flow, balance debited exactly once', async () => {
+      await db.query(`INSERT INTO credit_accounts (client_key, balance_cents) VALUES ('acct-1', 500)`);
+      const res = await app.inject({
+        method: 'GET',
+        url: '/v1/search',
+        headers: { 'x-client-key': 'acct-1' },
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.json().payment).toEqual({ paid: true, priceUsd: '0.02', clientKey: 'acct-1' });
+      const balance = await db.query(`SELECT balance_cents FROM credit_accounts WHERE client_key = 'acct-1'`);
+      expect(balance.rows).toEqual([{ balance_cents: 498 }]); // 500 - 2¢
+      const rows = await db.query(`SELECT provider, amount_usd, client_id FROM payments`);
+      // pg-mem returns numeric as a JS number (prod PostgreSQL: '0.02')
+      expect(rows.rows).toEqual([{ provider: 'credit', amount_usd: 0.02, client_id: null }]);
+    });
+  });
+
+  describe('trial api_clients seam (RED before implementation)', () => {
+    it('active trial key → 200, hash-label clientKey, quota decremented, trial payment row', async () => {
+      const key = generateKey();
+      const id = await seedTrialClient(key);
+
+      const res = await app.inject({
+        method: 'GET',
+        url: '/v1/search',
+        headers: { 'x-payment': key },
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.json().payment).toEqual({
+        paid: true,
+        priceUsd: '0.02',
+        clientKey: hashKeyLog(key), // Decision 6: hash-on-log label, never the raw key
+      });
+      const quota = await db.query(`SELECT calls_remaining FROM api_clients WHERE id = $1`, [id]);
+      expect(quota.rows).toEqual([{ calls_remaining: 24 }]);
+      const rows = await db.query(
+        `SELECT client_id, endpoint, amount_usd, provider, status FROM payments WHERE client_id = $1`,
+        [id],
+      );
+      // pg-mem numeric → JS number (prod PostgreSQL: '0.00')
+      expect(rows.rows).toEqual([
+        { client_id: id, endpoint: 'GET /v1/search', amount_usd: 0, provider: 'trial', status: 'success' },
+      ]);
+    });
+
+    it('consecutive calls exhaust the trial quota → 403 trial_exhausted/quota_exhausted, no double-spend', async () => {
+      const key = generateKey();
+      await seedTrialClient(key, { callsRemaining: 1 }); // cost 2¢ > remaining 1 → shortfall
+
+      const res = await app.inject({
+        method: 'GET',
+        url: '/v1/search',
+        headers: { 'x-payment': key },
+      });
+      expect(res.statusCode).toBe(403);
+      expect(res.json().error.code).toBe('trial_exhausted');
+      expect(res.json().error.message).toContain('Trial quota exhausted');
+      expect(res.json().error.message).toContain(hashKeyLog(key));
+      expect(res.json().error.hint).toContain('https://licita.test/pricing');
+      // not a payment gate: quota gate → 403, never 402
+      const quota = await db.query(`SELECT calls_remaining FROM api_clients WHERE key_hash = $1`, [hashKey(key)]);
+      expect(quota.rows).toEqual([{ calls_remaining: 1 }]); // unchanged
+      const rows = await db.query(`SELECT COUNT(*)::int AS n FROM payments`);
+      expect(rows.rows).toEqual([{ n: 0 }]);
+    });
+
+    it('expired trial key → 403 trial_exhausted/key_expired, quota untouched, no payment row', async () => {
+      const key = generateKey();
+      await seedTrialClient(key, { callsRemaining: 25, expiresInDays: -1 });
+
+      const res = await app.inject({
+        method: 'GET',
+        url: '/v1/search',
+        headers: { 'x-payment': key },
+      });
+      expect(res.statusCode).toBe(403);
+      expect(res.json().error.code).toBe('trial_exhausted');
+      expect(res.json().error.message).toContain('Trial key expired');
+      expect(res.json().error.hint).toContain('https://licita.test/pricing');
+      const quota = await db.query(`SELECT calls_remaining FROM api_clients WHERE key_hash = $1`, [hashKey(key)]);
+      expect(quota.rows).toEqual([{ calls_remaining: 25 }]);
+      const rows = await db.query(`SELECT COUNT(*)::int AS n FROM payments`);
+      expect(rows.rows).toEqual([{ n: 0 }]);
+    });
+
+    it('legacy agent row (NULL quota cols) with a valid key → untouched 402 dev flow', async () => {
+      const key = generateKey();
+      await db.query(
+        `INSERT INTO api_clients (key_hash, kind) VALUES ($1, 'agent')`,
+        [hashKey(key)],
+      );
+      const res = await app.inject({
+        method: 'GET',
+        url: '/v1/search',
+        headers: { 'x-payment': key },
+      });
+      expect(res.statusCode).toBe(402); // legacy: proof flow, not quota flow
+      expect(res.json().error.code).toBe('payment_required');
+      const quota = await db.query(`SELECT calls_remaining, expires_at FROM api_clients WHERE key_hash = $1`, [
+        hashKey(key),
+      ]);
+      expect(quota.rows[0]).toEqual({ calls_remaining: null, expires_at: null });
+    });
   });
 });

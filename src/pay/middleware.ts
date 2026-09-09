@@ -19,6 +19,7 @@ import type { AppConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import { createLogger, type Logger } from '../obs/log.js';
 import { createPaymentProvider } from './provider.js';
+import { KEY_PREFIX, hashKey, hashKeyLog } from './keys.js';
 import type { RequestPayment } from '../api/routes/common.js';
 
 declare module 'fastify' {
@@ -30,8 +31,14 @@ declare module 'fastify' {
      * card can distinguish "no proof sent" from "proof rejected by verify"
      * and "facilitator unreachable". The public 402 envelope still says
      * `code: 'payment_required'` (OpenAPI) — this is a per-request tag.
+     * Trial keys (B1.3) add 'quota_exhausted' / 'key_expired'.
      */
-    paymentFailureKind?: 'payment_required' | 'verify_failed' | 'facilitator_unavailable';
+    paymentFailureKind?:
+      | 'payment_required'
+      | 'verify_failed'
+      | 'facilitator_unavailable'
+      | 'quota_exhausted'
+      | 'key_expired';
   }
 }
 
@@ -39,6 +46,8 @@ interface PaymentRuntime {
   provider: PaymentProvider;
   db: Db;
   log: Logger;
+  /** Public origin used to build upgrade hints (config.baseUrl). */
+  baseUrl: string;
 }
 
 let runtime: PaymentRuntime | null = null;
@@ -56,6 +65,7 @@ export function initPayments(
     provider: providerOverride ?? createPaymentProvider(config, db),
     db,
     log: createLogger(config.logLevel),
+    baseUrl: config.baseUrl,
   };
   return runtime.provider;
 }
@@ -82,6 +92,14 @@ export function getPaymentProvider(): PaymentProvider {
 export interface CreditDebitResult {
   ok: boolean;
   clientKey?: string;
+  /** 'credit' (prepaid account) or 'trial' (api_clients quota key). */
+  provider?: 'credit' | 'trial';
+  clientId?: number;
+  /** Set when an api_clients row exists but is exhausted/expired (B1.3). */
+  errorCode?: 'trial_exhausted';
+  kind?: 'quota_exhausted' | 'key_expired';
+  message?: string;
+  hint?: string;
 }
 
 /**
@@ -93,12 +111,25 @@ export interface CreditDebitResult {
  * funds) the transaction rolls back and { ok: false } is returned so callers
  * fall through to the per-call proof flow; a DB error rolls back and throws
  * (fail closed). Bundle purchase endpoints never debit — they top up instead.
+ *
+ * B1.3 seam (fiat-revenue-rails): keys with the lct_ prefix (trial/pro
+ * api_clients rows) are handled by a quota-governed branch that runs BEFORE
+ * the credit UPDATE:
+ *  - active row (not expired, calls_remaining >= cost) → atomically decrement
+ *    by 1, record a provider 'trial' payment row (0.00), return the hash-on-log
+ *    label as clientKey (Decision 6 — never the raw secret);
+ *  - exhausted/expired row → { ok:false, errorCode:'trial_exhausted', kind,
+ *    message, hint } so callers can answer 403;
+ *  - unknown key or legacy agent row (quota columns NULL) → { ok:false } so
+ *    callers keep the existing proof flow (402 for unknown keys in dev mode).
+ *    lct_ keys never reach the credit balance path.
  */
 export async function tryCreditDebit(
   db: Db,
   endpointKey: string,
   price: string,
   clientKey: string,
+  baseUrl = '',
 ): Promise<CreditDebitResult> {
   if (CREDIT_BUNDLE_ENDPOINTS.includes(endpointKey as (typeof CREDIT_BUNDLE_ENDPOINTS)[number])) {
     return { ok: false };
@@ -109,6 +140,74 @@ export async function tryCreditDebit(
   const client = await db.connect();
   try {
     await client.query('BEGIN');
+
+    // B1.3 trial api_clients branch — BEFORE the credit UPDATE so a trial key
+    // can never be double-charged against a prepaid balance.
+    if (clientKey.startsWith(KEY_PREFIX)) {
+      const row = await client.query(
+        `SELECT id, calls_remaining, expires_at FROM api_clients WHERE key_hash = $1`,
+        [hashKey(clientKey)],
+      );
+      if (row.rows.length === 1) {
+        const r = row.rows[0] as {
+          id: number;
+          calls_remaining: number | null;
+          expires_at: Date | null;
+        };
+        // Legacy agent rows (001 shape, quota columns NULL) keep the old flow.
+        const legacy = r.calls_remaining === null && r.expires_at === null;
+        if (!legacy) {
+          const failed = (
+            kind: 'quota_exhausted' | 'key_expired',
+            message: string,
+          ): CreditDebitResult => ({
+            ok: false,
+            errorCode: 'trial_exhausted',
+            kind,
+            message,
+            hint: `Upgrade: see ${baseUrl}/pricing or POST /v1/stripe/checkout`,
+          });
+          const expired = r.expires_at !== null && new Date(r.expires_at).getTime() <= Date.now();
+          const active = !expired && r.calls_remaining !== null && r.calls_remaining >= costCents;
+          if (!active) {
+            await client.query('ROLLBACK');
+            return expired
+              ? failed('key_expired', `Trial key expired: ${hashKeyLog(clientKey)} is no longer valid.`)
+              : failed(
+                  'quota_exhausted',
+                  `Trial quota exhausted: ${hashKeyLog(clientKey)} can no longer call ${endpointKey}.`,
+                );
+          }
+          const updated = await client.query(
+            `UPDATE api_clients
+             SET calls_remaining = calls_remaining - 1
+             WHERE key_hash = $1 AND calls_remaining >= $2
+             RETURNING id`,
+            [hashKey(clientKey), costCents],
+          );
+          if (updated.rows.length === 0) {
+            // lost a concurrent race for the last affordable call
+            await client.query('ROLLBACK');
+            return failed(
+              'quota_exhausted',
+              `Trial quota exhausted: ${hashKeyLog(clientKey)} can no longer call ${endpointKey}.`,
+            );
+          }
+          await client.query(
+            `INSERT INTO payments (client_id, endpoint, amount_usd, provider, proof, status)
+             VALUES ($1, $2, '0.00', 'trial', $3, 'success')`,
+            [r.id, endpointKey, proof],
+          );
+          await client.query('COMMIT');
+          return { ok: true, clientKey: hashKeyLog(clientKey), provider: 'trial', clientId: r.id };
+        }
+      }
+      // Unknown lct_ key or legacy agent row: roll back and let the caller use
+      // the proof flow. Never touch the credit account with an lct_ key.
+      await client.query('ROLLBACK');
+      return { ok: false };
+    }
+
     const updated = await client.query(
       `UPDATE credit_accounts
        SET balance_cents = balance_cents - $2::int, updated_at = now()
@@ -210,6 +309,45 @@ export function paymentPreHandler(endpointKey: string): preHandlerHookHandler {
 
     const proofHeader = req.headers['payment-signature'] ?? req.headers['x-payment'];
     const proof = Array.isArray(proofHeader) ? proofHeader[0] : proofHeader;
+
+    // B1.3: trial/pro api_clients keys travel in X-PAYMENT (lct_ prefix).
+    // Probe the quota-governed branch before the proof flow: active key → paid;
+    // exhausted/expired key → 403 trial_exhausted (quota gate, not a payment
+    // gate); unknown key → unchanged 402 proof flow below.
+    const trialKey = typeof proof === 'string' && proof.startsWith(KEY_PREFIX) ? proof : undefined;
+    if (trialKey !== undefined) {
+      const debit = await tryCreditDebit(rt.db, endpointKey, price, trialKey, rt.baseUrl);
+      if (debit.ok) {
+        rt.log.info('payment_success', {
+          endpoint: endpointKey,
+          amount: price,
+          client_key: debit.clientKey,
+          provider: debit.provider ?? 'trial',
+        });
+        req.payment = { paid: true, priceUsd: price, clientKey: debit.clientKey };
+        return;
+      }
+      if (debit.errorCode === 'trial_exhausted' && debit.kind && debit.message) {
+        req.errorCode = 'trial_exhausted';
+        req.paymentFailureKind = debit.kind === 'key_expired' ? 'key_expired' : 'quota_exhausted';
+        rt.log.info('payment_attempt_failed', {
+          endpoint: endpointKey,
+          reason: debit.kind,
+          client_key: hashKeyLog(trialKey),
+        });
+        await reply.code(403).send({
+          error: {
+            code: 'trial_exhausted' as const,
+            message: debit.message,
+            hint: debit.hint,
+          },
+        });
+        return; // halt: quota gate answered, no proof flow
+      }
+      // unknown lct_ key or legacy agent row: { ok:false } without errorCode →
+      // fall through to the existing proof flow (402 in dev mode).
+    }
+
     if (typeof proof !== 'string' || proof.length === 0) {
       const requirement = provider.requiredResponse(endpointKey);
       req.errorCode = 'payment_required';

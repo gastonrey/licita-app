@@ -14,6 +14,7 @@ import type { Db } from '../db/client.js';
 import type { PaymentProvider } from '../domain/types.js';
 import { CREDIT_BUNDLE_ENDPOINTS, CREDIT_BUNDLES } from '../domain/types.js';
 import { getPaymentProvider, tryCreditDebit } from '../pay/middleware.js';
+import { hashKeyLog } from '../pay/keys.js';
 import { createLogger, type Logger } from '../obs/log.js';
 import { hashIp, logRequest, strField } from '../obs/requestlog.js';
 import { dateStr, num, provenanceFor, tedUrl } from '../api/routes/common.js';
@@ -552,6 +553,7 @@ function isEmptyResult(data: unknown): boolean {
 function statusForError(code: string): number {
   if (code === 'not_found') return 404;
   if (code === 'invalid_query') return 400;
+  if (code === 'trial_exhausted') return 403;
   return 500;
 }
 
@@ -669,6 +671,19 @@ export function buildMcpServer(
             if (debit.ok) {
               clientKey = debit.clientKey;
               debited = true;
+            } else if (debit.errorCode === 'trial_exhausted' && debit.message) {
+              // B1.3: quota gate → 403, never the 402 payment gate. Log the
+              // hash-on-log label (Decision 6); the raw key never leaves the client.
+              toolCallLog(db, log, config, name, rest, {
+                clientIp,
+                clientKey: hashKeyLog(client_key),
+                status: 403,
+                error: 'trial_exhausted',
+                zeroResult: false,
+                latencyMs: Date.now() - started,
+                paid: false,
+              });
+              return errorResult(debit.errorCode, debit.message, debit.hint);
             }
           }
           if (paid && !debited) {
