@@ -16,6 +16,7 @@ export function makeTestConfig(overrides: Partial<AppConfig> = {}): AppConfig {
     notifyEmail: 'ops@licita.test',
     resendApiKey: '',
     resendFrom: 'Licita <operator@licita.test>',
+    demoAutoReplyEnabled: true,
     trustProxy: false,
     rateLimitMaxKeys: 1000,
     ingestMonths: 24,

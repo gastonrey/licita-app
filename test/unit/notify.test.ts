@@ -8,7 +8,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Db } from '../../src/db/client.js';
 import { createLogger, type Logger } from '../../src/obs/log.js';
-import { notifyNewLead, type NotifyConfig, type NotifyLead } from '../../src/obs/notify.js';
+import { notifyLeadAck, notifyNewLead, type NotifyConfig, type NotifyLead } from '../../src/obs/notify.js';
 
 const TEST_Db = {} as Db; // not exercised by notifyNewLead's no-op path
 const baseLead: NotifyLead = { id: 42, email: 'lead@example.com', channel: 'homepage', source_url: 'https://example.com/about' };
@@ -122,5 +122,65 @@ describe('notifyNewLead', () => {
     const realLog = createLogger('warn');
     expect(() => notifyNewLead(TEST_Db, realLog, baseLead, cfg())).not.toThrow();
     await new Promise((r) => setTimeout(r, 5));
+  });
+});
+
+describe('notifyLeadAck (lead auto-reply)', () => {
+  let originalFetch: typeof globalThis.fetch;
+  let log: Logger;
+
+  beforeEach(() => {
+    originalFetch = globalThis.fetch;
+    log = makeSilentLogger();
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+    vi.restoreAllMocks();
+  });
+
+  it('is a no-op when RESEND_API_KEY is empty (no HTTP call)', async () => {
+    const fetchSpy = vi.fn();
+    globalThis.fetch = fetchSpy as unknown as typeof globalThis.fetch;
+    notifyLeadAck(log, baseLead, { ...cfg({ resendApiKey: '' }) });
+    await new Promise((r) => setTimeout(r, 0));
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('is a no-op when DEMO_AUTOREPLY_ENABLED is false even with a key set', async () => {
+    const fetchSpy = vi.fn();
+    globalThis.fetch = fetchSpy as unknown as typeof globalThis.fetch;
+    notifyLeadAck(log, baseLead, { ...cfg(), demoAutoReplyEnabled: false });
+    await new Promise((r) => setTimeout(r, 0));
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('sends a branded confirmation to the lead (not the operator) with honest content', async () => {
+    let capturedInit: RequestInit | undefined;
+    globalThis.fetch = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      capturedInit = init;
+      return new Response('{"id":"ack"}', { status: 200 });
+    }) as unknown as typeof globalThis.fetch;
+
+    notifyLeadAck(log, baseLead, cfg());
+    await new Promise((r) => setTimeout(r, 5));
+
+    const body = JSON.parse(String(capturedInit?.body));
+    expect(body.to).toEqual(['lead@example.com']);
+    expect(body.subject).toBe('Licita demo request received — what happens next');
+    expect(body.reply_to).toBe('ops@licita.test');
+    expect(body.html).toContain('guided review');
+    expect(body.html).toContain('/v1/demo');
+    expect(body.html).toContain('/docs');
+    // The lead's email must be HTML-escaped in the body.
+    expect(body.html).toContain('lead@example.com');
+  });
+
+  it('does not throw on send failure (warns, request path unaffected)', async () => {
+    globalThis.fetch = vi.fn(async () => new Response('nope', { status: 500 })) as unknown as typeof globalThis.fetch;
+    const warnSpy = vi.fn();
+    expect(() => notifyLeadAck({ ...log, warn: warnSpy }, baseLead, cfg())).not.toThrow();
+    await new Promise((r) => setTimeout(r, 5));
+    expect(warnSpy).toHaveBeenCalled();
   });
 });

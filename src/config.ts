@@ -35,6 +35,9 @@ export interface AppConfig {
   resendApiKey: string;
   /** Resend "from" header (env RESEND_FROM). Must be a verified Resend sender. */
   resendFrom: string;
+  /** Send the confirmation email to the lead after a demo request
+   *  (env DEMO_AUTOREPLY_ENABLED, default true). Still requires RESEND_API_KEY. */
+  demoAutoReplyEnabled: boolean;
   /** max distinct client keys tracked by the in-memory rate limiter */
   rateLimitMaxKeys: number;
   ingestMonths: number;
@@ -97,6 +100,7 @@ export function loadConfig(): AppConfig {
     notifyEmail: env('LEAD_NOTIFY_EMAIL', 'eutendersai@gmail.com'),
     resendApiKey: env('RESEND_API_KEY'),
     resendFrom: env('RESEND_FROM', 'Licita Operator <operator@licita.app>'),
+    demoAutoReplyEnabled: env('DEMO_AUTOREPLY_ENABLED', 'true') === 'true',
     trustProxy: parseTrustProxy(env('TRUST_PROXY', 'false')),
     rateLimitMaxKeys: parseInt(env('RATE_LIMIT_MAX_KEYS', '10000'), 10),
     ingestMonths: parseInt(env('INGEST_MONTHS', '24'), 10),

@@ -210,7 +210,7 @@ function homePage(config: AppConfig, demoStatus = false): string {
 
 <section class="cta-section" id="demo">
 <h2>See your next opportunity in context.</h2>
-<p>A free labeled sample from the current index, followed by a guided review of your market. We retain demo emails for 30 days unless the lead advances to contacted, used or paid.</p>
+<p>A free labeled sample from the current index, followed by a guided review of your market. Demo emails are kept while the request is new; once a lead advances to contacted, used, paid or lost it is purged after 180 days.</p>
 <form id="demo-request" class="cta-form" method="post" action="/v1/demo/request">
 <label for="demo-email">Work email</label>
 <input id="demo-email" name="email" type="email" inputmode="email" autocomplete="email" spellcheck="false" required placeholder="name@company.com">
@@ -277,11 +277,11 @@ function homePage(config: AppConfig, demoStatus = false): string {
   </details>
   <details class="faq-item">
     <summary>How do credits or client keys work?<span class="chev" aria-hidden="true">▾</span></summary>
-    <p class="answer">Buy dollar-denominated credits in $5–$25 packs; each paid call returns a client id for continuity on multi-step research jobs.</p>
+    <p class="answer">Buy dollar-denominated credits in $5–$25 packs at <code>POST /v1/billing/credits/5</code> (or /10, /25) with your own <code>x-client-key</code> string, then send that same key as the <code>x-client-key</code> header on priced calls to pay from your balance. Keep the key safe — it is the only identifier of your balance, and if it is lost the balance cannot currently be recovered.</p>
   </details>
   <details class="faq-item">
     <summary>How long do you keep demo emails?<span class="chev" aria-hidden="true">▾</span></summary>
-    <p class="answer">Demo emails are retained for <strong>30 days</strong> unless the lead advances to contacted, used or paid.</p>
+    <p class="answer">Demo emails are kept while the request is new; once a lead advances to contacted, used, paid or lost it is purged after <strong>180 days</strong>.</p>
   </details>
 </div>
 </section>
@@ -939,7 +939,7 @@ function dataPage(kind: 'overview' | 'spain' | 'eu'): string {
 const TRUST_PAGES: Record<string, [string, string]> = {
   methodology: ['Methodology', '<p>Licita presents source rows and deterministic heuristics with their evidence. Confidence is evidence strength, not a probability. Coverage counts, indexed ranges and freshness are shown only when supplied by the live index; unknown values are Not reported.</p>'],
   security: ['Security', '<p>Operator statistics and lead details require the server-side operator key. Public demo capture is rate limited and stores only a normalized email, channel, source URL and lifecycle timestamps. Licita does not claim a certification or SLA on this page.</p>'],
-  privacy: ['Privacy', '<p>Demo emails are retained for 30 days unless the lead advances to contacted, used or paid. Access is restricted to operators. Request deletion or ask a privacy question by email.</p>'],
+  privacy: ['Privacy', '<p>Demo emails are kept while the request is new; once a lead advances to contacted, used, paid or lost it is purged after 180 days. Access is restricted to operators. Request deletion or ask a privacy question by email.</p>'],
   terms: ['Terms', '<p>Use Licita and upstream data in accordance with applicable law and the terms of TED and PLACSP. This page is informational; contact us before relying on data for a material decision.</p>'],
   status: ['Status', '<p>Service status and source freshness are operational values, not guarantees. Check the response metadata and contact us to report an issue. No uptime SLA is claimed here.</p>'],
 };

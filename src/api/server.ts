@@ -31,7 +31,16 @@ import {
 import { buyerHistoryHandler, buyerIdValidation } from './routes/buyers.js';
 import { renewalsHandler, renewalsValidation } from './routes/renewals.js';
 import { researchHandler, researchBodyValidation } from './routes/research.js';
-import { demoHandler, demoRequestHandler, demoRequestValidation } from './routes/demo.js';
+import {
+  demoHandler,
+  demoListQueryValidation,
+  demoRequestHandler,
+  demoRequestStatusHandler,
+  demoRequestValidation,
+  demoRequestsListHandler,
+  demoStatusParamValidation,
+  demoStatusValidation,
+} from './routes/demo.js';
 import { pricingHandler } from './routes/pricing.js';
 import { billingAmountValidation, billingGetHandler, billingPurchaseHandler } from './routes/billing.js';
 import { demoStatsHandler, paymentsStatsHandler, recentStatsHandler, statsAuth, statsHandler, statsQueryValidation } from './routes/stats.js';
@@ -206,6 +215,9 @@ export async function buildServer(config: AppConfig, db: Db): Promise<FastifyIns
   // free endpoints
   app.get('/v1/demo', { preHandler: [paymentPreHandler('GET /v1/demo')] }, demoHandler(ctx));
   app.post('/v1/demo/request', { preHandler: [demoRequestValidation] }, demoRequestHandler(ctx));
+  // Operator-only lead management (x-operator-key, same gate as /v1/stats*).
+  app.get('/v1/demo/requests', { preHandler: [statsAuth(config.operatorKey), demoListQueryValidation] }, demoRequestsListHandler(ctx));
+  app.patch('/v1/demo/requests/:id', { preHandler: [statsAuth(config.operatorKey), demoStatusParamValidation, demoStatusValidation] }, demoRequestStatusHandler(ctx));
   app.get('/v1/pricing', pricingHandler(ctx));
   app.get('/v1/billing', { preHandler: [paymentPreHandler('GET /v1/billing')] }, billingGetHandler(ctx));
   app.post(
