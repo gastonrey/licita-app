@@ -83,7 +83,10 @@ export async function buildServer(config: AppConfig, db: Db): Promise<FastifyIns
       }
       done(null, JSON.parse(body as string));
     } catch (error) {
-      done(error as Error, undefined);
+      // A malformed JSON body is a client error, not a 500: without an
+      // explicit statusCode the global error handler would classify it as an
+      // internal failure (C2.1 envelope standardization).
+      done(Object.assign(error as Error, { statusCode: 400 }), undefined);
     }
   });
 

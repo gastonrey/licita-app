@@ -251,3 +251,87 @@ describe('placspFetchPage / windowCutoffIso', () => {
     expect(windowCutoffIso(1, new Date('2026-03-31T00:00:00Z'))).toBe('2026-02-28');
   });
 });
+
+describe('placsp circuit-lite (C2.3)', () => {
+  it('retries 502 then 503 specifically, then succeeds', async () => {
+    let hits = 0;
+    const { fetchFn } = mockFetch({
+      [PLACSP_FEEDS.licitaciones]: () => {
+        hits += 1;
+        if (hits === 1) return new Response('bad gateway', { status: 502 });
+        if (hits === 2) return new Response('service unavailable', { status: 503 });
+        return new Response(noNext(licXml), { status: 200 });
+      },
+    });
+    const xml = await placspFetchPage(PLACSP_FEEDS.licitaciones, {
+      ...NO_DELAY,
+      fetchFn,
+      maxRetries: 3,
+    });
+    expect(hits).toBe(3);
+    expect(xml).toContain('<feed');
+  });
+
+  it('opens the shared circuit after 3 consecutive 503s, and a success closes it', async () => {
+    const { createBackoffCircuit } = await import('../../src/ingest/backoff.js');
+    const circuit = createBackoffCircuit({ threshold: 3, openMs: 1, now: () => 0 });
+    let hits = 0;
+    const { fetchFn } = mockFetch({
+      [PLACSP_FEEDS.licitaciones]: () => {
+        hits += 1;
+        return hits < 4
+          ? new Response('service unavailable', { status: 503 })
+          : new Response(noNext(licXml), { status: 200 });
+      },
+    });
+    const xml = await placspFetchPage(PLACSP_FEEDS.licitaciones, {
+      ...NO_DELAY,
+      fetchFn,
+      maxRetries: 3,
+      circuit,
+    });
+    expect(hits).toBe(4);
+    expect(xml).toContain('<feed');
+    expect(circuit.failures()).toBe(0); // success reset the circuit
+    expect(circuit.isOpen()).toBe(false);
+  });
+
+  it('the circuit is shared across pages of one harvest run', async () => {
+    const { createBackoffCircuit } = await import('../../src/ingest/backoff.js');
+    // openMs 5 (fast test; the pure-module suite pins the production 60s default).
+    const circuit = createBackoffCircuit({ threshold: 3, openMs: 5, now: () => 0 });
+    const logs: Array<{ msg: string; url?: string; waitMs?: number }> = [];
+    let licHits = 0;
+    const { fetchFn } = mockFetch({
+      [PLACSP_FEEDS.licitaciones]: () => {
+        licHits += 1;
+        return licHits < 4
+          ? new Response('service unavailable', { status: 503 })
+          : new Response(noNext(licXml), { status: 200 });
+      },
+      [PLACSP_FEEDS.menores]: () => new Response('service unavailable', { status: 503 }),
+    });
+    const gen = harvestPlacsp({
+      ...NO_DELAY,
+      fetchFn,
+      months: 2400,
+      maxRetries: 3, // 3 failures + 1 success on feed A; bounded retries on B
+      circuit,
+      log: (e) => logs.push(e as { msg: string; url?: string; waitMs?: number }),
+    });
+    const { stats } = await drain(gen);
+    expect(licHits).toBe(4); // feed A survived 3 failures and delivered
+    expect(stats.feedErrors).toBe(1); // feed B failed within its budget
+    expect(stats.pages).toBe(1);
+    // Feed A's retries 1-2 use the exponential backoff (1ms / 2ms base + jitter);
+    // retry 3 runs after the 2nd failure opened the circuit, so its wait is the
+    // circuit's open wait (5ms) — proof the SAME instance spans the run.
+    const licRetries = logs.filter((l) => l.msg === 'placsp retry' && l.url === PLACSP_FEEDS.licitaciones);
+    expect(licRetries).toHaveLength(3);
+    expect(licRetries[0].waitMs).toBeGreaterThanOrEqual(1);
+    expect(licRetries[0].waitMs).toBeLessThan(250);
+    expect(licRetries[1].waitMs).toBeGreaterThanOrEqual(2);
+    expect(licRetries[1].waitMs).toBeLessThan(5000);
+    expect(licRetries[2].waitMs).toBe(5); // open wait, not 4ms+ backoff
+  });
+});
