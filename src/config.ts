@@ -27,6 +27,12 @@ export interface AppConfig {
     rpcUrl?: string;
   };
   operatorKey: string;
+  /** Public absolute origin of this deployment (env BASE_URL, default '').
+   *  Every server-emitted absolute URL (MCP server card, docs copy, sitemap,
+   *  page canonicals, email links) is derived from it. Empty outside
+   *  production (dev/test fall back to root-relative URLs); required to be an
+   *  absolute https URL in production (see config.validate.ts). */
+  baseUrl: string;
   /** Fastify trustProxy setting: false (default), true, or a hop count */
   trustProxy: boolean | number;
   /** Operator inbox for lead-notification emails (env LEAD_NOTIFY_EMAIL). */
@@ -97,6 +103,7 @@ export function loadConfig(): AppConfig {
       rpcUrl: env('X402_RPC_URL'),
     },
     operatorKey: env('OPERATOR_KEY'),
+    baseUrl: env('BASE_URL'),
     notifyEmail: env('LEAD_NOTIFY_EMAIL', 'eutendersai@gmail.com'),
     resendApiKey: env('RESEND_API_KEY'),
     resendFrom: env('RESEND_FROM', 'Licita Operator <operator@licita.app>'),

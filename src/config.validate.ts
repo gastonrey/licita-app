@@ -40,7 +40,8 @@ function isHttpsUrl(raw: string | undefined): boolean {
  * - NODE_ENV=production additionally requires PAYMENTS_MODE=x402, a valid
  *   X402_PAY_TO address, an https X402_FACILITATOR_URL, a CAIP-2 X402_NETWORK
  *   (Base Sepolia / Base mainnet, or an explicit eip155:<chainId> override),
- *   and rejects any secret equal to a known placeholder.
+ *   an absolute https BASE_URL, and rejects any secret equal to a known
+ *   placeholder.
  */
 export function validateConfig(config: AppConfig): void {
   const violations: string[] = [];
@@ -80,6 +81,14 @@ export function validateConfig(config: AppConfig): void {
     if (!isValidX402Network(config.x402.network)) {
       violations.push(
         'X402_NETWORK is required in production and must be a CAIP-2 EVM network: "eip155:84532" (Base Sepolia) or "eip155:8453" (Base mainnet); other eip155:<chainId> values are accepted as explicit overrides.',
+      );
+    }
+    // BASE_URL: fail closed in production — every absolute URL the server
+    // emits (server card, sitemap, canonicals, email links) is derived from
+    // it, so an unset or non-https value would leak broken/insecure hosts.
+    if (!isHttpsUrl(config.baseUrl)) {
+      violations.push(
+        'BASE_URL is required in production and must be a valid absolute https:// URL (e.g. https://your-domain.example) — it is the origin every served URL is derived from.',
       );
     }
     if (PLACEHOLDER_SECRETS.has(config.payHmacSecret)) {

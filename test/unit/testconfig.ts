@@ -13,6 +13,7 @@ export function makeTestConfig(overrides: Partial<AppConfig> = {}): AppConfig {
     researchPriceUsd: '0.50',
     x402: { facilitatorUrl: 'https://facilitator.test', network: 'eip155:84532' },
     operatorKey: 'test-operator-key',
+    baseUrl: '',
     notifyEmail: 'ops@licita.test',
     resendApiKey: '',
     resendFrom: 'Licita <operator@licita.test>',

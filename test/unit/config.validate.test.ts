@@ -12,6 +12,7 @@ function prodConfig(overrides = {}) {
   return makeTestConfig({
     nodeEnv: 'production',
     paymentsMode: 'x402',
+    baseUrl: 'https://licita.example',
     x402: { facilitatorUrl: VALID_FACILITATOR, payTo: VALID_PAY_TO, network: 'eip155:84532' },
     payHmacSecret: '',
     operatorKey: 'real-operator-secret',
@@ -107,6 +108,7 @@ describe('validateConfig (production)', () => {
     const config = makeTestConfig({
       nodeEnv: 'production',
       paymentsMode: 'dev',
+      baseUrl: 'https://licita.example',
       payHmacSecret: 'change-me-in-prod',
       operatorKey: 'change-me',
       x402: { facilitatorUrl: '', network: '' },
@@ -144,5 +146,57 @@ describe('validateConfig (production)', () => {
         ),
       ).not.toThrow();
     }
+  });
+});
+
+// fiat-revenue-rails Slice A / domain-readiness DR1: baseUrl config with
+// fail-closed production https validation.
+describe('validateConfig (production baseUrl)', () => {
+  it('fails in production when BASE_URL is unset, naming BASE_URL', () => {
+    expect(() => validateConfig(prodConfig({ baseUrl: '' }))).toThrow(/BASE_URL/);
+  });
+
+  it('fails in production when BASE_URL is not an absolute https URL, naming BASE_URL', () => {
+    for (const bad of [
+      'http://eutenders.duckdns.org', // plain http (today's dynamic-DNS deployment)
+      'eutenders.duckdns.org', // no scheme
+      '/licita', // relative
+      'ftp://licita.example', // wrong scheme
+      'not a url',
+    ]) {
+      expect(() => validateConfig(prodConfig({ baseUrl: bad })), bad).toThrow(/BASE_URL/);
+    }
+  });
+
+  it('accepts a valid https BASE_URL in production and exposes it exactly on config.baseUrl', () => {
+    const config = prodConfig({ baseUrl: 'https://licita.example' });
+    expect(() => validateConfig(config)).not.toThrow();
+    expect(config.baseUrl).toBe('https://licita.example');
+  });
+
+  it('does not require BASE_URL outside production (dev/test fall back safely)', () => {
+    expect(() => validateConfig(makeTestConfig({ baseUrl: '' }))).not.toThrow();
+  });
+});
+
+describe('loadConfig (baseUrl)', () => {
+  const original = process.env.BASE_URL;
+  const restore = () => {
+    if (original === undefined) delete process.env.BASE_URL;
+    else process.env.BASE_URL = original;
+  };
+
+  it('defaults baseUrl to an empty string when BASE_URL is unset', async () => {
+    restore();
+    delete process.env.BASE_URL;
+    const { loadConfig } = await import('../../src/config.js');
+    expect(loadConfig().baseUrl).toBe('');
+  });
+
+  it('reads baseUrl from BASE_URL verbatim when set', async () => {
+    process.env.BASE_URL = 'https://licita.example';
+    const { loadConfig } = await import('../../src/config.js');
+    expect(loadConfig().baseUrl).toBe('https://licita.example');
+    restore();
   });
 });
