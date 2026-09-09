@@ -93,6 +93,20 @@ describe('GET /dashboard', () => {
     await app.close();
   });
 
+  it('renders the read-only Fiat revenue readiness card on the Overview tab (D1)', async () => {
+    const app = buildApp();
+    const res = await app.inject({ method: 'GET', url: '/dashboard' });
+    const html = res.body;
+    // Panel skeleton in the Overview tab.
+    expect(html).toContain('<h2>Fiat revenue readiness</h2>');
+    expect(html).toContain('id="readiness"');
+    expect(html).toContain('id="readiness-summary"');
+    // Fetched from the operator-only readiness endpoint (read-only, no write path).
+    expect(html).toContain('/v1/stats/readiness');
+    expect(html).toContain('x-operator-key');
+    await app.close();
+  });
+
   it('renderPaymentHealth tiles have id hooks so a future build that omits the field renders empty', async () => {
     // The Payment health container is wired even when the stats payload
     // predates the field — older envelopes must render zero state, not 500.

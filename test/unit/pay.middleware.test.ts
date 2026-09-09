@@ -519,6 +519,8 @@ describe('paymentPreHandler trial-clients seam (B1.3)', () => {
     payHmacSecret: SECRET,
     operatorKey: 'op',
     baseUrl: 'https://licita.test',
+    // D3: the trial seam is flag-gated now — this describe exercises it ON.
+    trialEnabled: true,
   });
 
   // Byte-golden captures from the CURRENT byte stream (dev mode, no trial

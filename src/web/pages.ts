@@ -444,10 +444,17 @@ Creem handles the payment itself; Licita never sees a card number.</p>`
 (<code>CREEM_ENABLED=false</code>), so no subscription is advertised here and
 <code>/v1/creem/*</code> answers <code>404</code>. The prepaid credit path above is fully available.</p>`
 }
-<p class="muted"><strong>Known trade-off for trial keys (B1)</strong>: a trial key's quota is
+${
+  config.trialEnabled
+    ? `<p class="muted"><strong>Known trade-off for trial keys (B1)</strong>: a trial key's quota is
 <code>calls_remaining</code> (25 calls), but the guard that prevents double-spending against credits
 also blocks the very last call — the 25th call answers <code>403 trial_exhausted</code> with 0 calls
-left. Effectively 24 of the 25 calls are usable; this is a conservative safety choice, documented openly.</p>
+left. Effectively 24 of the 25 calls are usable; this is a conservative safety choice, documented openly.</p>`
+    : `<p class="muted">Trial/pro keys are <strong>not enabled</strong> on this deployment
+(<code>TRIAL_ENABLED=false</code>), so no trial quota branch is documented here; <code>lct_</code>
+api_clients keys are inert and fall back to the credit/x402 proof path. Creem-subscriber keys
+(<code>kind=creem</code>) are unaffected — they were purchased, not granted.</p>`
+}
 
 <h2>Endpoints</h2>
 ${priceTable(config)}

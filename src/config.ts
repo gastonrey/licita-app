@@ -73,6 +73,14 @@ export interface AppConfig {
    *  from/bcc recipients every DIGEST_CRON. Requires RESEND_API_KEY and, in
    *  production, DIGEST_FROM_EMAIL + DIGEST_BCC (see config.validate.ts). */
   digestEnabled: boolean;
+  /** Trial/pro api_clients key seam (fiat-revenue-rails B1, flag added in
+   *  D3 — activation readiness): env TRIAL_ENABLED, default false like every
+   *  other fiat switch. When false, lct_ keys are inert: they revert to the
+   *  legacy credit/402 path (the pre-B1 behavior). kind='creem' rows keep
+   *  working — purchased subscriptions are independent of trial grants.
+   *  Production TRIAL_ENABLED=true requires RESEND_API_KEY + BASE_URL
+   *  (see config.validate.ts). */
+  trialEnabled: boolean;
   /** Cron expression for the weekly digest run (env DIGEST_CRON).
    *  Format: "M H * * DOW" (UTC); default '0 9 * * 1' = Monday 09:00 UTC. */
   digestCron: string;
@@ -175,5 +183,6 @@ export function loadConfig(): AppConfig {
     digestCron: env('DIGEST_CRON', '0 9 * * 1'),
     digestFromEmail: env('DIGEST_FROM_EMAIL'),
     digestBcc: env('DIGEST_BCC'),
+    trialEnabled: env('TRIAL_ENABLED', 'false') === 'true',
   };
 }

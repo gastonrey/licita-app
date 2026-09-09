@@ -1196,6 +1196,57 @@ function paths(): Record<string, unknown> {
         },
       },
     },
+    '/v1/stats/readiness': {
+      get: {
+        operationId: 'getReadiness',
+        summary: 'Fiat-revenue activation readiness (operator only, read-only)',
+        description:
+          'Free, operator-only. Requires header x-operator-key. One read-only grant document with the actual fiat-revenue switch states (tri-state "disabled" | "enabled-dry" | "enabled" for creem, digest, trial), scheduled_generation_events, base_url set/https status, and migration status (009_trial_api_keys / 010_webhook_events + pending list). Mirrors the /health feature probes with the operator-only migration detail. No write path: flipping a switch means setting the env var (CREEM_ENABLED/DIGEST_ENABLED/TRIAL_ENABLED) and redeploying.',
+        parameters: [
+          {
+            name: 'x-operator-key',
+            in: 'header',
+            required: true,
+            schema: { type: 'string' },
+          },
+        ],
+        responses: {
+          '200': {
+            description: 'Readiness envelope',
+            content: {
+              'application/json': {
+                schema: envelopeOf({
+                  type: 'object',
+                  properties: {
+                    features: {
+                      type: 'object',
+                      properties: {
+                        creem: { type: 'string', enum: ['disabled', 'enabled-dry', 'enabled'] },
+                        digest: { type: 'string', enum: ['disabled', 'enabled-dry', 'enabled'] },
+                        trial: { type: 'string', enum: ['disabled', 'enabled-dry', 'enabled'] },
+                      },
+                    },
+                    scheduled_generation_events: { type: 'boolean' },
+                    base_url: { type: 'object', properties: { set: { type: 'boolean' }, https: { type: 'boolean' } } },
+                    migrations: {
+                      type: 'object',
+                      properties: {
+                        all_applied: { type: 'boolean' },
+                        applied: { type: 'array', items: { type: 'string' } },
+                        pending: { type: 'array', items: { type: 'string' } },
+                        trial_api_keys: { type: 'boolean' },
+                        webhook_events: { type: 'boolean' },
+                      },
+                    },
+                  },
+                }),
+              },
+            },
+          },
+          '401': errResp('Missing/invalid operator key'),
+        },
+      },
+    },
     '/openapi.json': {
       get: {
         operationId: 'getOpenApi',
@@ -1208,7 +1259,7 @@ function paths(): Record<string, unknown> {
         operationId: 'getHealth',
         summary: 'Liveness/readiness probe',
         description:
-          'Free, no payment hook. 200 { status: "ok", db: "up" } when a trivial SELECT 1 succeeds within a short timeout; 503 { status: "degraded", db: "down" } otherwise.',
+          'Free, no payment hook. 200 { status: "ok", db: "up" } when a trivial SELECT 1 succeeds within a short timeout; 503 { status: "degraded", db: "down" } otherwise. Both states carry a features map (D2, activation readiness): each fiat switch reports tri-state "disabled" (flag off) | "enabled-dry" (flag on but half-wired) | "enabled" (fully wired), plus scheduled_generation_events and base_url_set. Derived from env config state only — secrets are never echoed.',
         responses: {
           '200': { description: 'Service healthy; database reachable' },
           '503': { description: 'Service degraded; database unreachable' },

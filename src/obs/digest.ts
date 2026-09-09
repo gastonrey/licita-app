@@ -3,10 +3,10 @@
 // Two pieces:
 // - buildWeeklyDigest(db, window): reads api_clients + payments and groups
 //   subscribers into the three radar buckets the operator cares about:
-//     renewed   — stripe plan active at window end (or a completed payment
+//     renewed   — creem plan active at window end (or a completed payment
 //                 landed inside the window);
 //     watchlist — any client running low on calls (< 10 remaining);
-//     churnRisk — stripe subscriber with no renewal for 30+ days (expired
+//     churnRisk — creem subscriber with no renewal for 30+ days (expired
 //                 current_period_end AND no completed payment inside 30d).
 //   Rows with NULL email (legacy agent rows) are never reported; empty
 //   buckets render an honest empty state, never invented data.
@@ -128,7 +128,7 @@ export async function buildWeeklyDigest(db: Db, window: DigestWindow): Promise<D
     const paidInWindow =
       acc.lastPaymentAt !== null && acc.lastPaymentAt >= window.from && acc.lastPaymentAt < window.to;
     const activeAtWindowEnd =
-      acc.tier === 'stripe' && acc.currentPeriodEnd !== null && acc.currentPeriodEnd >= window.to;
+      acc.tier === 'creem' && acc.currentPeriodEnd !== null && acc.currentPeriodEnd >= window.to;
     if (paidInWindow || activeAtWindowEnd) {
       renewed.push(entry);
     }
@@ -138,7 +138,7 @@ export async function buildWeeklyDigest(db: Db, window: DigestWindow): Promise<D
     }
 
     const expiredPastGrace =
-      acc.tier === 'stripe' &&
+      acc.tier === 'creem' &&
       (acc.currentPeriodEnd === null || acc.currentPeriodEnd < churnCutoff) &&
       (acc.lastPaymentAt === null || acc.lastPaymentAt < churnCutoff);
     if (expiredPastGrace) {

@@ -442,6 +442,30 @@ button:focus-visible { outline: 3px solid var(--color-brand); outline-offset: 3p
 }
 .payment-failures-table { margin-top: var(--space-3); }
 
+/* === FIAT REVENUE READINESS (D1) === */
+.readiness-grid { display: flex; flex-direction: column; gap: var(--space-1); margin-bottom: var(--space-3); }
+.readiness-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-2) var(--space-3);
+  background: var(--kpi-bg);
+  border: 1px solid var(--kpi-border);
+  border-radius: var(--radius-default);
+}
+.readiness-name { font-weight: 600; color: var(--color-foreground); }
+.readiness-state {
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-default);
+}
+.readiness-state.is-ok   { color: var(--color-success); background: color-mix(in srgb, var(--color-success) 12%, transparent); }
+.readiness-state.is-warn { color: var(--color-warning); background: color-mix(in srgb, var(--color-warning) 12%, transparent); }
+.readiness-state.is-no   { color: var(--color-muted-foreground); background: var(--color-ink-light); }
+
 /* === TABLES === */
 table { border-collapse: collapse; width: 100%; font-size: var(--text-base); }
 thead th {
@@ -846,6 +870,12 @@ section[hidden] { display: none; }
           <div id="payment-health-tiles" class="payment-health-grid" aria-label="Payment health tiles"></div>
           <h3 class="h3">Recent payment failures</h3>
           <div id="payment-health-failures"></div>
+        </div>
+
+        <div class="card">
+          <h2>Fiat revenue readiness</h2>
+          <p class="muted" id="readiness-summary" aria-live="polite">Read-only switch states — flip them via environment variables, not here.</p>
+          <div id="readiness"></div>
         </div>
 
         <div class="grid2">
@@ -1506,22 +1536,26 @@ async function load() {
     const from = $('from').value, to = $('to').value;
      const range = from || to ? '?from=' + encodeURIComponent(from) + '&to=' + encodeURIComponent(to) : '';
      renderFilters(); $('load-state').textContent = 'Loading selected period…';
-    const [s, r, d, p] = await Promise.all([
+    const [s, r, d, p, q] = await Promise.all([
       fetch('/v1/stats' + range, { headers: { 'x-operator-key': key } }),
         fetch('/v1/stats/recent?limit=200' + (range ? '&' + range.slice(1) : ''), { headers: { 'x-operator-key': key } }),
        fetch('/v1/stats/demo?limit=200' + (range ? '&' + range.slice(1) : ''), { headers: { 'x-operator-key': key } }),
        fetch('/v1/stats/payments?limit=200' + (range ? '&' + range.slice(1) : ''), { headers: { 'x-operator-key': key } }),
+       fetch('/v1/stats/readiness', { headers: { 'x-operator-key': key } }),
     ]);
-    if (s.status === 401 || r.status === 401 || d.status === 401 || p.status === 401) { invalidKey(); return; }
+    if (s.status === 401 || r.status === 401 || d.status === 401 || p.status === 401 || q.status === 401) { invalidKey(); return; }
     if (!s.ok) throw new Error('GET /v1/stats → ' + s.status);
     if (!r.ok) throw new Error('GET /v1/stats/recent → ' + r.status);
     if (!p.ok) throw new Error('GET /v1/stats/payments → ' + p.status);
+    if (!q.ok) throw new Error('GET /v1/stats/readiness → ' + q.status);
     const stats = await s.json();
     const recent = await r.json();
     const payments = await p.json();
     lastPaymentAttempts = payments.data && payments.data.attempts !== undefined ? payments.data.attempts : [];
     render(stats.data, recent.data);
      renderLeads(d.data);
+     const readiness = await q.json();
+     renderReadiness(readiness.data);
      selectTab(state.tab || 'overview');
     $('login').hidden = true;
     $('dash').hidden = false;
@@ -1541,6 +1575,32 @@ function renderLeads(data) {
       (rows.length ? '<table><thead><tr><th>Email</th><th>Source / channel</th><th>Source URL</th><th>Status</th><th>Created</th><th>Converted</th></tr></thead><tbody>' +
          rows.map((r) => '<tr><td>' + esc(r.email) + '</td><td>' + esc(r.channel) + '</td><td>' + esc(r.source_url || '—') + '</td><td>' + esc(r.status) + '</td><td>' + esc(r.created_at ? dateFormat.format(new Date(r.created_at)) : '—') + '</td><td>' + (r.converted ? 'yes' : 'no') + '</td></tr>').join('') +
         '</tbody></table>' : '<p class="muted">No demo leads yet.</p>');
+}
+
+// D1: read-only fiat revenue readiness. Mirrors GET /v1/stats/readiness
+// (tri-state switches + migration status). Never a write path — flipping a
+// switch means setting the env var and redeploying.
+function renderReadiness(data) {
+  const target = $('readiness');
+  if (!data || !data.features) {
+    target.innerHTML = '<p class="muted">Readiness unavailable — is the deployment running the latest code?</p>';
+    return;
+  }
+  const label = { disabled: ['Off', 'no'], 'enabled-dry': ['Dry-run', 'warn'], enabled: ['On', 'ok'] };
+  const rows = [
+    ['Creem subscriptions', data.features.creem],
+    ['Weekly digest', data.features.digest],
+    ['Trial keys', data.features.trial],
+  ];
+  target.innerHTML =
+    '<div class="readiness-grid">' + rows.map(([name, state]) => {
+      const pair = label[state] || [esc(state), 'warn'];
+      return '<div class="readiness-row"><span class="readiness-name">' + esc(name) + '</span>' +
+        '<span class="readiness-state is-' + pair[1] + '">' + esc(pair[0]) + '</span></div>';
+    }).join('') + '</div>' +
+    '<p class="muted">Scheduled jobs: ' + (data.scheduled_generation_events ? 'on' : 'off') +
+    ' · Base URL: ' + (data.base_url.set ? (data.base_url.https ? 'https set' : 'set but not https') : 'missing') +
+    ' · Migrations: ' + (data.migrations.all_applied ? '001–010 applied' : 'pending: ' + esc((data.migrations.pending || []).join(', '))) + '</p>';
 }
 
 function selectTab(tab, push = true) {
