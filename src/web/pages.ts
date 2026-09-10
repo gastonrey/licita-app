@@ -318,7 +318,7 @@ function homePage(config: AppConfig, demoStatus = false): string {
 <div class="faq-list">
   <details class="faq-item" open>
     <summary>Do I need an account or subscription?<span class="chev" aria-hidden="true">▾</span></summary>
-    <p class="answer">${config.creem.enabled ? 'No account needed for pay-per-call — no signup. Prefer a plan? A monthly subscription is available via Creem checkout at <code>POST /v1/creem/checkout</code> — subscriber keys are marked <code>kind=creem</code> and stay active for 30 days.' : 'No. Licita is pay-per-call — no signup, no seats, no subscriptions.'}</p>
+    <p class="answer">${config.creem.enabled ? 'No account needed for pay-per-call — no signup. Prefer a plan? A monthly subscription is available via Creem checkout at <code>POST /v1/creem/checkout</code> — your API key is emailed right after checkout, marked <code>kind=creem</code>, and stays active for 30 days.' : 'No. Licita is pay-per-call — no signup, no seats, no subscriptions.'}</p>
   </details>
   <details class="faq-item">
     <summary>How do credits or client keys work?<span class="chev" aria-hidden="true">▾</span></summary>
@@ -441,7 +441,9 @@ ${
 with an email opens a Creem Checkout session for <code>€${(config.creem.priceCents / 100).toFixed(2)}/month</code>
 (config-driven — the price shown here is always the configured <code>CREEM_PRICE_CENTS</code>). After payment,
 Creem calls <code>POST /v1/creem/webhook</code> (signature-verified) and the account is marked
-<code>kind=creem</code> for 30 days.</p>
+<code>kind=creem</code> for 30 days. The subscriber's API key (<code>lct_...</code>) is generated
+and emailed to the checkout email right after payment — send it as <code>x-client-key</code> to buy
+credits and debit from your balance.</p>
 <p class="muted">How subscriber calls are billed (honest description): a subscription grants
 <strong>one-time credits</strong>, not metered per-call billing — each priced call debits your credit
 balance, and running out simply returns <code>402</code> until you refill. Trial keys that upgrade

@@ -8,7 +8,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Db } from '../../src/db/client.js';
 import { createLogger, type Logger } from '../../src/obs/log.js';
-import { notifyLeadAck, notifyNewLead, type NotifyConfig, type NotifyLead } from '../../src/obs/notify.js';
+import { notifyLeadAck, notifyNewLead, notifySubscriberKey, type NotifyConfig, type NotifyLead } from '../../src/obs/notify.js';
 
 const TEST_Db = {} as Db; // not exercised by notifyNewLead's no-op path
 const baseLead: NotifyLead = { id: 42, email: 'lead@example.com', channel: 'homepage', source_url: 'https://example.com/about' };
@@ -206,5 +206,74 @@ describe('notifyLeadAck (lead auto-reply)', () => {
     expect(body.html).toContain('href="/v1/demo"');
     expect(body.html).toContain('href="/docs"');
     expect(body.html).not.toMatch(/duckdns|licita\.app/);
+  });
+});
+
+describe('notifySubscriberKey', () => {
+  let originalFetch: typeof globalThis.fetch;
+  let log: Logger;
+
+  beforeEach(() => {
+    originalFetch = globalThis.fetch;
+    log = makeSilentLogger();
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+    vi.restoreAllMocks();
+  });
+
+  it('is a no-op when RESEND_API_KEY is empty (no HTTP call)', async () => {
+    const fetchSpy = vi.fn();
+    globalThis.fetch = fetchSpy as unknown as typeof globalThis.fetch;
+    notifySubscriberKey(log, 'sub@example.com', 'lct_test123', cfg({ resendApiKey: '' }));
+    await new Promise((r) => setTimeout(r, 0));
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('POSTs to api.resend.com/emails with the key in the HTML body', async () => {
+    let capturedInit: RequestInit | undefined;
+    globalThis.fetch = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      capturedInit = init;
+      return new Response('{"id":"sub_key"}', { status: 200 });
+    }) as unknown as typeof globalThis.fetch;
+
+    notifySubscriberKey(log, 'sub@example.com', 'lct_abc123def456', cfg());
+    await new Promise((r) => setTimeout(r, 5));
+
+    expect(capturedInit?.method).toBe('POST');
+    const headers = capturedInit?.headers as Record<string, string> | undefined;
+    expect(headers?.Authorization).toBe('Bearer re_test_abcdefghijklmnopqrstuvwxyz0123456789');
+    expect(headers?.['Content-Type']).toBe('application/json');
+    const body = JSON.parse(String(capturedInit?.body));
+    expect(body.from).toBe('Licita <operator@licita.test>');
+    expect(body.to).toEqual(['sub@example.com']);
+    expect(body.subject).toBe('Your Licita API key — welcome to the monthly plan');
+    expect(body.reply_to).toBe('ops@licita.test');
+    // HTML contains the raw key
+    expect(body.html).toContain('lct_abc123def456');
+    // HTML contains usage instructions
+    expect(body.html).toContain('/docs');
+    expect(body.html).toContain('/v1/billing');
+    expect(body.html).toContain('POST /v1/billing/credits/5');
+    expect(body.html).toContain('x-client-key');
+    // Security warning
+    expect(body.html).toContain('balance cannot currently be recovered');
+    expect(body.html).toContain('You will not see this key again');
+    // Signature
+    expect(body.html).toContain('The Licita team');
+  });
+
+  it('does not throw on non-2xx (logs warn)', async () => {
+    globalThis.fetch = vi.fn(async () => new Response('{"message":"forbidden"}', { status: 500 })) as unknown as typeof globalThis.fetch;
+    const warnSpy = vi.fn();
+    const errorLog: Logger = { ...log, warn: warnSpy };
+    expect(() => notifySubscriberKey(errorLog, 'sub@example.com', 'lct_test', cfg())).not.toThrow();
+    await new Promise((r) => setTimeout(r, 5));
+    expect(warnSpy).toHaveBeenCalled();
+    const call = warnSpy.mock.calls[0];
+    expect(call[0]).toBe('subscriber key failed');
+    const fields = call[1] as { status: number };
+    expect(fields.status).toBe(500);
   });
 });
