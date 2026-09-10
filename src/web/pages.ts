@@ -256,6 +256,8 @@ function homePage(config: AppConfig, demoStatus = false): string {
   <a class="chip" href="/data/eu"><span class="chip-kicker">EU — TED</span>Tenders Electronic Daily</a>
   <a class="chip" href="/data/spain"><span class="chip-kicker">ES — PLACSP</span>Spain contracts when enabled</a>
   <a class="chip" href="/data"><span class="chip-kicker">Dates</span>Not reported when unknown</a>
+  <a class="chip" href="https://github.com/gastonrey/licita-app"><span class="chip-kicker">Open source</span>MIT — auditable</a>
+  <a class="chip" href="/status"><span class="chip-kicker">Status</span>Live freshness</a>
 </div>
 </section>
 
@@ -336,6 +338,10 @@ function homePage(config: AppConfig, demoStatus = false): string {
   <details class="faq-item">
     <summary>How do credits or client keys work?<span class="chev" aria-hidden="true">▾</span></summary>
     <p class="answer">Buy dollar-denominated credits in $5–$25 packs at <code>POST /v1/billing/credits/5</code> (or /10, /25) with your own <code>x-client-key</code> string, then send that same key as the <code>x-client-key</code> header on priced calls to pay from your balance. Keep the key safe — it is the only identifier of your balance, and if it is lost the balance cannot currently be recovered.</p>
+  </details>
+  <details class="faq-item">
+    <summary>Do I need USDC or a crypto wallet for the monthly subscription?<span class="chev" aria-hidden="true">▾</span></summary>
+    <p class="answer">No. The monthly subscription is paid by card through Creem (Merchant of Record); Licita never sees your card number. The x402/USDC flow is only for pay-per-call and prepaid credits — no subscription, no crypto wallet needed.</p>
   </details>
   <details class="faq-item">
     <summary>How long do you keep demo emails?<span class="chev" aria-hidden="true">▾</span></summary>
@@ -558,6 +564,7 @@ ${Object.entries(CREDIT_BUNDLES)
   .join('\n')}
 </tbody>
 </table>
+<p class="muted">Two payment rails, chosen by how you buy: the monthly subscription is paid in <strong>EUR</strong> by card via Creem (no crypto wallet); pay-per-call and prepaid credits are priced in <strong>USD</strong> and paid with USDC proofs via x402.</p>
 ${config.creem.enabled
   ? '<h2>Monthly subscription</h2>\n<p class="muted"><strong>Creem MoR</strong>: subscribe at <code>POST /v1/creem/checkout</code> for\n<code>€' + (config.creem.priceCents / 100).toFixed(2) + '/month</code> (config-driven — always the configured\n<code>CREEM_PRICE_CENTS</code>). After payment Creem calls <code>POST /v1/creem/webhook</code>\n(signature-verified) and the account is marked <code>kind=creem</code> for 30 days. Subscriber calls\ndebit one-time credits — running out returns <code>402</code> until you refill.</p>\n'
   : ''}
