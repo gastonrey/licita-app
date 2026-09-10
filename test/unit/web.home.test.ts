@@ -68,4 +68,27 @@ describe('human homepage', () => {
     expect(res.body).toContain('contacted, used, paid or lost');
     await app.close();
   });
+
+  it('homepage advertises the creem monthly plan with a config-derived price when enabled (B2.6)', async () => {
+    const app = Fastify({ logger: false });
+    registerWeb(app, makeTestConfig({ paymentsMode: 'dev', creem: { enabled: true, apiKey: 'creem_test_x', webhookSecret: 'whsec_x', productId: 'prod_x', priceCents: 4950 } }));
+    const res = await app.inject({ method: 'GET', url: '/' });
+    expect(res.statusCode).toBe(200);
+    for (const needle of ['Monthly plan', '€49.50', 'POST /v1/creem/checkout', 'kind=creem', '30 days', 'USDC via x402']) {
+      expect(res.body, `homepage missing "${needle}"`).toContain(needle);
+    }
+    expect(res.body).not.toContain('no subscriptions, no signup');
+    await app.close();
+  });
+
+  it('homepage keeps the no-subscription framing when creem is disabled', async () => {
+    const app = Fastify({ logger: false });
+    registerWeb(app, makeTestConfig({ paymentsMode: 'dev' }));
+    const res = await app.inject({ method: 'GET', url: '/' });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toContain('no subscriptions, no signup');
+    expect(res.body).toContain('Research brief');
+    expect(res.body).not.toContain('Monthly plan');
+    await app.close();
+  });
 });
