@@ -52,6 +52,18 @@ function page(
 ): string {
   const meta =
     opts.config && opts.path !== undefined ? pageMeta(opts.config, opts.path, title, opts.description) : '';
+  const jsonLd = `
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": ["WebSite", "SoftwareApplication"],
+  "name": "Licita",
+  "url": "${opts.config && opts.path !== undefined ? absoluteUrl(opts.config.baseUrl, opts.path) : opts.config?.baseUrl ?? ''}",
+  "description": "${opts.description ?? 'Evidence-backed public procurement intelligence: EU (TED) and Spain (PLACSP) tenders, buyers, suppliers and deterministic renewal signals, queryable over REST and MCP.'}",
+  "applicationCategory": "BusinessApplication",
+  "operatingSystem": "Web"
+}
+</script>`.trim();
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -63,6 +75,7 @@ function page(
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=Source+Serif+4:wght@400;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/styles.css">
 ${meta}
+${jsonLd}
 <title>${title} — Licita</title>
 <style>${CSS}</style>
 </head>
@@ -218,7 +231,7 @@ function footer(): string {
 function homePage(config: AppConfig, demoStatus = false): string {
   const mcpEndpoint = absoluteUrl(config.apiBaseUrl ?? config.baseUrl, '/mcp');
   return page(
-    'Licita — know which public contracts deserve your next conversation',
+    'Public procurement intelligence for EU & Spain',
     `
 <header class="hero-grid">
 <div class="hero-copy">
@@ -342,7 +355,7 @@ function homePage(config: AppConfig, demoStatus = false): string {
       config,
       path: '/',
       description:
-        'Licita turns indexed EU and Spanish procurement notices into evidence-backed tenders, buyers, suppliers and deterministic renewal signals for professional teams.',
+        'Evidence-backed tenders, buyers, suppliers and deterministic renewal signals from TED (EU) and PLACSP (Spain) for professional teams. REST API + MCP.',
     },
   );
 }
