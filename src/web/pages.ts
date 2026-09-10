@@ -270,15 +270,22 @@ function homePage(config: AppConfig, demoStatus = false): string {
 
 <section>
 <h2>Pricing</h2>
-<p class="muted">Pay per call with <strong>USDC via x402</strong> — no subscriptions, no signup, machine-to-machine. Start at <a href="/v1/pricing">GET /v1/pricing</a> for the full ladder.</p>
+<p class="muted">${config.creem.enabled ? 'Pay per call with <strong>USDC via x402</strong> — no signup, machine-to-machine. Or subscribe monthly via Creem checkout. Start at <a href="/v1/pricing">GET /v1/pricing</a> for the full ladder.' : 'Pay per call with <strong>USDC via x402</strong> — no subscriptions, no signup, machine-to-machine. Start at <a href="/v1/pricing">GET /v1/pricing</a> for the full ladder.'}</p>
 <div class="pricing-grid">
+  ${config.creem.enabled ? `
+  <div class="price-card featured">
+    <span class="plan">Monthly plan</span>
+    <div class="amount"><span class="n">€${(config.creem.priceCents / 100).toFixed(2)}</span><span class="u">per month</span></div>
+    <p class="desc">One monthly payment unlocks the paid endpoints: subscriber calls debit one-time credits, and the account stays active for 30 days. Creem handles payment; Licita never sees a card number.</p>
+    <span class="tag">POST /v1/creem/checkout</span>
+  </div>` : ''}
   <div class="price-card">
     <span class="plan">Research brief</span>
     <div class="amount"><span class="n">$${config.researchPriceUsd}</span><span class="u">USDC per call</span></div>
     <p class="desc">One paid call turns a topic into a deterministic, evidence-backed research brief. NO LLM, fully auditable.</p>
     <span class="tag">POST /v1/research</span>
   </div>
-  <div class="price-card featured">
+  <div class="price-card${config.creem.enabled ? '' : ' featured'}">
     <span class="plan">Core endpoints</span>
     <div class="amount"><span class="n">from $0.02</span><span class="u">per call</span></div>
     <p class="desc">Contract data, renewals signals, buyer and supplier profiles — every row carries provenance.</p>
@@ -311,7 +318,7 @@ function homePage(config: AppConfig, demoStatus = false): string {
 <div class="faq-list">
   <details class="faq-item" open>
     <summary>Do I need an account or subscription?<span class="chev" aria-hidden="true">▾</span></summary>
-    <p class="answer">No. Licita is pay-per-call with USDC via x402 — no signup, no seats, no subscriptions.</p>
+    <p class="answer">${config.creem.enabled ? 'No account needed for pay-per-call: pay with USDC via x402, no signup. Prefer a plan? A monthly subscription is available via Creem checkout at <code>POST /v1/creem/checkout</code> — subscriber keys are marked <code>kind=creem</code> and stay active for 30 days.' : 'No. Licita is pay-per-call with USDC via x402 — no signup, no seats, no subscriptions.'}</p>
   </details>
   <details class="faq-item">
     <summary>How do credits or client keys work?<span class="chev" aria-hidden="true">▾</span></summary>
@@ -522,9 +529,9 @@ ${priceTable(config)}
 <p class="muted"><code>GET /v1/demo</code> is free: a labeled sample of the paid data (recent tender +
 renewal signal), so agents can validate quality before paying.</p>
 <h2>Credits &amp; billing</h2>
-<p class="muted">Prepaid credit bundles — a one-time x402 purchase, no subscription. Buy a bundle, then
-pay every call from your balance by sending <code>x-client-key: &lt;your key&gt;</code> on the request
-(instead of a per-call payment proof).</p>
+${config.creem.enabled
+  ? '<p class="muted">Prepaid credit bundles — a one-time x402 purchase. Buy a bundle, then\npay every call from your balance by sending <code>x-client-key: &lt;your key&gt;</code> on the request\n(instead of a per-call payment proof).</p>'
+  : '<p class="muted">Prepaid credit bundles — a one-time x402 purchase, no subscription. Buy a bundle, then\npay every call from your balance by sending <code>x-client-key: &lt;your key&gt;</code> on the request\n(instead of a per-call payment proof).</p>'}
 <table>
 <thead><tr><th>Bundle</th><th>Price (USD)</th></tr></thead>
 <tbody>
@@ -536,6 +543,9 @@ ${Object.entries(CREDIT_BUNDLES)
   .join('\n')}
 </tbody>
 </table>
+${config.creem.enabled
+  ? '<h2>Monthly subscription</h2>\n<p class="muted"><strong>Creem MoR</strong>: subscribe at <code>POST /v1/creem/checkout</code> for\n<code>€' + (config.creem.priceCents / 100).toFixed(2) + '/month</code> (config-driven — always the configured\n<code>CREEM_PRICE_CENTS</code>). After payment Creem calls <code>POST /v1/creem/webhook</code>\n(signature-verified) and the account is marked <code>kind=creem</code> for 30 days. Subscriber calls\ndebit one-time credits — running out returns <code>402</code> until you refill.</p>\n'
+  : ''}
 <p class="muted">Buy: <code>POST /v1/billing/credits/5</code> (or <code>/10</code> <code>/25</code>) with
 the normal x402 payment flow (402 → <code>PAYMENT-SIGNATURE</code> retry). Check balance:
 <code>GET /v1/billing</code> with header <code>x-client-key: &lt;your key&gt;</code>. MCP:

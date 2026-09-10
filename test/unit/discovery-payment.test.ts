@@ -208,6 +208,16 @@ describe('discovery surfaces teach the x402 v2 flow', () => {
     expect(p.subscription.price_monthly).toBe((4950 / 100).toFixed(2));
     expect(String(p.subscription.mechanics)).toContain('one-time credits');
   });
+
+  it('/pricing advertises the creem monthly subscription arm when enabled (B2.6)', async () => {
+    const app = await webApp('dev', { creem: { enabled: true, apiKey: 'creem_test_x', webhookSecret: 'whsec_x', productId: 'prod_x', priceCents: 4950 } });
+    const res = await app.inject({ method: 'GET', url: '/pricing' });
+    expect(res.statusCode).toBe(200);
+    for (const needle of ['Monthly subscription', '€49.50/month', 'POST /v1/creem/checkout', 'POST /v1/creem/webhook', 'kind=creem', '402']) {
+      expect(res.body, `/pricing missing "${needle}"`).toContain(needle);
+    }
+    await app.close();
+  });
 });
 
 describe('P1 use-case and data pages (agent-first discovery)', () => {
