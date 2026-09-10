@@ -338,36 +338,39 @@ El portal de PLACSP (contrataciondelsectorpublico.gob.es) está detrás de un WA
 
 ---
 
-## 11. Custom domain (P1 — configuration only, nothing to buy yet)
+## 11. Custom domain (P1 — production)
 
-The service runs today on `https://eutenders.duckdns.org` (duckdns free
-subdomain, TLS via Caddy). When a real domain is bought, this is the exact
-change set — no code changes are required except the MCP server card URL:
+The service runs on `https://eutendersai.com` (web) with API/MCP at
+`https://api.eutendersai.com` — a dual-origin deployment. Both domains resolve
+to the same VM and Caddy reverse-proxies both to the same `app:3000` container:
 
-1. **DNS** — at the registrar/Cloudflare, point the domain at the VM:
-   - `A` record: `licita.<your-domain>` → `2.28.56.131` (or a CNAME to
-     `eutenders.duckdns.org`).
-2. **Reverse proxy** — the VM's Caddy config already proxies
-   `https://eutenders.duckdns.org` to `127.0.0.1:3000`; add the same site block
-   for the new domain so Caddy issues a Let's Encrypt certificate automatically:
+1. **DNS** — at the registrar/Cloudflare, point both domains at the VM:
+   - `eutendersai.com` → `A` record pointing at the VM IP.
+   - `api.eutendersai.com` → `A` or `CNAME` record pointing at the same VM.
+2. **Reverse proxy** — Caddy serves both domains with automatic TLS. Each
+   site block forwards to the same container:
    ```
-   licita.<your-domain> {
+   eutendersai.com {
+       reverse_proxy 127.0.0.1:3000
+   }
+   api.eutendersai.com {
        reverse_proxy 127.0.0.1:3000
    }
    ```
-3. **Code — one URL to change**: the MCP server card advertises the endpoint
-   URL at `src/web/pages.ts` (`SERVER_CARD_URL`, currently
-   `https://eutenders.duckdns.org/mcp`). Update it to the new origin, redeploy:
-   ```bash
-   rsync -az --delete --exclude .git --exclude node_modules --exclude dist \
-     --exclude .env --exclude '*.log' --exclude .DS_Store --exclude .epg-data \
-     --exclude coverage --exclude test ./ root@2.28.56.131:/root/licita/app/
-   ssh root@2.28.56.131 'cd /root/licita && docker compose --env-file /root/licita/.env \
-     -p licita -f app/docker-compose.prod.yml -f app/docker-compose.cohost.yml up -d --build app'
+3. **Environment** — set both origins in the production `.env`:
    ```
-4. **Verify** — `curl https://licita.<your-domain>/.well-known/mcp/server-card.json`
-   returns the card with the new `url`; `GET /v1/pricing` and one paid 402 also
-   return `extensions.bazaar` with `resource.url` reflecting the new origin.
-5. **Optional** — update any operator-facing copy that mentions the duckdns
-   URL (dashboard, runbook). Public discovery surfaces (`/llms.txt`,
-   `/openapi.json`) are origin-agnostic and need no change.
+   BASE_URL=https://eutendersai.com
+   API_BASE_URL=https://api.eutendersai.com
+   ```
+   `BASE_URL` drives discovery pages, sitemap, canonicals, OG and email links.
+   `API_BASE_URL` drives the MCP server card URL and API-facing absolute URLs
+   (currently the `url` in `/.well-known/mcp/server-card.json` and the MCP
+   endpoint shown on the homepage). When `API_BASE_URL` is unset, MCP/API URLs
+   fall back to `BASE_URL` (single-origin mode).
+4. **Verify** — `curl https://eutendersai.com/health` and
+   `curl https://api.eutendersai.com/health` both return
+   `{"status":"ok","db":"up"}`. `curl https://eutendersai.com/.well-known/mcp/server-card.json`
+   shows `url` pointing at `https://api.eutendersai.com/mcp`.
+5. **Optional** — update any operator-facing copy that references the old URL.
+   Public discovery surfaces (`/llms.txt`, `/openapi.json`) are origin-agnostic
+   and need no change.

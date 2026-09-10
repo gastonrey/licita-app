@@ -9,7 +9,7 @@
   "maintainers": ["gastonrey"],
   "server": {
     "type": "streamable-http",
-    "url": "https://eutenders.duckdns.org/mcp"
+    "url": "https://api.eutendersai.com/mcp"
   },
   "tools": [
     "search_tenders",
@@ -25,7 +25,7 @@
     "billing_purchase_credits"
   ],
   "transport": "streamable-http",
-  "url": "https://eutenders.duckdns.org/mcp",
+  "url": "https://api.eutendersai.com/mcp",
   "license": "MIT",
   "repository": "https://github.com/gastonrey/licita-app",
   "keywords": [

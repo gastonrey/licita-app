@@ -33,6 +33,11 @@ export interface AppConfig {
    *  production (dev/test fall back to root-relative URLs); required to be an
    *  absolute https URL in production (see config.validate.ts). */
   baseUrl: string;
+  /** Optional public origin for API/MCP-facing absolute URLs (env API_BASE_URL,
+   *  default undefined). When unset, API/MCP services fall back to baseUrl —
+   *  single-origin deployments keep working unchanged. Must be https in
+   *  production when set (see config.validate.ts). */
+  apiBaseUrl?: string;
   /** Fastify trustProxy setting: false (default), true, or a hop count */
   trustProxy: boolean | number;
   /** Operator inbox for lead-notification emails (env LEAD_NOTIFY_EMAIL). */
@@ -156,6 +161,7 @@ export function loadConfig(): AppConfig {
     },
     operatorKey: env('OPERATOR_KEY'),
     baseUrl: env('BASE_URL'),
+    apiBaseUrl: env('API_BASE_URL') || undefined,
     notifyEmail: env('LEAD_NOTIFY_EMAIL', 'eutendersai@gmail.com'),
     resendApiKey: env('RESEND_API_KEY'),
     resendFrom: env('RESEND_FROM', 'Licita Operator <operator@licita.app>'),

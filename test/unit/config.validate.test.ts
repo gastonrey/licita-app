@@ -207,8 +207,8 @@ describe('validateConfig (production baseUrl)', () => {
 
   it('fails in production when BASE_URL is not an absolute https URL, naming BASE_URL', () => {
     for (const bad of [
-      'http://eutenders.duckdns.org', // plain http (today's dynamic-DNS deployment)
-      'eutenders.duckdns.org', // no scheme
+      'http://licita.example', // plain http / no scheme
+      'licita.example', // no scheme
       '/licita', // relative
       'ftp://licita.example', // wrong scheme
       'not a url',

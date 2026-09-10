@@ -216,7 +216,7 @@ function footer(): string {
 
 
 function homePage(config: AppConfig, demoStatus = false): string {
-  const mcpEndpoint = absoluteUrl(config.baseUrl, '/mcp');
+  const mcpEndpoint = absoluteUrl(config.apiBaseUrl ?? config.baseUrl, '/mcp');
   return page(
     'Licita — know which public contracts deserve your next conversation',
     `
@@ -665,7 +665,7 @@ ${lines}
 // not imported: pages.ts must stay dependency-free of the MCP module graph and
 // the inputSchema values here are plain JSON Schema mirrors of the zod shapes).
 
-// SERVER_CARD_URL is derived from config.baseUrl at runtime (serverCard function).
+// SERVER_CARD_URL is derived from config.apiBaseUrl (falling back to config.baseUrl) at runtime (serverCard function).
 
 const PAYMENT_TOKEN_SCHEMA = {
   type: 'string',
@@ -1031,7 +1031,7 @@ function serverCard(config: AppConfig): Record<string, unknown> {
     name: 'licita',
     description:
       'Public procurement intelligence for AI agents: EU tenders, renewal signals, company opportunities and buyer activity. Pay per call with USDC via x402.',
-    url: absoluteUrl(config.baseUrl, '/mcp'),
+    url: absoluteUrl(config.apiBaseUrl ?? config.baseUrl, '/mcp'),
     transports: ['sse'],
     tools: SERVER_CARD_TOOLS,
   };

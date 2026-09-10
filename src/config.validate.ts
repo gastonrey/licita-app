@@ -91,6 +91,14 @@ export function validateConfig(config: AppConfig): void {
         'BASE_URL is required in production and must be a valid absolute https:// URL (e.g. https://your-domain.example) — it is the origin every served URL is derived from.',
       );
     }
+    // API_BASE_URL (optional dual-origin): when explicit, it must be https in
+    // production — it becomes the origin of the MCP server card and API-facing
+    // absolute URLs.
+    if (config.apiBaseUrl && !isHttpsUrl(config.apiBaseUrl)) {
+      violations.push(
+        'API_BASE_URL, when set, must be a valid absolute https:// URL (e.g. https://api.your-domain.example). It is the origin for API/MCP-facing URLs; leave it empty to reuse BASE_URL.',
+      );
+    }
     if (PLACEHOLDER_SECRETS.has(config.payHmacSecret)) {
       violations.push('PAY_HMAC_SECRET must not be a known placeholder value ("change-me-in-prod").');
     }

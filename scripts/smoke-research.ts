@@ -1,5 +1,5 @@
 // Real x402 payment test for POST /v1/research (P0.1) + Bazaar extension echo.
-// Usage: SMOKE_PAY_MODE=x402 BASE_URL=https://eutenders.duckdns.org npx tsx scripts/smoke-research.ts
+// Usage: SMOKE_PAY_MODE=x402 BASE_URL=https://eutendersai.com npx tsx scripts/smoke-research.ts
 import { x402Client } from '@x402/core/client';
 import { registerExactEvmScheme } from '@x402/evm/exact/client';
 import { decodePaymentRequiredHeader, encodePaymentSignatureHeader } from '@x402/core/http';
