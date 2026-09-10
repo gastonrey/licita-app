@@ -81,4 +81,4 @@ jobs:
       - name: Verify health
         run: |
           sleep 10
-          curl -sSf https://eutenders.duckdns.org/health
+          curl -sSf https://eutendersai.com/health

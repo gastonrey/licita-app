@@ -21,8 +21,8 @@ track record, and which contracts are likely to be re-tendered soon.
 
 A public production instance is live — agents can connect right now:
 
-- **MCP (streamable-HTTP):** `https://eutenders.duckdns.org/mcp`
-- **Discovery:** `https://eutenders.duckdns.org/llms.txt` · `/openapi.json` · `/v1/pricing` · `/docs`
+- **MCP (streamable-HTTP):** `https://api.eutendersai.com/mcp`
+- **Discovery:** `https://eutendersai.com/llms.txt` · `/openapi.json` · `/v1/pricing` · `/docs`
 - **Payments:** x402 v2 (USDC on Base), pay-per-call, free discovery calls.
   Unpaid tool calls return `{"payment_required": true, ...}` with `how_to_pay`
   steps; create the payment with an x402 client from the `PAYMENT-REQUIRED`
@@ -33,7 +33,7 @@ Client config snippet for the live instance:
 ```json
 {
   "mcpServers": {
-    "eutenders": { "type": "streamable-http", "url": "https://eutenders.duckdns.org/mcp" }
+    "eutenders": { "type": "streamable-http", "url": "https://api.eutendersai.com/mcp" }
   }
 }
 ```
@@ -42,7 +42,7 @@ Client config snippet for the live instance:
 
 Licita is listed in MCP registries and directories for agent and human discovery:
 
-- **MCP registry manifest:** [`server.json`](./server.json) — streamable-HTTP at `https://eutenders.duckdns.org/mcp`.
+- **MCP registry manifest:** [`server.json`](./server.json) — streamable-HTTP at `https://api.eutendersai.com/mcp`.
 - **Static server card:** `/.well-known/mcp/server-card.json` (identity, SSE URL, all 11 tool schemas).
 - **Glama:** [glama.json](./glama.json) + [Glama server](https://glama.ai/mcp/servers) (badge).
 - **mcp.so:** [Licita on mcp.so](https://mcp.so).
