@@ -1,5 +1,7 @@
-// Fire-and-forget lead notification via the Resend HTTP API (P0.x: operator
-// notification on new demo lead). No new runtime dependency — uses global
+// Fire-and-forget emails via the Resend HTTP API (P0.x):
+// - notifyNewLead: operator notification on new demo lead.
+// - notifyLeadAck: branded confirmation to the lead (demo auto-reply).
+// No new runtime dependency — uses global
 // fetch. Never throws, never blocks the request path.
 //
 // Behavior:
@@ -10,6 +12,7 @@
 //   succeeded (the lead was inserted), so the email is best-effort.
 
 import type { Db } from '../db/client.js';
+import { absoluteUrl } from '../config.js';
 
 /** Minimal log surface we depend on. Compatible with the project Logger and
  *  with Fastify's FastifyBaseLogger (which has debug/info/warn/error methods). */
@@ -31,6 +34,56 @@ export interface NotifyConfig {
   notifyEmail: string;
   resendApiKey: string;
   resendFrom: string;
+  /** DEMO_AUTOREPLY_ENABLED gate for the lead confirmation email (default true). */
+  demoAutoReplyEnabled?: boolean;
+  /** Deployment origin (env BASE_URL) for links inside emails. Empty when
+   *  unset — links fall back to root-relative form, never a hardcoded host. */
+  baseUrl?: string;
+}
+
+interface ResendPayload {
+  from: string;
+  to: [string, ...string[]];
+  subject: string;
+  html: string;
+  reply_to?: string;
+}
+
+/** Shared fire-and-forget POST to the Resend HTTP API. Never throws; `tag`
+ *  namespaces the log lines ('lead notification' | 'lead auto-reply'). */
+function resendSend(log: NotifyLogger, tag: string, leadId: number, apiKey: string, payload: ResendPayload): void {
+  const body = JSON.stringify(payload);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  fetch(RESEND_URL, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body,
+    signal: controller.signal,
+  })
+    .then(async (res) => {
+      if (!res.ok) {
+        const text = await res.text().catch(() => '');
+        log.warn(`${tag} failed`, {
+          leadId,
+          status: res.status,
+          statusText: res.statusText,
+          body: text.slice(0, 200),
+        });
+      } else {
+        log.info(`${tag} sent`, { leadId, to: payload.to[0] });
+      }
+    })
+    .catch((err: unknown) => {
+      log.warn(`${tag} error`, {
+        leadId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    })
+    .finally(() => clearTimeout(timer));
 }
 
 const RESEND_URL = 'https://api.resend.com/emails';
@@ -66,42 +119,58 @@ export function notifyNewLead(_db: Db, log: NotifyLogger, lead: NotifyLead, cfg:
     log.debug('lead notification skipped: RESEND_API_KEY is empty', { leadId: lead.id });
     return;
   }
-  const html = buildHtml(lead, 'https://licita.app/dashboard?view=leads');
-  const body = JSON.stringify({
+  const html = buildHtml(lead, absoluteUrl(cfg.baseUrl ?? '', '/dashboard?view=leads'));
+  resendSend(log, 'lead notification', lead.id, cfg.resendApiKey, {
     from: cfg.resendFrom,
     to: [cfg.notifyEmail],
     subject: `New demo lead: ${lead.email}`,
     html,
   });
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
-  fetch(RESEND_URL, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${cfg.resendApiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body,
-    signal: controller.signal,
-  })
-    .then(async (res) => {
-      if (!res.ok) {
-        const text = await res.text().catch(() => '');
-        log.warn('lead notification failed', {
-          leadId: lead.id,
-          status: res.status,
-          statusText: res.statusText,
-          body: text.slice(0, 200),
-        });
-      } else {
-        log.info('lead notification sent', { leadId: lead.id, to: cfg.notifyEmail });
-      }
-    })
-    .catch((err: unknown) => {
-      log.warn('lead notification error', {
-        leadId: lead.id,
-        error: err instanceof Error ? err.message : String(err),
-      });
-    })
-    .finally(() => clearTimeout(timer));
+}
+
+function buildAckHtml(email: string, baseUrl: string): string {
+  const safeEmail = escapeHtml(email);
+  const demoUrl = absoluteUrl(baseUrl, '/v1/demo');
+  const docsUrl = absoluteUrl(baseUrl, '/docs');
+  return `<!doctype html>
+<html><body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 560px; margin: 0 auto; padding: 24px; color: #1a1a1a;">
+<h1 style="font-size: 18px; margin: 0 0 16px;">Your Licita demo request is in</h1>
+<p>Hi ${safeEmail},</p>
+<p>Thanks for requesting a Licita demo. Here is what happens next:</p>
+<ul style="font-size: 14px; line-height: 1.6;">
+  <li>A guided review of your market — the tenders, buyers and renewal signals relevant to you.</li>
+  <li>An evidence-backed sample from the live index, so you see the actual output before any meeting.</li>
+</ul>
+<p style="font-size: 14px; line-height: 1.6;">In the meantime you can get instant value without signup:</p>
+<ul style="font-size: 14px; line-height: 1.6;">
+  <li>Free sample endpoint: <a href="${demoUrl}">${demoUrl}</a></li>
+  <li>Developer docs: <a href="${docsUrl}">${docsUrl}</a></li>
+</ul>
+<p style="font-size: 14px; line-height: 1.6;">To schedule your review, simply reply to this email.</p>
+<p style="font-size: 13px; color: #666;">— The Licita team · Public procurement intelligence for professionals</p>
+</body></html>`;
+}
+
+/**
+ * Send the branded confirmation email to the lead after a successful demo
+ * request. Fire-and-forget; never throws. Skipped silently when
+ * `resendApiKey` is empty or `demoAutoReplyEnabled` is false — same semantics
+ * as the operator notification.
+ */
+export function notifyLeadAck(log: NotifyLogger, lead: NotifyLead, cfg: NotifyConfig): void {
+  if (!cfg.resendApiKey) {
+    log.debug('lead auto-reply skipped: RESEND_API_KEY is empty', { leadId: lead.id });
+    return;
+  }
+  if (cfg.demoAutoReplyEnabled === false) {
+    log.debug('lead auto-reply skipped: DEMO_AUTOREPLY_ENABLED is false', { leadId: lead.id });
+    return;
+  }
+  resendSend(log, 'lead auto-reply', lead.id, cfg.resendApiKey, {
+    from: cfg.resendFrom,
+    to: [lead.email],
+    subject: 'Licita demo request received — what happens next',
+    html: buildAckHtml(lead.email, cfg.baseUrl ?? ''),
+    reply_to: cfg.notifyEmail,
+  });
 }

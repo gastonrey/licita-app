@@ -354,7 +354,7 @@ const demoRequestData = {
   properties: {
     id: { type: 'integer' }, email: { type: 'string', format: 'email' },
     channel: { type: 'string' }, source_url: { type: ['string', 'null'] },
-    status: { type: 'string', enum: ['new', 'contacted', 'used', 'paid'] },
+    status: { type: 'string', enum: ['new', 'contacted', 'used', 'paid', 'lost'] },
     created_at: { type: 'string', format: 'date-time' },
   },
 } as const;
@@ -974,9 +974,36 @@ function paths(): Record<string, unknown> {
     '/v1/demo/request': {
       post: {
         operationId: 'createDemoRequest', summary: 'Request a product demo',
-        description: 'Free public solo-email demo request capture.',
+        description: 'Free public solo-email demo request capture. Resubmitting an already-known email is treated as "already requested": the same success response is returned and no duplicate row is created.',
         requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['email'], properties: { email: { type: 'string', format: 'email' } } } } } },
         responses: { '201': { description: 'Demo request captured', content: { 'application/json': { schema: envelopeOf(demoRequestData) } } }, '400': errResp('Invalid email'), '429': errResp('Rate limited') },
+      },
+    },
+    '/v1/demo/requests': {
+      get: {
+        operationId: 'listDemoRequests', summary: 'List demo leads (operator only)',
+        description:
+          'Operator-only lead management feed. Requires header x-operator-key. Returns demo_requests rows newest-first with optional status filter and page/limit pagination.',
+        parameters: [
+          { name: 'x-operator-key', in: 'header', required: true, schema: { type: 'string' } },
+          qParam('status', 'Filter by lead lifecycle status', { type: 'string', enum: ['new', 'contacted', 'used', 'paid', 'lost'] }),
+          qParam('page', '1-based page (default 1)', { type: 'integer', minimum: 1 }),
+          qParam('limit', 'Rows per page, up to 200 (default 50)', { type: 'integer', maximum: 200 }),
+        ],
+        responses: { '200': { description: 'Paginated demo lead list', content: { 'application/json': { schema: envelopeOf({ type: 'object' }) } } }, '400': errResp('Invalid parameters'), '401': errResp('Missing/invalid operator key') },
+      },
+    },
+    '/v1/demo/requests/{id}': {
+      patch: {
+        operationId: 'patchDemoRequestStatus', summary: 'Advance a demo lead status (operator only)',
+        description:
+          'Operator-only. Requires header x-operator-key. Sets the lifecycle status of one demo request; returns the updated row in the standard envelope. Leads are purged 180 days after reaching contacted, used, paid or lost; "new" leads are never auto-deleted.',
+        parameters: [
+          { name: 'x-operator-key', in: 'header', required: true, schema: { type: 'string' } },
+          { name: 'id', in: 'path', required: true, schema: { type: 'integer', minimum: 1 } },
+        ],
+        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['status'], properties: { status: { type: 'string', enum: ['new', 'contacted', 'used', 'paid', 'lost'] } } } } } },
+        responses: { '200': { description: 'Updated lead', content: { 'application/json': { schema: envelopeOf(demoRequestData) } } }, '400': errResp('Invalid id or status'), '401': errResp('Missing/invalid operator key'), '404': errResp('Lead not found') },
       },
     },
     '/v1/billing': {

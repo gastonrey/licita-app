@@ -16,3 +16,7 @@ services:
     ports: !reset []
     expose:
       - "3000"
+    environment:
+      # The co-hosted profile IS the production deploy path (deploy.yml) — the
+      # public origin is required, matching docker-compose.prod.yml.
+      BASE_URL: ${BASE_URL:?set BASE_URL}

@@ -25,6 +25,8 @@
 #   POSTGRES_PASSWORD     admin DB password (used by migrations)
 #   LICITA_APP_PASSWORD   password for the low-privilege licita_app role
 #   OPERATOR_KEY          x-operator-key header for GET /v1/stats
+#   BASE_URL              public https origin (sitemap, canonicals, MCP server
+#                         card, email links — enforced https at boot)
 #   X402_FACILITATOR_URL  https facilitator endpoint (default https://www.x402.org/facilitator)
 #   X402_PAY_TO           0x + 40 hex chars (USDC recipient)
 #   X402_NETWORK          CAIP-2: eip155:84532 (Base Sepolia) / eip155:8453 (Base mainnet)
@@ -90,6 +92,10 @@ services:
       # and fails closed (never double-charges, but retries do not recover).
       X402_RPC_URL: ${X402_RPC_URL:-}
       OPERATOR_KEY: ${OPERATOR_KEY:?set OPERATOR_KEY}
+      # Public origin every served absolute URL is derived from (sitemap,
+      # canonicals/OG, MCP server card, email links). Must be https — enforced
+      # again at boot by src/config.validate.ts.
+      BASE_URL: ${BASE_URL:?set BASE_URL}
       # Admin connection: migrations only (also re-run idempotently on boot).
       DATABASE_URL: postgres://licita:${POSTGRES_PASSWORD}@db:5432/licita
       # App traffic: low-privilege role (SELECT/INSERT/UPDATE/DELETE, no DDL).

@@ -7,12 +7,30 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 import { ENDPOINT_PRICES, type Provenance } from '../../domain/types.js';
 import type { Db } from '../../db/client.js';
 import { priceOverrides } from '../../pay/prices.js';
-import { dateStr, envelope, num, tedUrl, type RouteCtx, validate } from './common.js';
+import { dateStr, envelope, notFound, num, tedUrl, type RouteCtx, HttpError, validate } from './common.js';
 import { z } from 'zod';
-import { notifyNewLead } from '../../obs/notify.js';
+import { notifyLeadAck, notifyNewLead } from '../../obs/notify.js';
 
 export const demoRequestSchema = z.object({ email: z.string().trim().toLowerCase().email('invalid email') });
 export const demoRequestValidation = validate(demoRequestSchema, 'body');
+
+/** Lead lifecycle states (mirrors the migrations/008 CHECK domain). */
+export const LEAD_STATUSES = ['new', 'contacted', 'used', 'paid', 'lost'] as const;
+const leadStatus = z.enum(LEAD_STATUSES);
+
+export const demoStatusParamSchema = z.object({ id: z.coerce.number().int().positive('id must be a positive integer') });
+export const demoStatusParamValidation = validate(demoStatusParamSchema, 'params');
+export const demoStatusSchema = z.object({ status: leadStatus });
+export const demoStatusValidation = validate(demoStatusSchema, 'body');
+
+export const demoListQuerySchema = z.object({
+  status: leadStatus.optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+});
+export const demoListQueryValidation = validate(demoListQuerySchema, 'query');
+
+const LEAD_ROW_SQL = 'id, email, channel, source_url, status, created_at';
 
 export function channelFor(query: Record<string, unknown>, referer?: string): string {
   const source = typeof query.source === 'string' ? query.source.trim() : '';
@@ -26,23 +44,96 @@ export function demoRequestHandler(ctx: RouteCtx) {
     const query = (req.query ?? {}) as Record<string, unknown>;
     const referer = typeof req.headers.referer === 'string' ? req.headers.referer : undefined;
     const sourceUrl = req.url.includes('?') ? req.url : referer ?? null;
-    await ctx.db.query("DELETE FROM demo_requests WHERE status IN ('new', 'contacted') AND created_at < now() - interval '30 days'");
-    const result = await ctx.db.query(
+    // Retention sweep (008 rule): purge only terminal leads older than 180
+    // days. 'new' leads are NEVER auto-deleted. Best-effort: a sweep failure
+    // must not block the capture (same spirit as the old unconditional DELETE).
+    try {
+      await ctx.db.query(
+        "DELETE FROM demo_requests WHERE status IN ('contacted', 'used', 'paid', 'lost') AND created_at < now() - interval '180 days'",
+      );
+    } catch (err: unknown) {
+      ctx.log.warn('demo retention sweep failed', {
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+    // Duplicate email = "already requested": the unique index from 008 makes
+    // the insert a no-op and the existing row is read back. Resubmission must
+    // not error and must not re-notify.
+    const inserted = await ctx.db.query(
       `INSERT INTO demo_requests (email, channel, source_url) VALUES ($1, $2, $3)
-       RETURNING id, email, channel, source_url, status, created_at`,
+       ON CONFLICT DO NOTHING
+       RETURNING ${LEAD_ROW_SQL}`,
       [body.email, channelFor(query, referer), sourceUrl],
     );
-    const lead = result.rows[0] as { id: number; email: string; channel: string; source_url: string | null };
-    // Fire-and-forget: never block the request, never throw.
-    notifyNewLead(ctx.db, req.log, lead, {
-      notifyEmail: ctx.config.notifyEmail,
-      resendApiKey: ctx.config.resendApiKey,
-      resendFrom: ctx.config.resendFrom,
-    });
+    let lead = inserted.rows[0] as
+      | { id: number; email: string; channel: string; source_url: string | null; status: string; created_at: unknown }
+      | undefined;
+    const isNew = lead !== undefined;
+    if (!lead) {
+      const existing = await ctx.db.query(
+        `SELECT ${LEAD_ROW_SQL} FROM demo_requests WHERE lower(email) = $1`,
+        [body.email],
+      );
+      lead = existing.rows[0];
+    }
+    if (!lead) {
+      throw new HttpError(500, 'internal', 'Demo request could not be stored', 'Retry shortly or email us directly.');
+    }
+    if (isNew) {
+      // Fire-and-forget: never block the request, never throw.
+      notifyNewLead(ctx.db, req.log, lead, {
+        notifyEmail: ctx.config.notifyEmail,
+        resendApiKey: ctx.config.resendApiKey,
+        resendFrom: ctx.config.resendFrom,
+        baseUrl: ctx.config.baseUrl,
+      });
+      notifyLeadAck(req.log, lead, {
+        notifyEmail: ctx.config.notifyEmail,
+        resendApiKey: ctx.config.resendApiKey,
+        resendFrom: ctx.config.resendFrom,
+        demoAutoReplyEnabled: ctx.config.demoAutoReplyEnabled,
+        baseUrl: ctx.config.baseUrl,
+      });
+    }
     if (String(req.headers['content-type'] ?? '').startsWith('application/x-www-form-urlencoded')) {
       return reply.code(303).header('location', '/?demo=success').send();
     }
-    return reply.code(201).send(envelope(req, result.rows[0], { meta: { price_usd: '0.00', paid: false } }));
+    return reply.code(201).send(envelope(req, lead, { meta: { price_usd: '0.00', paid: false } }));
+  };
+}
+
+/** GET /v1/demo/requests — operator-only lead list (x-operator-key) with
+ *  status filter + page/limit pagination, newest first. */
+export function demoRequestsListHandler(ctx: RouteCtx) {
+  return async (req: FastifyRequest, reply: FastifyReply) => {
+    const q = req.query as { status?: string; page: number; limit: number };
+    const where = q.status ? 'WHERE status = $1' : '';
+    const whereValues = q.status ? [q.status] : [];
+    const [rows, count] = await Promise.all([
+      ctx.db.query(
+        `SELECT ${LEAD_ROW_SQL} FROM demo_requests ${where} ORDER BY id DESC LIMIT $${whereValues.length + 1} OFFSET $${whereValues.length + 2}`,
+        [...whereValues, q.limit, (q.page - 1) * q.limit],
+      ),
+      ctx.db.query(`SELECT count(*)::int AS n FROM demo_requests ${where}`, whereValues),
+    ]);
+    const total = Number((count.rows[0] as { n: number } | undefined)?.n ?? 0);
+    return reply.send(envelope(req, rows.rows, { page: q.page, total }));
+  };
+}
+
+/** PATCH /v1/demo/requests/:id — operator-only status advance. Returns the
+ *  updated row with explicit nulls in the standard envelope. */
+export function demoRequestStatusHandler(ctx: RouteCtx) {
+  return async (req: FastifyRequest, reply: FastifyReply) => {
+    const { id } = req.params as { id: number };
+    const { status } = req.body as { status: string };
+    const res = await ctx.db.query(
+      `UPDATE demo_requests SET status = $2 WHERE id = $1 RETURNING ${LEAD_ROW_SQL}`,
+      [id, status],
+    );
+    const row = res.rows[0];
+    if (!row) throw notFound('demo request');
+    return reply.send(envelope(req, row));
   };
 }
 

@@ -39,6 +39,9 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-info}
       NODE_ENV: development
       TRUST_PROXY: ${TRUST_PROXY:-false}
+      # Public origin for served absolute URLs (sitemap, canonicals, MCP server
+      # card, email links). Empty in dev: output falls back to root-relative.
+      BASE_URL: ${BASE_URL:-}
       PAYMENTS_MODE: dev
       # Dev-only placeholder secrets (explicitly not for any shared deployment).
       PAY_HMAC_SECRET: ${PAY_HMAC_SECRET:-dev-only-secret}

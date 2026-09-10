@@ -23,7 +23,13 @@ describe('human homepage', () => {
     expect(res.body).toContain('inputmode="email"');
     expect(res.body).toContain('spellcheck="false"');
     expect(res.body).toContain('aria-live="polite"');
-    expect(res.body).toContain('30 days');
+    // Retention copy (approved fix): the old "30 days unless the lead advances"
+    // claim was false (nothing advanced). The funnel now keeps 'new' leads and
+    // purges terminal statuses (contacted/used/paid/lost) after 180 days.
+    expect(res.body).toContain('180 days');
+    expect(res.body).not.toContain('for 30 days');
+    expect(res.body).not.toContain('each paid call returns a client id');
+    expect(res.body).toContain('x-client-key');
     expect(res.body).toContain('site-footer');
     expect(res.body).toContain('<link rel="stylesheet" href="/styles.css">');
     expect(res.body).toContain('POST /v1/research');
@@ -49,6 +55,17 @@ describe('human homepage', () => {
     const res = await app.inject({ method: 'GET', url: '/?demo=success' });
     expect(res.body).toContain('Demo request received');
     expect(res.body).toContain('no meeting was booked');
+    await app.close();
+  });
+
+  it('states the real demo-retention rule on the privacy page', async () => {
+    const app = Fastify({ logger: false });
+    registerWeb(app, makeTestConfig());
+    const res = await app.inject({ method: 'GET', url: '/privacy' });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toContain('180 days');
+    expect(res.body).not.toContain('for 30 days');
+    expect(res.body).toContain('contacted, used, paid or lost');
     await app.close();
   });
 });

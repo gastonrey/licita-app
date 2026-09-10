@@ -91,6 +91,14 @@ addendum). For the Glama badge/card, point Glama at either:
 
 Glama crawls `server.json` and `glama.json` from the repo. Keep both in sync.
 
+> **BASE_URL note:** `server.json` and `glama.json` are static registry manifests
+> crawled by third-party directories — the app never reads them at runtime
+> (nothing in `src/` references them). They deliberately carry the **absolute**
+> deployment URL because external crawlers require one; keep their URL equal to
+> the production `BASE_URL` at deploy time. All *in-app* absolute URLs (sitemap,
+> canonicals/OG, `/.well-known/mcp/server-card.json`, email links) are derived
+> from `BASE_URL` at runtime instead.
+
 ---
 
 ## Status
