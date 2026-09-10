@@ -15,6 +15,7 @@ import { z } from 'zod';
 import { envelope, HttpError, validate, type RouteCtx } from './common.js';
 import { completeCheckout } from '../../pay/billing.js';
 import { checkoutCompleted, createCheckoutSession, verifyWebhookSignature } from '../../pay/creem.js';
+import { notifySubscriberKey } from '../../obs/notify.js';
 
 export const billingAmountSchema = z.object({
   amount: z.enum(['5', '10', '25'], { errorMap: () => ({ message: 'amount must be 5, 10 or 25' }) }),
@@ -109,7 +110,18 @@ const eventId = typeof event.id === 'string' ? event.id : '';
         );
         throw new HttpError(400, 'invalid_query', 'checkout.completed event is malformed.');
       }
-      await completeCheckout(ctx.db, ctx.config, { email: completed.email, eventId: completed.eventId });
+      // completeCheckout returns issuedKey only when a NEW lct_ key was generated
+      // (new subscriber, or legacy 'creem:' hash repaired). On pure replays the
+      // hash is no longer 'creem:' so issuedKey is undefined — idempotent.
+      const completed2 = await completeCheckout(ctx.db, ctx.config, { email: completed.email, eventId: completed.eventId });
+      if (completed2.issuedKey) {
+        notifySubscriberKey(req.log, completed.email, completed2.issuedKey, {
+          notifyEmail: ctx.config.notifyEmail,
+          resendApiKey: ctx.config.resendApiKey,
+          resendFrom: ctx.config.resendFrom,
+          baseUrl: ctx.config.baseUrl,
+        });
+      }
       ctx.metrics.inc('subscription_activated_total');
     }
     await ctx.db.query(

@@ -223,3 +223,65 @@ export function sendEmail(
   }
   postResend(log, apiKey, payload, tag, {});
 }
+
+// ---------------------------------------------------------------------------
+// Subscriber key delivery email (GTM blocker #1 fix)
+// ---------------------------------------------------------------------------
+
+function buildSubscriberKeyHtml(clientKey: string, baseUrl: string): string {
+  const safeKey = escapeHtml(clientKey);
+  const docsUrl = absoluteUrl(baseUrl, '/docs');
+  const billingUrl = absoluteUrl(baseUrl, '/v1/billing');
+  return `<!doctype html>
+<html><body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 560px; margin: 0 auto; padding: 24px; color: #1a1a1a;">
+<h1 style="font-size: 18px; margin: 0 0 16px;">Your Licita API key — welcome to the monthly plan</h1>
+<p>Hi,</p>
+<p>Your monthly subscription is active. Below is your API key — <strong>this is the only time you will see it</strong>.</p>
+
+<div style="background: #f5f5f5; border: 1px solid #ddd; border-radius: 6px; padding: 16px; margin: 16px 0;">
+<p style="margin: 0 0 8px; font-size: 13px; color: #666; text-transform: uppercase; letter-spacing: 0.5px;">Your x-client-key</p>
+<pre style="margin: 0; font-size: 15px; font-family: 'IBM Plex Mono', monospace; word-break: break-all;"><code>${safeKey}</code></pre>
+</div>
+
+<p style="font-size: 14px; line-height: 1.6;">Send this key as the <code>x-client-key</code> header on every priced request:</p>
+<pre style="background: #f5f5f5; border-radius: 4px; padding: 12px; font-size: 13px; overflow-x: auto;"><code>curl -H "x-client-key: ${safeKey}" \\
+  "${absoluteUrl(baseUrl, '/v1/search?q=software&type=award')}"</code></pre>
+
+<h2 style="font-size: 15px; margin: 20px 0 8px;">What you can do</h2>
+<ul style="font-size: 14px; line-height: 1.8;">
+  <li>Buy credits: <code>POST /v1/billing/credits/5</code> (or /10, /25) with the same <code>x-client-key</code> header.</li>
+  <li>Check balance: <code>GET /v1/billing</code> — send the same key.</li>
+  <li>Docs &amp; full API reference: <a href="${docsUrl}">${docsUrl}</a></li>
+</ul>
+
+<p style="font-size: 14px; line-height: 1.6;">How it works: each priced call debits from your prepaid credit balance. When credits run out, calls return <code>402</code> until you refill. Your subscription keeps the account active for 30 days.</p>
+
+<p style="font-size: 13px; color: #b44; margin: 16px 0;"><strong>Keep this key safe</strong> — it is the only identifier of your balance. If lost, the balance cannot currently be recovered. You will not see this key again.</p>
+
+<p style="font-size: 13px; color: #666;">— The Licita team · Public procurement intelligence for professionals</p>
+</body></html>`;
+}
+
+/**
+ * Fire-and-forget email delivering the subscriber's real API key after a
+ * successful Creem checkout. Identical never-throw semantics as the lead
+ * notifications: skipped silently when `cfg.resendApiKey` is empty (dev/test).
+ */
+export function notifySubscriberKey(
+  log: NotifyLogger,
+  email: string,
+  clientKey: string,
+  cfg: Pick<NotifyConfig, 'notifyEmail' | 'resendApiKey' | 'resendFrom' | 'baseUrl'>,
+): void {
+  if (!cfg.resendApiKey) {
+    log.debug('subscriber key email skipped: RESEND_API_KEY is empty', { to: email });
+    return;
+  }
+  sendEmail(log, cfg.resendApiKey, {
+    from: cfg.resendFrom,
+    to: [email],
+    subject: 'Your Licita API key — welcome to the monthly plan',
+    html: buildSubscriberKeyHtml(clientKey, cfg.baseUrl ?? ''),
+    reply_to: cfg.notifyEmail,
+  }, 'subscriber key');
+}
