@@ -135,6 +135,63 @@ describe('POST /v1/creem/webhook', () => {
     expect(res.statusCode).toBe(404);
     await disabledApp.close();
   });
+
+  // C1.1 webhook idempotency: INSERT ON CONFLICT (event_id) DO NOTHING.
+  it('treats a replayed event id as an idempotent 200 replay:true and never re-applies effects', async () => {
+    const payload = JSON.stringify({
+      id: 'evt_replay_1',
+      eventType: 'checkout.completed',
+      object: { customer: { email: 'replay@example.com' }, amount_total: 2900, id: 'cs_replay_1' },
+    });
+    const headers = { 'content-type': 'application/json', 'creem-signature': creemSignature(payload) };
+    const first = await app.inject({ method: 'POST', url: '/v1/creem/webhook', headers, payload });
+    expect(first.statusCode).toBe(200);
+
+    // First delivery: exactly one client row and one webhook_events row.
+    let rows = await db.query(`SELECT kind, email FROM api_clients WHERE lower(email) = lower($1)`, [
+      'replay@example.com',
+    ]);
+    expect(rows.rows).toHaveLength(1);
+    expect(await countRows(db, 'webhook_events')).toBe(1);
+
+    // Second delivery of the SAME event id: 200 replay:true, no double-grant,
+    // no second webhook_events row, no extra api_clients row.
+    const second = await app.inject({ method: 'POST', url: '/v1/creem/webhook', headers, payload });
+    expect(second.statusCode).toBe(200);
+    expect(second.json()).toEqual({ ok: true, replay: true });
+
+    rows = await db.query(`SELECT kind, email FROM api_clients WHERE lower(email) = lower($1)`, [
+      'replay@example.com',
+    ]);
+    expect(rows.rows).toHaveLength(1);
+    expect(await countRows(db, 'webhook_events')).toBe(1);
+  });
+
+  it('records the event type and status in webhook_events', async () => {
+    const payload = JSON.stringify({
+      id: 'evt_record_1',
+      eventType: 'checkout.completed',
+      object: { customer: { email: 'record@example.com' }, amount_total: 2900, id: 'cs_record_1' },
+    });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/creem/webhook',
+      headers: { 'content-type': 'application/json', 'creem-signature': creemSignature(payload) },
+      payload,
+    });
+    expect(res.statusCode).toBe(200);
+
+    const evRows = await db.query(
+      `SELECT event_id, type, status FROM webhook_events WHERE event_id = $1`,
+      ['evt_record_1'],
+    );
+    expect(evRows.rows).toHaveLength(1);
+    expect(evRows.rows[0]).toMatchObject({
+      event_id: 'evt_record_1',
+      type: 'checkout.completed',
+      status: 'completed',
+    });
+  });
 });
 
 describe('POST /v1/creem/checkout', () => {

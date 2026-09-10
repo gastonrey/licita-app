@@ -64,6 +64,25 @@ export interface AppConfig {
     /** Monthly subscription price in cents (env CREEM_PRICE_CENTS, default 2900). */
     priceCents: number;
   };
+  /** Master gate for ALL periodic scheduled jobs (ingest + digest).
+   *  env SCHEDULED_GENERATION_EVENTS, default true — off disables every
+   *  scheduled runner (operators keep one kill-switch). */
+  scheduledGenerationEvents: boolean;
+  /** Weekly Renewal Radar digest (fiat-revenue-rails RD): flag-gated,
+   *  default off. When enabled, the digest scheduler emails the configured
+   *  from/bcc recipients every DIGEST_CRON. Requires RESEND_API_KEY and, in
+   *  production, DIGEST_FROM_EMAIL + DIGEST_BCC (see config.validate.ts). */
+  digestEnabled: boolean;
+  /** Cron expression for the weekly digest run (env DIGEST_CRON).
+   *  Format: "M H * * DOW" (UTC); default '0 9 * * 1' = Monday 09:00 UTC. */
+  digestCron: string;
+  /** Digest sender address (env DIGEST_FROM_EMAIL). Must be a verified
+   *  Resend sender domain in production. */
+  digestFromEmail: string;
+  /** Comma-separated digest recipients, delivered as Bcc (env DIGEST_BCC).
+   *  The only addresses a digest ever sends to — the rate-guard that makes
+   *  test/dev digest runs incapable of emailing strangers. */
+  digestBcc: string;
 }
 
 function env(name: string, fallback = ''): string {
@@ -151,5 +170,10 @@ export function loadConfig(): AppConfig {
       productId: env('CREEM_PRODUCT_ID'),
       priceCents: parseInt(env('CREEM_PRICE_CENTS', '2900'), 10),
     },
+    scheduledGenerationEvents: env('SCHEDULED_GENERATION_EVENTS', 'true') === 'true',
+    digestEnabled: env('DIGEST_ENABLED', 'false') === 'true',
+    digestCron: env('DIGEST_CRON', '0 9 * * 1'),
+    digestFromEmail: env('DIGEST_FROM_EMAIL'),
+    digestBcc: env('DIGEST_BCC'),
   };
 }

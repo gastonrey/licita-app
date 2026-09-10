@@ -100,6 +100,16 @@ CREATE TABLE request_logs (
 CREATE INDEX idx_request_logs_source ON request_logs(source);
 CREATE INDEX idx_request_logs_zero_result ON request_logs(zero_result) WHERE zero_result = true;
 CREATE INDEX idx_request_logs_status ON request_logs(status);
+-- mirrors migrations/010_webhook_events.sql (webhook event idempotency)
+CREATE TABLE webhook_events (
+  id bigserial PRIMARY KEY,
+  event_id text NOT NULL UNIQUE,
+  type text NOT NULL,
+  status text NOT NULL,
+  requested_at timestamptz NOT NULL,
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now()
+);
 `;
 
 export async function makeTestDb(): Promise<Db> {

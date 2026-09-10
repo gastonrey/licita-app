@@ -47,11 +47,25 @@ interface ResendPayload {
   subject: string;
   html: string;
   reply_to?: string;
+  /** Hidden recipients (Resend bcc) — used by the digest rate-guard: the
+   *  weekly digest only ever addresses DIGEST_FROM_EMAIL (as to) plus the
+   *  DIGEST_BCC list, never any external address. */
+  bcc?: string[];
 }
 
-/** Shared fire-and-forget POST to the Resend HTTP API. Never throws; `tag`
- *  namespaces the log lines ('lead notification' | 'lead auto-reply'). */
-function resendSend(log: NotifyLogger, tag: string, leadId: number, apiKey: string, payload: ResendPayload): void {
+/**
+ * Shared fire-and-forget POST to the Resend HTTP API. Never throws; `tag`
+ * namespaces the log lines, `context` carries caller-specific log fields
+ * (e.g. { leadId } for lead emails). Shared by the lead-notification and
+ * digest paths so every email has identical transport semantics.
+ */
+function postResend(
+  log: NotifyLogger,
+  apiKey: string,
+  payload: ResendPayload,
+  tag: string,
+  context: Record<string, unknown>,
+): void {
   const body = JSON.stringify(payload);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
@@ -68,22 +82,28 @@ function resendSend(log: NotifyLogger, tag: string, leadId: number, apiKey: stri
       if (!res.ok) {
         const text = await res.text().catch(() => '');
         log.warn(`${tag} failed`, {
-          leadId,
+          ...context,
           status: res.status,
           statusText: res.statusText,
           body: text.slice(0, 200),
         });
       } else {
-        log.info(`${tag} sent`, { leadId, to: payload.to[0] });
+        log.info(`${tag} sent`, { ...context, to: payload.to[0] });
       }
     })
     .catch((err: unknown) => {
       log.warn(`${tag} error`, {
-        leadId,
+        ...context,
         error: err instanceof Error ? err.message : String(err),
       });
     })
     .finally(() => clearTimeout(timer));
+}
+
+/** Lead-flavored transport used by notifyNewLead / notifyLeadAck (kept for
+ *  the existing log contract: warn lines carry { leadId }). */
+function resendSend(log: NotifyLogger, tag: string, leadId: number, apiKey: string, payload: ResendPayload): void {
+  postResend(log, apiKey, payload, tag, { leadId });
 }
 
 const RESEND_URL = 'https://api.resend.com/emails';
@@ -173,4 +193,33 @@ export function notifyLeadAck(log: NotifyLogger, lead: NotifyLead, cfg: NotifyCo
     html: buildAckHtml(lead.email, cfg.baseUrl ?? ''),
     reply_to: cfg.notifyEmail,
   });
+}
+
+/** Generic Resend email payload (the same shape resendSend posts). */
+export interface ResendEmailPayload {
+  from: string;
+  to: [string, ...string[]];
+  subject: string;
+  html: string;
+  reply_to?: string;
+  bcc?: string[];
+}
+
+/**
+ * Generalized Resend transport for arbitrary emails (weekly digest, key
+ * delivery, ...): accepts a target sender, recipients, subject and body and
+ * posts them fire-and-forget with the same never-throw semantics as the lead
+ * emails. Skipped silently when `apiKey` is empty (dev/test without secrets).
+ */
+export function sendEmail(
+  log: NotifyLogger,
+  apiKey: string,
+  payload: ResendEmailPayload,
+  tag = 'email',
+): void {
+  if (!apiKey) {
+    log.debug(`${tag} skipped: RESEND_API_KEY is empty`);
+    return;
+  }
+  postResend(log, apiKey, payload, tag, {});
 }

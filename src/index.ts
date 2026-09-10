@@ -7,6 +7,7 @@ import { registerWeb } from './web/pages.js';
 import { registerDashboard } from './web/dashboard.js';
 import { mountMcp } from './mcp/server.js';
 import { startScheduler } from './ingest/scheduler.js';
+import { startDigestScheduler } from './obs/digest-runner.js';
 
 async function main(): Promise<void> {
   const config = loadConfig();
@@ -25,12 +26,17 @@ async function main(): Promise<void> {
   registerDashboard(app, config);
   mountMcp(app, config, db);
 
+  const handles: Array<{ stop(): void }> = [];
   if (config.ingestOnBoot) {
-    startScheduler(config, db);
+    handles.push(startScheduler(config, db));
   }
+  // Weekly Renewal Radar digest — no-op handle unless the gate is open
+  // (DIGEST_ENABLED && SCHEDULED_GENERATION_EVENTS && valid DIGEST_CRON).
+  handles.push(startDigestScheduler(config, db));
 
   const shutdown = async (signal: string) => {
     console.log(JSON.stringify({ level: 'info', msg: 'shutdown', signal }));
+    for (const handle of handles) handle.stop();
     await app.close();
     await db.end();
     process.exit(0);
