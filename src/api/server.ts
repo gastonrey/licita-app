@@ -42,6 +42,7 @@ import {
   demoStatusValidation,
 } from './routes/demo.js';
 import { pricingHandler } from './routes/pricing.js';
+import { healthFeatures, readinessHandler } from './routes/readiness.js';
 import { billingAmountValidation, billingGetHandler, billingPurchaseHandler, creemCheckoutHandler, creemCheckoutValidation, creemWebhookHandler } from './routes/billing.js';
 import { demoStatsHandler, paymentsStatsHandler, recentStatsHandler, statsAuth, statsHandler, statsQueryValidation } from './routes/stats.js';
 
@@ -270,6 +271,8 @@ export async function buildServer(config: AppConfig, db: Db): Promise<FastifyIns
   app.get('/v1/stats/demo', { preHandler: [statsAuth(config.operatorKey)] }, demoStatsHandler(ctx));
   app.get('/v1/stats/recent', { preHandler: [statsAuth(config.operatorKey)] }, recentStatsHandler(ctx));
   app.get('/v1/stats/payments', { preHandler: [statsAuth(config.operatorKey)] }, paymentsStatsHandler(ctx));
+// D1 activation readiness: operator-only, read-only fiat-revenue grant state.
+  app.get('/v1/stats/readiness', { preHandler: [statsAuth(config.operatorKey)] }, readinessHandler(ctx));
   // Creem MoR surface (B2.3/B2.5) — flag-gated, 404 when disabled.
   app.post('/v1/creem/webhook', creemWebhookHandler(ctx));
   app.post(
@@ -291,9 +294,9 @@ export async function buildServer(config: AppConfig, db: Db): Promise<FastifyIns
           timer.unref();
         }),
       ]);
-      return reply.send({ status: 'ok', db: 'up' });
+      return reply.send({ status: 'ok', db: 'up', features: healthFeatures(config) });
     } catch {
-      return reply.code(503).send({ status: 'degraded', db: 'down' });
+      return reply.code(503).send({ status: 'degraded', db: 'down', features: healthFeatures(config) });
     } finally {
       if (timer) clearTimeout(timer);
     }

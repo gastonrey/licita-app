@@ -91,7 +91,7 @@ describe('error envelope standardization (C2.1)', () => {
   it('malformed JSON on the rawBody-stashing webhook route is also a 400 envelope', async () => {
     const res = await app.inject({
       method: 'POST',
-      url: '/v1/stripe/webhook',
+      url: '/v1/creem/webhook',
       payload: '{"id": ',
       headers: { 'content-type': 'application/json' },
     });

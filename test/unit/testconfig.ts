@@ -30,6 +30,7 @@ creem: { enabled: false, apiKey: '', webhookSecret: '', productId: '', priceCent
     digestCron: '0 9 * * 1',
     digestFromEmail: '',
     digestBcc: '',
+    trialEnabled: false,
     ...overrides,
   };
 }

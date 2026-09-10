@@ -144,6 +144,16 @@ missing/invalid variable (`src/config.validate.ts`, called from `src/index.ts`).
 | `PLACSP_DELAY_MS` | `500` | Minimum delay between PLACSP feed requests (politeness) |
 | `PLACSP_SCHEDULE` | `false` | `true` = include PLACSP in the daily scheduler run (needs `PLACSP_ENABLED=true`) |
 | `X402_FACILITATOR_URL` `X402_PAY_TO` `X402_NETWORK` | facilitator/network defaulted; `X402_PAY_TO` required in production | Real x402 facilitator config (CAIP-2 network: `eip155:84532` / `eip155:8453`) |
+| `STRIPE_ENABLED` | `false` | Fiat subscription arm (Stripe Checkout). **Default off** — nothing is advertised or reachable until you enable it (see the [Fiat revenue enablement checklist](#fiat-revenue-enablement-checklist)) |
+| `STRIPE_SECRET_KEY` | — | Stripe secret key (`sk_test_` / `sk_live_`). Required + format-checked when `STRIPE_ENABLED=true` |
+| `STRIPE_WEBHOOK_SECRET` | — | Stripe webhook signing secret (`whsec_`). Required + format-checked when `STRIPE_ENABLED=true` |
+| `PRICE_CENTS` | `2900` | Monthly subscription price in cents (e.g. `2900` = €29.00). Published on `/docs`, `/v1/pricing` and the Stripe line item — keep them in sync by changing only this var |
+| `TRIAL_ENABLED` | `false` | Trial/pro `lct_` api_clients key seam. **Default off** — when off, trial keys are inert and revert to the legacy credit/x402 path (stripe-subscriber keys keep working: they were purchased). Production `true` requires `RESEND_API_KEY` + `BASE_URL` |
+| `SCHEDULED_GENERATION_EVENTS` | `true` | Master gate for ALL scheduled jobs (ingest + digest). `false` kills every scheduled runner |
+| `DIGEST_ENABLED` | `false` | Weekly Renewal Radar digest email. **Default off** — requires `RESEND_API_KEY` and (in production) `DIGEST_FROM_EMAIL` + `DIGEST_BCC` |
+| `DIGEST_CRON` | `0 9 * * 1` | Weekly digest schedule (`M H * * DOW`, UTC) — default Monday 09:00 UTC |
+| `DIGEST_FROM_EMAIL` | — | Digest sender address (a verified Resend sender domain). Required in production when `DIGEST_ENABLED=true` |
+| `DIGEST_BCC` | — | Comma-separated digest recipients, delivered as Bcc. The ONLY addresses a digest can send to — the rate-guard that keeps test/dev runs from emailing strangers. Required in production when `DIGEST_ENABLED=true` |
 
 ## First ingestion
 
@@ -323,6 +333,67 @@ curl -s -X POST "$BASE/mcp" \
   unknown path). No private keys are stored anywhere — settlement is
   gasless for the server; funds go straight to `X402_PAY_TO`.
 
+## Fiat revenue enablement checklist
+
+The fiat arms (Stripe subscriptions, the trial/pro key seam, and the weekly
+digest) are **opt-in**: every fiat flag (`STRIPE_ENABLED`, `DIGEST_ENABLED`,
+`TRIAL_ENABLED`) defaults to `false`, and with them off the app behaves
+exactly like the crypto-only build — nothing fiat is advertised, reachable, or
+executed. Flip them in this order and verify each step against the operator
+dashboard:
+
+1. **Baseline (mandatory).** `BASE_URL=https://<public-origin>` (https — boot
+   fails in production without it; it also builds every absolute URL and email
+   link). Run migrations: the container runs `src/db/migrate.ts` on boot, so
+   `docker compose up --build -d` applies `migrations/001..010` in order,
+   idempotently. `009_trial_api_keys.sql` and `010_webhook_events.sql` are the
+   two fiat-critical tables; the operator dashboard "Fiat revenue readiness"
+   card lists any still-pending migration explicitly.
+2. **Stripe keys.** Set `STRIPE_ENABLED=true`, `STRIPE_SECRET_KEY` and
+   `STRIPE_WEBHOOK_SECRET`. Boot then format-checks both (`sk_test_`/`sk_live_`
+   and `whsec_`) and requires `PRICE_CENTS` to be a positive integer. With the
+   flag on but secrets missing, boot FAILS fast listing every violation — the
+   app never half-enables fiat.
+3. **Stripe Dashboard setup (one-time, human).** Create the product and a
+   **recurring** price of exactly the `PRICE_CENTS` value (default `2900` =
+   €29.00/month — the price shown in `/docs` and `/v1/pricing` is always
+   `PRICE_CENTS/100`, never a hardcoded number). Register a webhook endpoint
+   `POST https://<public-origin>/v1/stripe/webhook` and subscribe it to the
+   **`checkout.session.completed`** event — the only event that mutates data
+   (other event types are signed-verified and acknowledged `200 {ok:true}`
+   with no side effects). Copy the `whsec_…` signing secret into
+   `STRIPE_WEBHOOK_SECRET`.
+4. **Smoke-test checkout.** `POST /v1/stripe/subscribe` with an email returns
+   `303` + a Checkout Session URL (Stripe test mode). Complete the fake
+   payment; the webhook upgrades that client to `kind='stripe'` with a 30-day
+   period (zero credits granted — calls use separately bought credits).
+   `/health` and the dashboard card flip `stripe` to `enabled`, and
+   `/v1/pricing` lists the subscription arm as `available:true`. Setting
+   `PRICE_CENTS` to the wrong product price creates a Stripe-side mismatch —
+   change the env var and redeploy, then keep Dashboard price and env in sync.
+5. **Trial/pro key seam (optional).** Set `TRIAL_ENABLED=true`. Production
+   `true` requires `RESEND_API_KEY` + `BASE_URL`. On, trial `lct_` api_clients
+   keys get the pro/trial quota branch; **off, they are inert** and fall back
+   to the legacy credit/x402 path exactly like B1 — while `kind='stripe'`
+   subscribers (which were actually purchased) keep working regardless of the
+   flag.
+6. **Weekly digest (optional).** Set `DIGEST_ENABLED=true` plus
+   `RESEND_API_KEY`, a verified `DIGEST_FROM_EMAIL` and `DIGEST_BCC` (the only
+   digest recipients, delivered as Bcc — set it to your own address first).
+   Production requires the Resend sender domain to be verified. `DIGEST_CRON`
+   (default `0 9 * * 1`, UTC) controls cadence and
+   `SCHEDULED_GENERATION_EVENTS=false` kills the digest scheduler entirely.
+7. **Observe.** `GET /v1/stats/readiness` (with `x-operator-key`) is a
+   read-only grant document: every fiat switch in tri-state
+   (`disabled`/`enabled-dry`/`enabled`), the base URL https status, and the
+   migration audit.
+
+Turning a switch OFF is the reverse: unset the flag and redeploy — the app
+stops advertising and serving the arm (routes 404, `/v1/pricing` reports
+`available:false`, digest scheduling stops) without any data migration. There
+is no write path in the API: enabling is a deploy-time env decision, never a
+runtime route.
+
 ## Security model
 
 - **Fail-fast configuration.** No secret has a default. At boot,
@@ -410,7 +481,7 @@ shape:
 ## Testing
 
 ```bash
-npm test                 # 256 unit tests (vitest, pg-mem + fixtures)
+npm test                 # 567 unit tests (vitest, pg-mem + fixtures)
 npm run test:api-smoke   # server wiring smoke (payment middleware stubbed)
 npm run test:integration # REAL app + REAL embedded postgres + live TED slice
 npm run smoke            # autonomous-agent acceptance test (needs a running,

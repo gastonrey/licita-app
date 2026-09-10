@@ -68,10 +68,10 @@ describe('buildWeeklyDigest', () => {
   });
 
   it('groups varied client states into renewed / watchlist / churnRisk', async () => {
-    // A: renewed — active stripe subscription covering the window end.
+    // A: renewed — active creem subscription covering the window end.
     await seedClient(db, {
       keyHash: 'kh-renew',
-      kind: 'stripe',
+      kind: 'creem',
       email: 'renew@example.com',
       callsRemaining: 50,
       currentPeriodEnd: new Date(WINDOW_TO.getTime() + 10 * 24 * 3600 * 1000),
@@ -84,11 +84,11 @@ describe('buildWeeklyDigest', () => {
       callsRemaining: 4,
       currentPeriodEnd: null,
     });
-    // C: churn risk — stripe subscription expired >30d before window end and
+    // C: churn risk — creem subscription expired >30d before window end and
     //    the last completed payment is also >30d old.
     await seedClient(db, {
       keyHash: 'kh-gone',
-      kind: 'stripe',
+      kind: 'creem',
       email: 'gone@example.com',
       callsRemaining: 20,
       currentPeriodEnd: new Date(WINDOW_TO.getTime() - 45 * 24 * 3600 * 1000),
@@ -107,7 +107,7 @@ describe('buildWeeklyDigest', () => {
 
     const data = await buildWeeklyDigest(db, { from: WINDOW_FROM, to: WINDOW_TO });
 
-    // Renewed: only the active stripe subscriber.
+    // Renewed: only the active creem subscriber.
     expect(data.renewed.map((r) => r.email)).toEqual(['renew@example.com']);
     // Watchlist: only the low-calls client.
     expect(data.watchlist.map((r) => r.email)).toEqual(['low@example.com']);
@@ -152,7 +152,7 @@ describe('sendWeeklyDigest', () => {
     // One client so the digest has real content.
     await db.query(
       `INSERT INTO api_clients (key_hash, kind, email, calls_remaining, current_period_end)
-       VALUES ('kh-send-1', 'stripe', 'renew@example.com', 50, $1)`,
+       VALUES ('kh-send-1', 'creem', 'renew@example.com', 50, $1)`,
       [new Date(WINDOW_TO.getTime() + 10 * 24 * 3600 * 1000)],
     );
   });

@@ -667,7 +667,7 @@ export function buildMcpServer(
           const hasClientKey = typeof client_key === 'string' && client_key.length > 0;
           let debited = false;
           if (paid && hasClientKey) {
-            const debit = await tryCreditDebit(db, endpointKey, price, client_key);
+            const debit = await tryCreditDebit(db, endpointKey, price, client_key, '', config.trialEnabled);
             if (debit.ok) {
               clientKey = debit.clientKey;
               debited = true;

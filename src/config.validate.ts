@@ -146,6 +146,23 @@ export function validateConfig(config: AppConfig): void {
     }
   }
 
+  // Trial api_clients seam (fiat-revenue-rails D3): TRIAL_ENABLED=true in
+  // production requires RESEND_API_KEY and BASE_URL — a live trial arm needs
+  // the signup email path and absolute upgrade links. Fail closed so a
+  // "trial on" deployment never boot-succeeds half-wired.
+  if (config.nodeEnv === 'production' && config.trialEnabled) {
+    if (config.resendApiKey.length === 0) {
+      violations.push(
+        'RESEND_API_KEY is required when TRIAL_ENABLED=true in production (trial signups email the key to the operator).',
+      );
+    }
+    if (!isHttpsUrl(config.baseUrl)) {
+      violations.push(
+        'BASE_URL is required when TRIAL_ENABLED=true in production (trial upgrade hints link to the public origin).',
+      );
+    }
+  }
+
   if (violations.length > 0) {
     throw new Error(
       `Invalid configuration — ${violations.length} violation(s):\n  - ${violations.join('\n  - ')}`,

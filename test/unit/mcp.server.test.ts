@@ -20,7 +20,8 @@ import { generateKey, hashKey, hashKeyLog } from '../../src/pay/keys.js';
 
 const SECRET = 'mcp-test-secret';
 
-const config: AppConfig = makeTestConfig({ payHmacSecret: SECRET, operatorKey: 'op' });
+// D3: the trial api_clients seam (B1.4) is flag-gated — enable it here.
+const config: AppConfig = makeTestConfig({ payHmacSecret: SECRET, operatorKey: 'op', trialEnabled: true });
 
 const PAYMENTS_DDL = `
 CREATE TABLE payments (

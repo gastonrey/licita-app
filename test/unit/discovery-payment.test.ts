@@ -75,12 +75,25 @@ describe('discovery surfaces teach the x402 v2 flow', () => {
       'CREEM_ENABLED=false',
       'answers <code>404</code>',
       'credit bundles',
-      'Known trade-off for trial keys (B1)',
-      '24 of the 25 calls are usable',
+      'Trial/pro keys are <strong>not enabled</strong>',
+      'TRIAL_ENABLED=false',
+      'inert',
     ]) {
       expect(res.body, `/docs missing "${needle}"`).toContain(needle);
     }
     expect(res.body).not.toContain('€29.00/month'); // never advertise a subscription that is not deployed
+    expect(res.body).not.toContain('Known trade-off for trial keys (B1)'); // trial quota branch does not exist off
+    await app.close();
+  });
+
+  it('/docs documents the B1 trial trade-off ONLY when TRIAL_ENABLED=true (D5 honesty)', async () => {
+    const app = await webApp('dev', { creem: { enabled: false, apiKey: '', webhookSecret: '', productId: '', priceCents: 2900 }, trialEnabled: true });
+    const res = await app.inject({ method: 'GET', url: '/docs' });
+    expect(res.statusCode).toBe(200);
+    for (const needle of ['Known trade-off for trial keys (B1)', '24 of the 25 calls are usable', '403 trial_exhausted']) {
+      expect(res.body, `/docs missing "${needle}"`).toContain(needle);
+    }
+    expect(res.body).not.toContain('not enabled on this deployment');
     await app.close();
   });
 

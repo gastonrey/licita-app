@@ -49,6 +49,8 @@ interface PaymentRuntime {
   log: Logger;
   /** Public origin used to build upgrade hints (config.baseUrl). */
   baseUrl: string;
+  /** TRIAL_ENABLED flag (D3): gates the B1.3 trial/pro api_clients seam. */
+  trialEnabled: boolean;
 }
 
 let runtime: PaymentRuntime | null = null;
@@ -67,6 +69,7 @@ export function initPayments(
     db,
     log: createLogger(config.logLevel),
     baseUrl: config.baseUrl,
+    trialEnabled: config.trialEnabled,
   };
   return runtime.provider;
 }
@@ -138,6 +141,13 @@ export async function tryCreditDebit(
   price: string,
   clientKey: string,
   baseUrl = '',
+  /** TRIAL_ENABLED flag (D3, activation readiness). When false, trial/pro
+   *  api_clients rows are INERT: lct_ keys revert to the legacy credit/402
+   *  path (the pre-B1 behavior). kind='creem' rows keep working — purchased
+   *  subscriptions are independent of trial grants. Default true preserves
+   *  direct-call compatibility; the REST and MCP production call sites always
+   *  pass config.trialEnabled. */
+  trialEnabled = true,
 ): Promise<CreditDebitResult> {
   if (CREDIT_BUNDLE_ENDPOINTS.includes(endpointKey as (typeof CREDIT_BUNDLE_ENDPOINTS)[number])) {
     return { ok: false };
@@ -169,8 +179,9 @@ export async function tryCreditDebit(
           // consume ONE-TIME credits from the credit UPDATE below, keyed by
           // this same lct_ key (their choice to refill). calls_remaining is
           // NEVER decremented: one-time credits WIN vs the preserved 25 calls.
+          // Independent of TRIAL_ENABLED: subscriptions were purchased.
           creemClientId = r.id;
-        } else {
+        } else if (trialEnabled) {
           // Legacy agent rows (001 shape, quota columns NULL) keep the old flow.
           const legacy = r.calls_remaining === null && r.expires_at === null;
           if (!legacy) {
@@ -220,9 +231,10 @@ export async function tryCreditDebit(
           }
         }
       }
-      if (creemClientId === null) {
-        // Unknown lct_ key or legacy agent row: roll back and let the caller
-        // use the proof flow. Never touch the credit account with an lct_ key.
+if (creemClientId === null) {
+        // Unknown lct_ key, legacy agent row, or (D3) a trial/pro row while
+        // TRIAL_ENABLED=false: roll back and let the caller use the proof
+        // flow. Never touch the credit account with an lct_ key.
         await client.query('ROLLBACK');
         return { ok: false };
       }
@@ -328,7 +340,7 @@ export function paymentPreHandler(endpointKey: string): preHandlerHookHandler {
       clientKey.length > 0 &&
       !CREDIT_BUNDLE_ENDPOINTS.includes(endpointKey as (typeof CREDIT_BUNDLE_ENDPOINTS)[number]);
     if (canDebit) {
-      const debit = await tryCreditDebit(rt.db, endpointKey, price, clientKey);
+      const debit = await tryCreditDebit(rt.db, endpointKey, price, clientKey, '', rt.trialEnabled);
       if (debit.ok) {
         rt.log.info('payment_success', {
           endpoint: endpointKey,
@@ -350,7 +362,7 @@ export function paymentPreHandler(endpointKey: string): preHandlerHookHandler {
     // gate); unknown key → unchanged 402 proof flow below.
     const trialKey = typeof proof === 'string' && proof.startsWith(KEY_PREFIX) ? proof : undefined;
     if (trialKey !== undefined) {
-      const debit = await tryCreditDebit(rt.db, endpointKey, price, trialKey, rt.baseUrl);
+      const debit = await tryCreditDebit(rt.db, endpointKey, price, trialKey, rt.baseUrl, rt.trialEnabled);
       if (debit.ok) {
         rt.log.info('payment_success', {
           endpoint: endpointKey,
