@@ -96,6 +96,10 @@ services:
       # canonicals/OG, MCP server card, email links). Must be https — enforced
       # again at boot by src/config.validate.ts.
       BASE_URL: ${BASE_URL:?set BASE_URL}
+      # Optional separate origin for API/MCP-facing absolute URLs (MCP server
+      # card URL, web MCP endpoint). Falls back to BASE_URL when unset; when
+      # set it must be https (enforced at boot by src/config.validate.ts).
+      API_BASE_URL: ${API_BASE_URL:-}
       # Admin connection: migrations only (also re-run idempotently on boot).
       DATABASE_URL: postgres://licita:${POSTGRES_PASSWORD}@db:5432/licita
       # App traffic: low-privilege role (SELECT/INSERT/UPDATE/DELETE, no DDL).
