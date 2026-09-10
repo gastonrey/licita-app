@@ -151,6 +151,55 @@ describe('validateConfig (production)', () => {
 
 // fiat-revenue-rails Slice A / domain-readiness DR1: baseUrl config with
 // fail-closed production https validation.
+describe('validateConfig (creem fail-closed, B2.6)', () => {
+  const creemOn = (overrides = {}) =>
+    makeTestConfig({
+      creem: { enabled: true, apiKey: 'creem_test_placeholder', webhookSecret: 'whsec_creem_placeholder', productId: 'prod_creem_placeholder', priceCents: 2900 },
+      ...overrides,
+    });
+
+  it('passes with a valid creem-enabled config (dev mode)', () => {
+    expect(() => validateConfig(creemOn())).not.toThrow();
+  });
+
+  it('passes with live-mode secrets', () => {
+    expect(() =>
+      validateConfig(creemOn({ creem: { enabled: true, apiKey: 'creem_live_abc123', webhookSecret: 'whsec_live_abc', productId: 'prod_live_abc', priceCents: 2900 } })),
+    ).not.toThrow();
+  });
+
+  it('fails when CREEM_ENABLED=true but CREEM_API_KEY is missing', () => {
+    expect(() => validateConfig(creemOn({ creem: { enabled: true, apiKey: '', webhookSecret: 'whsec_creem_placeholder', productId: 'prod_creem_placeholder', priceCents: 2900 } }))).toThrow(
+      /CREEM_API_KEY/,
+    );
+  });
+
+  it('fails when CREEM_WEBHOOK_SECRET is missing', () => {
+    expect(() => validateConfig(creemOn({ creem: { enabled: true, apiKey: 'creem_test_x', webhookSecret: '', productId: 'prod_creem_placeholder', priceCents: 2900 } }))).toThrow(/CREEM_WEBHOOK_SECRET/);
+    expect(() =>
+      validateConfig(creemOn({ creem: { enabled: true, apiKey: 'creem_test_x', webhookSecret: '', productId: 'prod_creem_placeholder' } })),
+    ).toThrow(/CREEM_WEBHOOK_SECRET/);
+  });
+
+  it('fails when CREEM_PRODUCT_ID is missing', () => {
+    expect(() =>
+      validateConfig(creemOn({ creem: { enabled: true, apiKey: 'creem_test_x', webhookSecret: 'whsec_x', productId: '' } })),
+    ).toThrow(/CREEM_PRODUCT_ID/);
+  });
+
+  it('fails when CREEM_PRICE_CENTS is missing, zero, negative or non-integer', () => {
+    for (const bad of [0, -100, 29.5, NaN]) {
+      expect(() =>
+        validateConfig(creemOn({ creem: { enabled: true, apiKey: 'creem_test_x', webhookSecret: 'whsec_x', productId: 'prod_x', priceCents: bad } })),
+      ).toThrow(/CREEM_PRICE_CENTS/);
+    }
+  });
+
+  it('creem disabled with empty keys stays valid (opt-out deployments)', () => {
+    expect(() => validateConfig(makeTestConfig({ creem: { enabled: false, apiKey: '', webhookSecret: '', productId: '', priceCents: 2900 } }))).not.toThrow();
+  });
+});
+
 describe('validateConfig (production baseUrl)', () => {
   it('fails in production when BASE_URL is unset, naming BASE_URL', () => {
     expect(() => validateConfig(prodConfig({ baseUrl: '' }))).toThrow(/BASE_URL/);

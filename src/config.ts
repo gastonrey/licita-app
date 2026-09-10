@@ -51,6 +51,19 @@ export interface AppConfig {
   ingestCronHour: number;
   /** PLACSP ingestion (P0.3): disabled by default, opt-in via PLACSP_ENABLED. */
   placsp: { enabled: boolean; maxPages: number; delayMs: number; schedule: boolean };
+  /** Creem MoR subscriptions (fiat-revenue-rails B2): flag-gated, default off.
+   *  Secrets have no defaults — validateConfig fails closed in production
+   *  when CREEM_ENABLED=true but CREEM_API_KEY / CREEM_WEBHOOK_SECRET
+   *  are missing or invalid (see config.validate.ts). */
+  creem: {
+    enabled: boolean;
+    apiKey: string;
+    webhookSecret: string;
+    /** Creem product ID (env CREEM_PRODUCT_ID). */
+    productId: string;
+    /** Monthly subscription price in cents (env CREEM_PRICE_CENTS, default 2900). */
+    priceCents: number;
+  };
 }
 
 function env(name: string, fallback = ''): string {
@@ -130,6 +143,13 @@ export function loadConfig(): AppConfig {
       maxPages: parseInt(env('PLACSP_MAX_PAGES', '5'), 10),
       delayMs: parseInt(env('PLACSP_DELAY_MS', '500'), 10),
       schedule: env('PLACSP_SCHEDULE', 'false') === 'true',
+    },
+    creem: {
+      enabled: env('CREEM_ENABLED', 'false') === 'true',
+      apiKey: env('CREEM_API_KEY'),
+      webhookSecret: env('CREEM_WEBHOOK_SECRET'),
+      productId: env('CREEM_PRODUCT_ID'),
+      priceCents: parseInt(env('CREEM_PRICE_CENTS', '2900'), 10),
     },
   };
 }

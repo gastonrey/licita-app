@@ -104,6 +104,30 @@ export function validateConfig(config: AppConfig): void {
     }
   }
 
+  // Creem MoR (fiat-revenue-rails B2): CREEM_ENABLED=true requires both secrets
+  // AND a valid key format — fail closed in ANY environment (including dev)
+  // so a misconfigured "creem on" deployment never boot-succeeds half-wired.
+  if (config.creem.enabled) {
+    if (config.creem.apiKey.length === 0) {
+      violations.push(
+        'CREEM_API_KEY is required when CREEM_ENABLED=true (it authenticates checkout/webhook API calls).',
+      );
+    }
+    if (config.creem.webhookSecret.length === 0) {
+      violations.push(
+        'CREEM_WEBHOOK_SECRET is required when CREEM_ENABLED=true (it verifies webhook signatures).',
+      );
+    }
+    if (config.creem.productId.length === 0) {
+      violations.push(
+        'CREEM_PRODUCT_ID is required when CREEM_ENABLED=true (it identifies the checkout product).',
+      );
+    }
+    if (!Number.isInteger(config.creem.priceCents) || config.creem.priceCents <= 0) {
+      violations.push('CREEM_PRICE_CENTS must be a positive integer number of cents (e.g. 2900 = €29.00).');
+    }
+  }
+
   if (violations.length > 0) {
     throw new Error(
       `Invalid configuration — ${violations.length} violation(s):\n  - ${violations.join('\n  - ')}`,

@@ -42,7 +42,7 @@ import {
   demoStatusValidation,
 } from './routes/demo.js';
 import { pricingHandler } from './routes/pricing.js';
-import { billingAmountValidation, billingGetHandler, billingPurchaseHandler } from './routes/billing.js';
+import { billingAmountValidation, billingGetHandler, billingPurchaseHandler, creemCheckoutHandler, creemCheckoutValidation, creemWebhookHandler } from './routes/billing.js';
 import { demoStatsHandler, paymentsStatsHandler, recentStatsHandler, statsAuth, statsHandler, statsQueryValidation } from './routes/stats.js';
 
 /** Rate-limit identity: X-PAYMENT-derived (proof hash) when present, else client IP. */
@@ -72,9 +72,30 @@ export async function buildServer(config: AppConfig, db: Db): Promise<FastifyIns
   app.addContentTypeParser('application/x-www-form-urlencoded', { parseAs: 'string' }, (_req, body, done) => {
     try { done(null, parseQueryString(body as string)); } catch (error) { done(error as Error, undefined); }
   });
+  // JSON parser with raw-body capture for the Creem webhook route (B2.3):
+  // the signature is computed over the exact bytes Creem sent, so the
+  // parsed object is never re-serialized for verification. All other routes
+  // behave exactly as Fastify's default JSON parser.
+  app.addContentTypeParser('application/json', { parseAs: 'string' }, (req, body, done) => {
+    try {
+      if (req.url.includes('/v1/creem/webhook')) {
+        req.rawBody = body as string;
+      }
+      done(null, JSON.parse(body as string));
+    } catch (error) {
+      done(error as Error, undefined);
+    }
+  });
 
   // --- rate limiting (per client key, 60 req/min token bucket) ----------------
   app.addHook('onRequest', (req, reply, done) => {
+    // Creem webhook is exempt from the ip-keyed limiter: Creem's rotating
+    // egress IPs would otherwise trip the bucket (design SS8). Signature
+    // verification is the webhook's own throttling control.
+    if (req.url.includes('/v1/creem/webhook')) {
+      done();
+      return;
+    }
     const r = limiter.take(rateLimitKey(req));
     if (!r.allowed) {
       metrics.inc('rate_limited_total');
@@ -246,6 +267,13 @@ export async function buildServer(config: AppConfig, db: Db): Promise<FastifyIns
   app.get('/v1/stats/demo', { preHandler: [statsAuth(config.operatorKey)] }, demoStatsHandler(ctx));
   app.get('/v1/stats/recent', { preHandler: [statsAuth(config.operatorKey)] }, recentStatsHandler(ctx));
   app.get('/v1/stats/payments', { preHandler: [statsAuth(config.operatorKey)] }, paymentsStatsHandler(ctx));
+  // Creem MoR surface (B2.3/B2.5) — flag-gated, 404 when disabled.
+  app.post('/v1/creem/webhook', creemWebhookHandler(ctx));
+  app.post(
+    '/v1/creem/checkout',
+    { preHandler: [creemCheckoutValidation] },
+    creemCheckoutHandler(ctx),
+  );
   app.get('/openapi.json', async (_req, reply) => reply.send(buildOpenApi()));
 
   // Liveness/readiness: 200 when `SELECT 1` succeeds within a short timeout,

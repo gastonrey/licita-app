@@ -26,7 +26,8 @@ export interface ApiError {
       | 'payment_required'
       | 'rate_limited'
       | 'internal'
-      | 'trial_exhausted';
+      | 'trial_exhausted'
+      | 'invalid_signature';
     message: string;
     hint?: string;
   };
