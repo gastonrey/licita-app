@@ -1032,8 +1032,37 @@ function dataPage(config: AppConfig, kind: 'overview' | 'spain' | 'eu'): string 
 const TRUST_PAGES: Record<string, [string, string]> = {
   methodology: ['Methodology', '<p>Licita presents source rows and deterministic heuristics with their evidence. Confidence is evidence strength, not a probability. Coverage counts, indexed ranges and freshness are shown only when supplied by the live index; unknown values are Not reported.</p>'],
   security: ['Security', '<p>Operator statistics and lead details require the server-side operator key. Public demo capture is rate limited and stores only a normalized email, channel, source URL and lifecycle timestamps. Licita does not claim a certification or SLA on this page.</p>'],
-  privacy: ['Privacy', '<p>Demo emails are kept while the request is new; once a lead advances to contacted, used, paid or lost it is purged after 180 days. Access is restricted to operators. Request deletion or ask a privacy question by email.</p>'],
-  terms: ['Terms', '<p>Use Licita and upstream data in accordance with applicable law and the terms of TED and PLACSP. This page is informational; contact us before relying on data for a material decision.</p>'],
+  privacy: ['Privacy Policy', `
+<h2>What data Licita holds</h2>
+<p>Licita is an agent-native public procurement intelligence service. It indexes public data from TED and PLACSP and exposes it through REST and MCP. The personal data we process is limited to what is needed to operate the service:</p>
+<ul>
+  <li><strong>Demo requests</strong> — when you request a demo, we store only the email address you provide, plus the channel, the source URL and lifecycle timestamps.</li>
+  <li><strong>Subscription emails</strong> — when you subscribe via Creem checkout, we store the checkout email to set up your API key and billing account.</li>
+  <li><strong>API keys</strong> — we generate your client key at checkout and send it to you by email. Only a cryptographic hash of the key is stored server-side; the raw key is never persisted after delivery.</li>
+  <li><strong>Payment proofs</strong> — per-call payments (x402) and credit purchases are recorded as proof rows with amount, endpoint, provider and status. Card payments are handled end-to-end by Creem (Merchant of Record); we never see or store card numbers.</li>
+</ul>
+<h2>How long we keep data</h2>
+<p>Demo emails are kept while the request is new; once a lead advances to contacted, used, paid or lost it is purged after 180 days. New leads are never auto-deleted. Subscription and payment records are kept while an account is active and for the period required by applicable payment and reconciliation rules.</p>
+<h2>Who can access data</h2>
+<p>Access is restricted to operators via a server-side operator key. We do not sell, rent or share personal data with third parties for marketing. We rely on limited processors: Creem (payments), Resend (transactional email) and the x402 facilitator (proof verification).</p>
+<h2>Your rights</h2>
+<p>Request deletion or ask a privacy question by email at <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>.</p>`],
+  terms: ['Terms of Service', `
+<h2>Service</h2>
+<p>Licita provides evidence-backed public procurement intelligence: EU (TED) and Spain (PLACSP) tenders, buyers, suppliers and deterministic renewal signals, queryable over REST and MCP. All values come from public sources or deterministic heuristics over them; Licita never fabricates data.</p>
+<h2>Use</h2>
+<p>You may use the service for professional evaluation of public procurement opportunities and for integration into your own tools and agents, subject to these terms and to the applicable terms of the upstream sources (TED, PLACSP). You must not use the service to violate law, to abuse or overload the API, to resell the raw index as a competing product, or to circumvent payment.</p>
+<h2>Pricing and payment</h2>
+<p>Endpoints are priced per call; full prices are published at <a href="/v1/pricing">/v1/pricing</a>. You pay with x402 payment proofs, with prepaid credit bundles (<code>x-client-key</code>), or with a monthly subscription via Creem checkout (<code>POST /v1/creem/checkout</code>). Proofs are single-use and expire after 5 minutes. Card payments are processed by Creem as Merchant of Record; we never see card details.</p>
+<h2>API keys and credits</h2>
+<p>Your API key is issued once and sent to you by email after checkout; only a hash is stored server-side. Keep the key safe — it is the only identifier of your credit balance, and a lost balance cannot currently be recovered. Prepaid credits never expire.</p>
+<h2>Data quality</h2>
+<p>Indexed values come from public sources with provenance. Renewal and opportunity signals are deterministic heuristics; confidence reflects evidence strength, not a probability. Licita does not claim a certification, an uptime SLA, or fitness for a particular decision. Verify before relying on the data for a material decision.</p>
+<h2>Intellectual property</h2>
+<p>The Licita application is open source under the MIT license (<a href="https://github.com/gastonrey/licita-app">github.com/gastonrey/licita-app</a>). The indexed data remains subject to the terms of its upstream sources.</p>
+<h2>Changes and contact</h2>
+<p>We may update these terms; continued use after a change is posted constitutes acceptance. Questions? Email <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>.</p>
+<p><em>Last updated: September 2026.</em></p>`],
   status: ['Status', '<p>Service status and source freshness are operational values, not guarantees. Check the response metadata and contact us to report an issue. No uptime SLA is claimed here.</p>'],
 };
 
