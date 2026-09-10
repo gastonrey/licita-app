@@ -15,6 +15,8 @@ import { X402PaymentProvider } from '../../src/pay/x402Provider.js';
 import { initPayments, resetPayments } from '../../src/pay/middleware.js';
 import { ENDPOINT_PRICES } from '../../src/domain/types.js';
 import { makeTestConfig } from './testconfig.js';
+import { TEST_SCHEMA_SQL } from './testdb.js';
+import { generateKey, hashKey, hashKeyLog } from '../../src/pay/keys.js';
 
 const SECRET = 'mcp-test-secret';
 
@@ -489,5 +491,175 @@ describe('MCP tools in x402 mode', () => {
     const body = parseText(res);
     expect(body.payment_required).toBe(true);
     expect(body.reason).toBe('invalid_payload');
+  });
+});
+
+// ─── B1.4: MCP trial api_clients seam (fiat-revenue-rails) ────────────────────
+//
+// Real pg-mem pool (TEST_SCHEMA_SQL) so tryCreditDebit's transaction on
+// api_clients/payments and the request_logs writer both land. Contract:
+//  - paid tool + client_key = lct_ trial key → quota debit, provider 'trial'
+//    payment row, client_key logged as the hash-on-log label (Decision 6);
+//  - exhausted/expired key → isError result { error: { code:'trial_exhausted',
+//    message, hint } } and a 403 request log with error 'trial_exhausted';
+//  - unknown lct_ key → unchanged payment_required fallback (402 log).
+// request_logs is written fire-and-forget, so assertions poll briefly.
+describe('MCP trial api_clients seam (B1.4)', () => {
+  let client: Client;
+  let db: Db;
+
+  async function seedTrial(
+    key: string,
+    opts: { callsRemaining?: number; expiresInDays?: number | null } = {},
+  ): Promise<number> {
+    const { callsRemaining = 25, expiresInDays = 14 } = opts;
+    const expires = expiresInDays === null ? 'NULL' : `now() + interval '${expiresInDays} days'`;
+    const res = await db.query(
+      `INSERT INTO api_clients (key_hash, kind, email, calls_remaining, expires_at)
+       VALUES ($1, 'trial', $2, $3, ${expires})
+       RETURNING id`,
+      [hashKey(key), `${key.slice(0, 10)}@example.com`, callsRemaining],
+    );
+    return Number((res.rows[0] as { id: number }).id);
+  }
+
+  /** Seed tender id 7 so the paid get_tender call has pg-mem-safe data to run. */
+  async function seedTender(): Promise<void> {
+    const src = await db.query(`INSERT INTO sources (code, name) VALUES ('ted', 'TED') RETURNING id`);
+    const sid = Number((src.rows[0] as { id: number }).id);
+    await db.query(
+      `INSERT INTO tenders (id, source_id, source_ref, notice_type, publication_date, title, cpv_main, procedure_type, estimated_value, currency, nuts)
+       VALUES (7, $1, '123-2026', 'can-standard', '2026-01-15', 'Suministro de software', '72000000', 'open', 100000, 'EUR', 'ES61')`,
+      [sid],
+    );
+  }
+
+  async function waitForLogs(n = 1): Promise<void> {
+    const deadline = Date.now() + 1500;
+    for (;;) {
+      const { rows } = await db.query('SELECT count(*)::int AS n FROM request_logs');
+      if ((rows[0] as { n: number }).n >= n) return;
+      if (Date.now() > deadline) throw new Error('request_logs insert did not land in time');
+      await new Promise((r) => setTimeout(r, 5));
+    }
+  }
+
+  beforeEach(async () => {
+    const mem = newDb({ noAstCoverageCheck: true });
+    const { Pool } = mem.adapters.createPg();
+    db = new Pool() as unknown as Db;
+    await db.query(TEST_SCHEMA_SQL);
+    await seedTender();
+    const provider = new DevPaymentProvider({ secret: SECRET, db });
+    const server = buildMcpServer(provider, db, config);
+    const [clientT, serverT] = InMemoryTransport.createLinkedPair();
+    client = new Client({ name: 'test-client', version: '0.0.1' });
+    await Promise.all([client.connect(clientT), server.connect(serverT)]);
+  });
+
+  it('trial client_key → paid call, quota decremented, trial payment row, hash-label logged', async () => {
+    const key = generateKey();
+    const id = await seedTrial(key);
+
+    const res = (await client.callTool({
+      name: 'get_tender',
+      arguments: { id: 7, client_key: key },
+    })) as ToolCallResult;
+    expect(res.isError).toBeUndefined();
+    const body = parseText(res);
+    expect(body.meta).toEqual({ price_usd: '0.02', paid: true });
+    expect((body.data as Record<string, unknown>).id).toBe(7);
+
+    await waitForLogs(1);
+    const quota = await db.query(`SELECT calls_remaining FROM api_clients WHERE id = $1`, [id]);
+    expect(quota.rows).toEqual([{ calls_remaining: 24 }]);
+    const payRows = await db.query(`SELECT client_id, provider, amount_usd, status FROM payments`);
+    // pg-mem numeric → JS number (prod PostgreSQL: '0.00')
+    expect(payRows.rows).toEqual([{ client_id: id, provider: 'trial', amount_usd: 0, status: 'success' }]);
+    const logRows = await db.query(
+      `SELECT client_key, endpoint, status, error, paid FROM request_logs ORDER BY id`,
+    );
+    expect(logRows.rows).toEqual([
+      { client_key: hashKeyLog(key), endpoint: 'mcp:get_tender', status: 200, error: null, paid: true },
+    ]);
+  });
+
+  it('exhausted trial client_key → trial_exhausted error result, log 403, quota untouched, no debit', async () => {
+    const key = generateKey();
+    await seedTrial(key, { callsRemaining: 1 }); // cost 2¢ > remaining 1 → shortfall
+
+    const res = (await client.callTool({
+      name: 'get_tender',
+      arguments: { id: 7, client_key: key },
+    })) as ToolCallResult;
+    expect(res.isError).toBe(true);
+    const body = parseText(res);
+    expect(body.error).toMatchObject({
+      code: 'trial_exhausted',
+      message: expect.stringContaining('Trial quota exhausted'),
+      hint: expect.stringContaining('/pricing'),
+    });
+
+    await waitForLogs(1);
+    const quota = await db.query(`SELECT calls_remaining FROM api_clients WHERE key_hash = $1`, [hashKey(key)]);
+    expect(quota.rows).toEqual([{ calls_remaining: 1 }]);
+    const payCount = await db.query(`SELECT count(*)::int AS n FROM payments`);
+    expect(payCount.rows).toEqual([{ n: 0 }]);
+    const logRows = await db.query(
+      `SELECT client_key, endpoint, status, error, paid FROM request_logs ORDER BY id`,
+    );
+    expect(logRows.rows).toEqual([
+      {
+        client_key: hashKeyLog(key),
+        endpoint: 'mcp:get_tender',
+        status: 403,
+        error: 'trial_exhausted',
+        paid: false,
+      },
+    ]);
+  });
+
+  it('expired trial client_key → trial_exhausted (key_expired), log 403, quota untouched', async () => {
+    const key = generateKey();
+    await seedTrial(key, { callsRemaining: 25, expiresInDays: -1 });
+
+    const res = (await client.callTool({
+      name: 'get_tender',
+      arguments: { id: 7, client_key: key },
+    })) as ToolCallResult;
+    expect(res.isError).toBe(true);
+    const body = parseText(res);
+    expect(body.error).toMatchObject({
+      code: 'trial_exhausted',
+      message: expect.stringContaining('Trial key expired'),
+    });
+
+    await waitForLogs(1);
+    const quota = await db.query(`SELECT calls_remaining FROM api_clients WHERE key_hash = $1`, [hashKey(key)]);
+    expect(quota.rows).toEqual([{ calls_remaining: 25 }]);
+    const logRows = await db.query(
+      `SELECT client_key, status, error, paid FROM request_logs ORDER BY id`,
+    );
+    expect(logRows.rows).toEqual([
+      { client_key: hashKeyLog(key), status: 403, error: 'trial_exhausted', paid: false },
+    ]);
+  });
+
+  it('unknown lct_ client_key → payment_required fallback (unchanged), nothing mutated', async () => {
+    const res = (await client.callTool({
+      name: 'get_tender',
+      arguments: { id: 7, client_key: generateKey() },
+    })) as ToolCallResult;
+    expect(res.isError).toBeUndefined();
+    const body = parseText(res);
+    expect(body.payment_required).toBe(true);
+
+    await waitForLogs(1);
+    const clients = await db.query(`SELECT count(*)::int AS n FROM api_clients`);
+    expect(clients.rows).toEqual([{ n: 0 }]);
+    const payCount = await db.query(`SELECT count(*)::int AS n FROM payments`);
+    expect(payCount.rows).toEqual([{ n: 0 }]);
+    const logRows = await db.query(`SELECT status, error, paid FROM request_logs ORDER BY id`);
+    expect(logRows.rows).toEqual([{ status: 402, error: 'payment_required', paid: false }]);
   });
 });

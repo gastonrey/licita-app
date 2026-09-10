@@ -68,6 +68,14 @@ export const renewalsQuerySchema = paginationSchema.extend({
   min_confidence: z.enum(['low', 'medium', 'high']).default('low'),
 });
 
+/**
+ * api_clients.kind domain (migrations/001 + 009). DB table has no CHECK on
+ * kind — the domain is enforced here in the app layer (design: avoids a
+ * pg-mem-problematic CHECK widening). 'agent' = legacy x402 clients (no
+ * quota columns), 'trial'/'pro' = quota-governed keys.
+ */
+export const apiClientKindSchema = z.enum(['agent', 'trial', 'pro']);
+
 // --- inferred types ----------------------------------------------------------
 
 export type SearchQuery = z.infer<typeof searchQuerySchema>;

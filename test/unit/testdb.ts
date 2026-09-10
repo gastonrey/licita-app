@@ -67,9 +67,17 @@ CREATE TABLE forecast_signals (
   window_start date, window_end date, confidence text, basis jsonb,
   computed_at timestamptz DEFAULT now()
 );
--- mirrors migrations/001_core.sql + 002_payments_x402.sql
+-- mirrors migrations/001_core.sql + 002_payments_x402.sql + 009_trial_api_keys.sql
+CREATE TABLE api_clients (
+  id bigserial PRIMARY KEY, key_hash text UNIQUE NOT NULL,
+  kind text NOT NULL DEFAULT 'agent', created_at timestamptz DEFAULT now(),
+  -- 009 trial/pro activation columns (mirrored verbatim)
+  email text, calls_remaining integer, expires_at timestamptz,
+  current_period_end timestamptz
+);
+CREATE UNIQUE INDEX api_clients_email_lower_ux ON api_clients (lower(email));
 CREATE TABLE payments (
-  id bigserial PRIMARY KEY, client_id bigint,
+  id bigserial PRIMARY KEY, client_id bigint REFERENCES api_clients(id),
   endpoint text NOT NULL, amount_usd numeric NOT NULL, provider text NOT NULL,
   proof text UNIQUE NOT NULL, status text NOT NULL, created_at timestamptz DEFAULT now(),
   payer_address text, tx_hash text, network text
