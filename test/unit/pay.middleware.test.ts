@@ -696,30 +696,30 @@ describe('paymentPreHandler trial-clients seam (B1.3)', () => {
   });
 });
 
-// B2.4 stripe-kind one-time credits: a stripe api_clients row never decrements
+// B2.4 creem-kind one-time credits: a creem api_clients row never decrements
 // calls_remaining — its calls consume ONE-TIME credits from credit_accounts
 // (keyed by the same lct_ key); no credit row (or exhausted balance) falls
 // through to the original credit path → 402 (their choice to refill).
-describe('paymentPreHandler stripe-kind one-time credits (B2.4)', () => {
+describe('paymentPreHandler creem-kind one-time credits (B2.4)', () => {
   let db: Db;
   let app: FastifyInstance;
 
-  const stripeConfig: AppConfig = makeTestConfig({
+  const creemConfig: AppConfig = makeTestConfig({
     payHmacSecret: SECRET,
     operatorKey: 'op',
     baseUrl: 'https://licita.test',
-    stripe: { enabled: true, secretKey: 'sk_test_placeholder', webhookSecret: 'whsec_test_placeholder', priceCents: 2900 },
+    creem: { enabled: true, apiKey: 'creem_test_placeholder', webhookSecret: 'whsec_creem_placeholder', productId: 'prod_creem_placeholder', priceCents: 2900 },
   });
 
-  /** Stripe api_clients row (upgraded trial shape: quota PRESERVED but inert). */
-  async function seedStripeClient(
+  /** Creem api_clients row (upgraded trial shape: quota PRESERVED but inert). */
+  async function seedCreemClient(
     key: string,
     opts: { callsRemaining?: number | null; balanceCents?: number | null } = {},
   ): Promise<number> {
     const { callsRemaining = 25, balanceCents = null } = opts;
     const res = await db.query(
       `INSERT INTO api_clients (key_hash, kind, email, calls_remaining, expires_at, current_period_end)
-       VALUES ($1, 'stripe', $2, $3, now() + interval '30 days', now() + interval '30 days')
+       VALUES ($1, 'creem', $2, $3, now() + interval '30 days', now() + interval '30 days')
        RETURNING id`,
       [hashKey(key), `${key.slice(0, 10)}@example.com`, callsRemaining],
     );
@@ -733,16 +733,16 @@ describe('paymentPreHandler stripe-kind one-time credits (B2.4)', () => {
     return id;
   }
 
-  async function buildStripeApp(): Promise<void> {
+  async function buildCreemApp(): Promise<void> {
     resetPayments();
     db = makeDb();
     await db.query(TRIAL_DDL);
-    initPayments(stripeConfig, db);
+    initPayments(creemConfig, db);
     app = buildApp();
   }
 
   beforeEach(async () => {
-    await buildStripeApp();
+    await buildCreemApp();
   });
 
   afterEach(async () => {
@@ -750,9 +750,9 @@ describe('paymentPreHandler stripe-kind one-time credits (B2.4)', () => {
     resetPayments();
   });
 
-  it('stripe key with credits: call debits ONE-TIME credits, NOT calls_remaining; payments provider=stripe', async () => {
+  it('creem key with credits: call debits ONE-TIME credits, NOT calls_remaining; payments provider=creem', async () => {
     const key = generateKey();
-    await seedStripeClient(key, { callsRemaining: 25, balanceCents: 500 });
+    await seedCreemClient(key, { callsRemaining: 25, balanceCents: 500 });
 
     const res = await app.inject({
       method: 'GET',
@@ -764,17 +764,17 @@ describe('paymentPreHandler stripe-kind one-time credits (B2.4)', () => {
 
     const bal = await db.query(`SELECT balance_cents FROM credit_accounts WHERE client_key = $1`, [key]);
     expect(Number(bal.rows[0].balance_cents)).toBe(498);
-    // calls_remaining is NEVER decremented for stripe kind (credits win)
+    // calls_remaining is NEVER decremented for creem kind (credits win)
     const quota = await db.query(`SELECT calls_remaining FROM api_clients WHERE key_hash = $1`, [hashKey(key)]);
     expect(quota.rows[0]).toEqual({ calls_remaining: 25 });
     const pays = await db.query(`SELECT provider, client_id, endpoint FROM payments`);
     expect(pays.rows).toHaveLength(1);
-    expect(pays.rows[0]).toMatchObject({ provider: 'stripe', endpoint: 'GET /v1/search' });
+    expect(pays.rows[0]).toMatchObject({ provider: 'creem', endpoint: 'GET /v1/search' });
   });
 
-  it('stripe key with 1¢ left on a 2¢ endpoint → 402, balance untouched, no payment row, quota untouched', async () => {
+  it('creem key with 1¢ left on a 2¢ endpoint → 402, balance untouched, no payment row, quota untouched', async () => {
     const key = generateKey();
-    await seedStripeClient(key, { callsRemaining: 25, balanceCents: 1 });
+    await seedCreemClient(key, { callsRemaining: 25, balanceCents: 1 });
 
     const res = await app.inject({
       method: 'GET',
@@ -793,9 +793,9 @@ describe('paymentPreHandler stripe-kind one-time credits (B2.4)', () => {
     expect(pays.rows).toEqual([{ n: 0 }]);
   });
 
-  it('stripe key with NO credit row at all → 402 (their choice to refill)', async () => {
+  it('creem key with NO credit row at all → 402 (their choice to refill)', async () => {
     const key = generateKey();
-    await seedStripeClient(key, { callsRemaining: 25, balanceCents: null });
+    await seedCreemClient(key, { callsRemaining: 25, balanceCents: null });
 
     const res = await app.inject({
       method: 'GET',
@@ -810,11 +810,11 @@ describe('paymentPreHandler stripe-kind one-time credits (B2.4)', () => {
     expect(pays.rows).toEqual([{ n: 0 }]);
   });
 
-  it('fresh stripe row from completeCheckout (NULL quota cols) also consumes credits, not the trial gate', async () => {
+  it('fresh creem row from completeCheckout (NULL quota cols) also consumes credits, not the trial gate', async () => {
     const key = generateKey();
     // completeCheckout-created row: calls_remaining NULL, expires_at NULL
     await db.query(
-      `INSERT INTO api_clients (key_hash, kind, email) VALUES ($1, 'stripe', $2)`,
+      `INSERT INTO api_clients (key_hash, kind, email) VALUES ($1, 'creem', $2)`,
       [hashKey(key), 'fresh@example.com'],
     );
     await db.query(`INSERT INTO credit_accounts (client_key, balance_cents) VALUES ($1, 500)`, [key]);
@@ -829,6 +829,6 @@ describe('paymentPreHandler stripe-kind one-time credits (B2.4)', () => {
     const bal = await db.query(`SELECT balance_cents FROM credit_accounts WHERE client_key = $1`, [key]);
     expect(Number(bal.rows[0].balance_cents)).toBe(498);
     const pays = await db.query(`SELECT provider FROM payments`);
-    expect(pays.rows).toEqual([{ provider: 'stripe' }]);
+    expect(pays.rows).toEqual([{ provider: 'creem' }]);
   });
 });

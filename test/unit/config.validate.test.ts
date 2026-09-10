@@ -151,51 +151,52 @@ describe('validateConfig (production)', () => {
 
 // fiat-revenue-rails Slice A / domain-readiness DR1: baseUrl config with
 // fail-closed production https validation.
-describe('validateConfig (stripe fail-closed, B2.6)', () => {
-  const stripeOn = (overrides = {}) =>
+describe('validateConfig (creem fail-closed, B2.6)', () => {
+  const creemOn = (overrides = {}) =>
     makeTestConfig({
-      stripe: { enabled: true, secretKey: 'sk_test_placeholder', webhookSecret: 'whsec_test_placeholder', priceCents: 2900 },
+      creem: { enabled: true, apiKey: 'creem_test_placeholder', webhookSecret: 'whsec_creem_placeholder', productId: 'prod_creem_placeholder', priceCents: 2900 },
       ...overrides,
     });
 
-  it('passes with a valid stripe-enabled config (dev mode)', () => {
-    expect(() => validateConfig(stripeOn())).not.toThrow();
+  it('passes with a valid creem-enabled config (dev mode)', () => {
+    expect(() => validateConfig(creemOn())).not.toThrow();
   });
 
   it('passes with live-mode secrets', () => {
     expect(() =>
-      validateConfig(stripeOn({ stripe: { enabled: true, secretKey: 'sk_live_abc123', webhookSecret: 'whsec_live_abc', priceCents: 2900 } })),
+      validateConfig(creemOn({ creem: { enabled: true, apiKey: 'creem_live_abc123', webhookSecret: 'whsec_live_abc', productId: 'prod_live_abc', priceCents: 2900 } })),
     ).not.toThrow();
   });
 
-  it('fails when STRIPE_ENABLED=true but STRIPE_SECRET_KEY is missing or malformed', () => {
-    expect(() => validateConfig(stripeOn({ stripe: { enabled: true, secretKey: '', webhookSecret: 'whsec_test_placeholder', priceCents: 2900 } }))).toThrow(
-      /STRIPE_SECRET_KEY/,
+  it('fails when CREEM_ENABLED=true but CREEM_API_KEY is missing', () => {
+    expect(() => validateConfig(creemOn({ creem: { enabled: true, apiKey: '', webhookSecret: 'whsec_creem_placeholder', productId: 'prod_creem_placeholder', priceCents: 2900 } }))).toThrow(
+      /CREEM_API_KEY/,
     );
-    for (const bad of ['', 'nope', 'rk_live_abc', 'sk_']) {
-      expect(() =>
-        validateConfig(stripeOn({ stripe: { enabled: true, secretKey: bad, webhookSecret: 'whsec_test_placeholder', priceCents: 2900 } })),
-      ).toThrow(/STRIPE_SECRET_KEY/);
-    }
   });
 
-  it('fails when STRIPE_WEBHOOK_SECRET is missing or does not start with whsec_', () => {
-    expect(() => validateConfig(stripeOn({ stripe: { enabled: true, secretKey: 'sk_test_x', webhookSecret: '', priceCents: 2900 } }))).toThrow(/STRIPE_WEBHOOK_SECRET/);
+  it('fails when CREEM_WEBHOOK_SECRET is missing', () => {
+    expect(() => validateConfig(creemOn({ creem: { enabled: true, apiKey: 'creem_test_x', webhookSecret: '', productId: 'prod_creem_placeholder', priceCents: 2900 } }))).toThrow(/CREEM_WEBHOOK_SECRET/);
     expect(() =>
-      validateConfig(stripeOn({ stripe: { enabled: true, secretKey: 'sk_test_x', webhookSecret: 'not-a-whsec' } })),
-    ).toThrow(/STRIPE_WEBHOOK_SECRET/);
+      validateConfig(creemOn({ creem: { enabled: true, apiKey: 'creem_test_x', webhookSecret: '', productId: 'prod_creem_placeholder' } })),
+    ).toThrow(/CREEM_WEBHOOK_SECRET/);
   });
 
-  it('fails when PRICE_CENTS is missing, zero, negative or non-integer', () => {
+  it('fails when CREEM_PRODUCT_ID is missing', () => {
+    expect(() =>
+      validateConfig(creemOn({ creem: { enabled: true, apiKey: 'creem_test_x', webhookSecret: 'whsec_x', productId: '' } })),
+    ).toThrow(/CREEM_PRODUCT_ID/);
+  });
+
+  it('fails when CREEM_PRICE_CENTS is missing, zero, negative or non-integer', () => {
     for (const bad of [0, -100, 29.5, NaN]) {
       expect(() =>
-        validateConfig(stripeOn({ stripe: { enabled: true, secretKey: 'sk_test_x', webhookSecret: 'whsec_x', priceCents: bad } })),
-      ).toThrow(/PRICE_CENTS/);
+        validateConfig(creemOn({ creem: { enabled: true, apiKey: 'creem_test_x', webhookSecret: 'whsec_x', productId: 'prod_x', priceCents: bad } })),
+      ).toThrow(/CREEM_PRICE_CENTS/);
     }
   });
 
-  it('stripe disabled with empty keys stays valid (opt-out deployments)', () => {
-    expect(() => validateConfig(makeTestConfig({ stripe: { enabled: false, secretKey: '', webhookSecret: '', priceCents: 2900 } }))).not.toThrow();
+  it('creem disabled with empty keys stays valid (opt-out deployments)', () => {
+    expect(() => validateConfig(makeTestConfig({ creem: { enabled: false, apiKey: '', webhookSecret: '', productId: '', priceCents: 2900 } }))).not.toThrow();
   });
 });
 

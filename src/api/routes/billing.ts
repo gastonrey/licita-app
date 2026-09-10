@@ -5,16 +5,16 @@
 // account. The bundle endpoints never debit (they top up) — replay is blocked
 // by the provider's unique payments.proof insert.
 //
-// B2.3/B2.5 (fiat-revenue-rails): Stripe surface, flag-gated by
-// STRIPE_ENABLED (off → 404):
-//  - POST /v1/stripe/webhook  — signature-verified checkout completion.
-//  - POST /v1/stripe/checkout — creates a Stripe Checkout Session (303 URL).
+// B2.3/B2.5 (fiat-revenue-rails): Creem MoR surface, flag-gated by
+// CREEM_ENABLED (off → 404):
+//  - POST /v1/creem/webhook  — signature-verified checkout completion.
+//  - POST /v1/creem/checkout — creates a Creem checkout session (303 URL).
 
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { envelope, HttpError, validate, type RouteCtx } from './common.js';
 import { completeCheckout } from '../../pay/billing.js';
-import { checkoutCompleted, createCheckoutSession, verifyWebhookSignature } from '../../pay/stripe.js';
+import { checkoutCompleted, createCheckoutSession, verifyWebhookSignature } from '../../pay/creem.js';
 
 export const billingAmountSchema = z.object({
   amount: z.enum(['5', '10', '25'], { errorMap: () => ({ message: 'amount must be 5, 10 or 25' }) }),
@@ -22,58 +22,58 @@ export const billingAmountSchema = z.object({
 
 export const billingAmountValidation = validate(billingAmountSchema, 'params');
 
-// --- Stripe surface (B2.3/B2.5) ---------------------------------------------
+// --- Creem MoR surface (B2.3/B2.5) ----------------------------------------
 
-export const stripeCheckoutSchema = z.object({
+export const creemCheckoutSchema = z.object({
   email: z.string().trim().email('email must be a valid email address'),
-  /** Where Stripe returns the subscriber after payment. Defaults to
+  /** Where Creem returns the subscriber after payment. Defaults to
    *  {baseUrl}/?checkout=success (Decision 8) when omitted. */
   successUrl: z.string().url('successUrl must be an absolute URL').optional(),
-  /** Where Stripe returns the subscriber after cancel. Defaults to
+  /** Where Creem returns the subscriber after cancel. Defaults to
    *  {baseUrl}/pricing (Decision 8) when omitted. */
   cancelUrl: z.string().url('cancelUrl must be an absolute URL').optional(),
 });
 
-export const stripeCheckoutValidation = validate(stripeCheckoutSchema, 'body');
+export const creemCheckoutValidation = validate(creemCheckoutSchema, 'body');
 
-function stripeDisabled(): HttpError {
-  return new HttpError(404, 'not_found', 'Stripe billing is not enabled on this deployment.');
+function creemDisabled(): HttpError {
+  return new HttpError(404, 'not_found', 'Creem billing is not enabled on this deployment.');
 }
 
 /**
- * POST /v1/stripe/webhook — Stripe sends signed events here. Verifies the
- * HMAC signature (timestamp + raw payload) against STRIPE_WEBHOOK_SECRET,
- * then completes checkout for checkout.session.completed events. 200 {ok:true}
+ * POST /v1/creem/webhook — Creem sends signed events here. Verifies the
+ * HMAC signature (raw-body HMAC-SHA256) against CREEM_WEBHOOK_SECRET,
+ * then completes checkout for checkout.completed events. 200 {ok:true}
  * after successful processing; 400 unparseable; 401 bad signature;
- * 404 when STRIPE_ENABLED=false. Non-completed events are acknowledged
+ * 404 when CREEM_ENABLED=false. Non-completed events are acknowledged
  * without side effects.
  */
-export function stripeWebhookHandler(ctx: RouteCtx) {
+export function creemWebhookHandler(ctx: RouteCtx) {
   return async (req: FastifyRequest, reply: FastifyReply) => {
-    const stripe = ctx.config.stripe;
-    if (!stripe?.enabled) {
-      throw stripeDisabled();
+    const creem = ctx.config.creem;
+    if (!creem?.enabled) {
+      throw creemDisabled();
     }
-    const sig = req.headers['stripe-signature'];
+    const sig = req.headers['creem-signature'];
     const signature = Array.isArray(sig) ? sig[0] : sig;
     if (!req.rawBody) {
       throw new HttpError(400, 'invalid_query', 'Webhook requires a raw JSON body.');
     }
     let event: Record<string, unknown>;
     try {
-      event = verifyWebhookSignature(req.rawBody, signature ?? '', stripe.webhookSecret);
+      event = verifyWebhookSignature(req.rawBody, signature ?? '', creem.webhookSecret);
     } catch (err) {
       if (err instanceof SyntaxError) {
         throw new HttpError(400, 'invalid_query', 'Webhook body is not valid JSON.');
       }
-      throw new HttpError(401, 'invalid_signature', 'Stripe webhook signature verification failed.');
+      throw new HttpError(401, 'invalid_signature', 'Creem webhook signature verification failed.');
     }
-    if (event.type === 'checkout.session.completed') {
+    if (event.eventType === 'checkout.completed') {
       let completed;
       try {
         completed = checkoutCompleted(event);
       } catch {
-        throw new HttpError(400, 'invalid_query', 'checkout.session.completed event is malformed.');
+        throw new HttpError(400, 'invalid_query', 'checkout.completed event is malformed.');
       }
       await completeCheckout(ctx.db, ctx.config, { email: completed.email, eventId: completed.eventId });
       ctx.metrics.inc('subscription_activated_total');
@@ -83,17 +83,17 @@ export function stripeWebhookHandler(ctx: RouteCtx) {
 }
 
 /**
- * POST /v1/stripe/checkout — creates a Stripe Checkout Session for the
- * configured monthly price (PRICE_CENTS, default 2900 = €29/mo) and returns
- * the session URL as 303 {url}. 404 when STRIPE_ENABLED=false (tagged
+ * POST /v1/creem/checkout — creates a Creem checkout session for the
+ * configured product (CREEM_PRODUCT_ID) and returns
+ * the session URL as 303 {url}. 404 when CREEM_ENABLED=false (tagged
  * paymentFailureKind 'payment_disabled' for operator request logs).
  */
-export function stripeCheckoutHandler(ctx: RouteCtx) {
+export function creemCheckoutHandler(ctx: RouteCtx) {
   return async (req: FastifyRequest, reply: FastifyReply) => {
-    const stripe = ctx.config.stripe;
-    if (!stripe?.enabled) {
+    const creem = ctx.config.creem;
+    if (!creem?.enabled) {
       req.paymentFailureKind = 'payment_disabled';
-      throw stripeDisabled();
+      throw creemDisabled();
     }
     const body = req.body as { email: string; successUrl?: string; cancelUrl?: string };
     const url =
@@ -103,8 +103,6 @@ export function stripeCheckoutHandler(ctx: RouteCtx) {
       body.cancelUrl ?? `${ctx.config.baseUrl.replace(/\/+$/, '')}/pricing`;
     const sessionUrl = await createCheckoutSession(ctx.config, {
       email: body.email,
-      priceCents: stripe.priceCents,
-      mode: 'subscription',
       successUrl: url,
       cancelUrl,
     });

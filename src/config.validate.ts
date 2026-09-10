@@ -104,30 +104,27 @@ export function validateConfig(config: AppConfig): void {
     }
   }
 
-  // Stripe (fiat-revenue-rails B2): STRIPE_ENABLED=true requires both secrets
+  // Creem MoR (fiat-revenue-rails B2): CREEM_ENABLED=true requires both secrets
   // AND a valid key format — fail closed in ANY environment (including dev)
-  // so a misconfigured "stripe on" deployment never boot-succeeds half-wired.
-  // Validated secret formats: sk_test_ / sk_live_ (rejects metered or typo'd
-  // secrets proactively; webhook secrets must be whsec_).
-  if (config.stripe.enabled) {
-    if (config.stripe.secretKey.length === 0) {
+  // so a misconfigured "creem on" deployment never boot-succeeds half-wired.
+  if (config.creem.enabled) {
+    if (config.creem.apiKey.length === 0) {
       violations.push(
-        'STRIPE_SECRET_KEY is required when STRIPE_ENABLED=true (it authenticates checkout/webhook API calls).',
-      );
-    } else if (!/^sk_(test|live)_/.test(config.stripe.secretKey)) {
-      violations.push(
-        'STRIPE_SECRET_KEY looks invalid: Stripe secret keys start with "sk_test_" or "sk_live_" (rejecting metered/unvalidated values).',
+        'CREEM_API_KEY is required when CREEM_ENABLED=true (it authenticates checkout/webhook API calls).',
       );
     }
-    if (config.stripe.webhookSecret.length === 0) {
+    if (config.creem.webhookSecret.length === 0) {
       violations.push(
-        'STRIPE_WEBHOOK_SECRET is required when STRIPE_ENABLED=true (it verifies webhook signatures).',
+        'CREEM_WEBHOOK_SECRET is required when CREEM_ENABLED=true (it verifies webhook signatures).',
       );
-    } else if (!config.stripe.webhookSecret.startsWith('whsec_')) {
-      violations.push('STRIPE_WEBHOOK_SECRET looks invalid: Stripe webhook secrets start with "whsec_".');
     }
-    if (!Number.isInteger(config.stripe.priceCents) || config.stripe.priceCents <= 0) {
-      violations.push('PRICE_CENTS must be a positive integer number of cents (e.g. 2900 = €29.00).');
+    if (config.creem.productId.length === 0) {
+      violations.push(
+        'CREEM_PRODUCT_ID is required when CREEM_ENABLED=true (it identifies the checkout product).',
+      );
+    }
+    if (!Number.isInteger(config.creem.priceCents) || config.creem.priceCents <= 0) {
+      violations.push('CREEM_PRICE_CENTS must be a positive integer number of cents (e.g. 2900 = €29.00).');
     }
   }
 

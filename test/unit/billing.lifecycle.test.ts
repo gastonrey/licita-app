@@ -1,5 +1,5 @@
 // B2.2 Billing lifecycle: completeCheckout creates/upgrades the api_clients
-// row to kind='stripe' with current_period_end = now + 30d. NO credits are
+// row to kind='creem' with current_period_end = now + 30d. NO credits are
 // granted at checkout (S1: credit_accounts facade is not redesigned).
 // Replay-safe: the lower(email) UNIQUE index + SELECT-first upsert mean a
 // replayed event never creates a second row or a second credit row.
@@ -12,11 +12,11 @@ import { completeCheckout } from '../../src/pay/billing.js';
 import { generateKey, hashKey } from '../../src/pay/keys.js';
 
 const config = makeTestConfig({
-  stripe: { enabled: true, secretKey: 'sk_test_placeholder', webhookSecret: 'whsec_test_placeholder', priceCents: 2900 },
+  creem: { enabled: true, apiKey: 'creem_test_placeholder', webhookSecret: 'whsec_creem_placeholder', productId: 'prod_creem_placeholder', priceCents: 2900 },
 });
 
 const DISABLED = makeTestConfig({
-  stripe: { enabled: false, secretKey: '', webhookSecret: '', priceCents: 2900 },
+  creem: { enabled: false, apiKey: '', webhookSecret: '', productId: '', priceCents: 2900 },
 });
 
 describe('completeCheckout', () => {
@@ -30,7 +30,7 @@ describe('completeCheckout', () => {
     await (db as unknown as { end(): Promise<void> }).end();
   });
 
-  async function stripeRows(email: string) {
+  async function creemRows(email: string) {
     const res = await db.query(
       `SELECT id, kind, email, calls_remaining, expires_at, current_period_end
        FROM api_clients WHERE lower(email) = lower($1)`,
@@ -39,17 +39,17 @@ describe('completeCheckout', () => {
     return res.rows;
   }
 
-  it('creates a kind=stripe api_client with +30d period when email is unknown; NO credit row', async () => {
+  it('creates a kind=creem api_client with +30d period when email is unknown; NO credit row', async () => {
     const before = Date.now();
     const result = await completeCheckout(db, config, { email: 'alice@example.com', eventId: 'evt_1' });
     const after = Date.now();
     expect(result.ok).toBe(true);
     expect(result.created).toBe(true);
 
-    const rows = await stripeRows('ALICE@example.com'); // case-insensitive lookup
+    const rows = await creemRows('ALICE@example.com'); // case-insensitive lookup
     expect(rows).toHaveLength(1);
     const row = rows[0] as { kind: string; email: string; calls_remaining: number | null; current_period_end: Date };
-    expect(row.kind).toBe('stripe');
+    expect(row.kind).toBe('creem');
     expect(row.email).toBe('alice@example.com');
     expect(row.calls_remaining).toBeNull();
     // period end ≈ now + 30d (tolerance for test execution time)
@@ -61,7 +61,7 @@ describe('completeCheckout', () => {
     expect(await countRows(db, 'credit_accounts')).toBe(0);
   });
 
-  it('upgrades an existing trial row to kind=stripe and renews the period; no second row', async () => {
+  it('upgrades an existing trial row to kind=creem and renews the period; no second row', async () => {
     const key = generateKey();
     await db.query(
       `INSERT INTO api_clients (key_hash, kind, email, calls_remaining, expires_at)
@@ -72,29 +72,29 @@ describe('completeCheckout', () => {
     expect(result.created).toBe(false);
     expect(result.kindBefore).toBe('trial');
 
-    const rows = await stripeRows('bob@example.com');
+    const rows = await creemRows('bob@example.com');
     expect(rows).toHaveLength(1);
     const row = rows[0] as { kind: string; calls_remaining: number | null; current_period_end: Date };
-    expect(row.kind).toBe('stripe');
-    // trial's quota is PRESERVED but inert: stripe mode never decrements
+    expect(row.kind).toBe('creem');
+    // trial's quota is PRESERVED but inert: creem mode never decrements
     // calls_remaining (one-time credits govern going forward — B2.4 doc)
     expect(row.calls_remaining).toBe(25);
     expect(Number(new Date(row.current_period_end).getTime())).toBeGreaterThan(Date.now() + 29 * 24 * 3600 * 1000);
     expect(await countRows(db, 'credit_accounts')).toBe(0);
   });
 
-  it('upgrades a legacy agent row to kind=stripe preserving the row id', async () => {
+  it('upgrades a legacy agent row to kind=creem preserving the row id', async () => {
     await db.query(
       `INSERT INTO api_clients (key_hash, kind, email) VALUES ($1, 'agent', $2)`,
       [hashKey(generateKey()), 'carol@example.com'],
     );
-    const before = await stripeRows('carol@example.com');
+    const before = await creemRows('carol@example.com');
     const result = await completeCheckout(db, config, { email: 'carol@example.com', eventId: 'evt_3' });
     expect(result.created).toBe(false);
-    const after = await stripeRows('carol@example.com');
+    const after = await creemRows('carol@example.com');
     expect(after).toHaveLength(1);
     expect((after[0] as { id: number }).id).toBe((before[0] as { id: number }).id);
-    expect((after[0] as { kind: string }).kind).toBe('stripe');
+    expect((after[0] as { kind: string }).kind).toBe('creem');
   });
 
   it('rolls back the whole transaction when a query fails mid-flight', async () => {
@@ -111,22 +111,22 @@ describe('completeCheckout', () => {
     await expect(completeCheckout(failingDb, config, { email: 'dave@example.com', eventId: 'evt_4' })).rejects.toThrow(
       /mid-transaction/,
     );
-    expect(await stripeRows('dave@example.com')).toHaveLength(0);
+    expect(await creemRows('dave@example.com')).toHaveLength(0);
     expect(await countRows(db, 'credit_accounts')).toBe(0);
   });
 
-  it('replayed event id is idempotent: one row, still stripe, no duplicate credit row', async () => {
+  it('replayed event id is idempotent: one row, still creem, no duplicate credit row', async () => {
     await completeCheckout(db, config, { email: 'erin@example.com', eventId: 'evt_replay' });
     await completeCheckout(db, config, { email: 'erin@example.com', eventId: 'evt_replay' });
-    expect(await stripeRows('erin@example.com')).toHaveLength(1);
-    expect((await stripeRows('erin@example.com'))[0] as { kind: string }).toMatchObject({ kind: 'stripe' });
+    expect(await creemRows('erin@example.com')).toHaveLength(1);
+    expect((await creemRows('erin@example.com'))[0] as { kind: string }).toMatchObject({ kind: 'creem' });
     expect(await countRows(db, 'credit_accounts')).toBe(0);
   });
 
-  it('fails closed when STRIPE_ENABLED=false (kill switch)', async () => {
+  it('fails closed when CREEM_ENABLED=false (kill switch)', async () => {
     await expect(completeCheckout(db, DISABLED, { email: 'frank@example.com', eventId: 'evt_5' })).rejects.toThrow(
-      /STRIPE_ENABLED/,
+      /CREEM_ENABLED/,
     );
-    expect(await stripeRows('frank@example.com')).toHaveLength(0);
+    expect(await creemRows('frank@example.com')).toHaveLength(0);
   });
 });

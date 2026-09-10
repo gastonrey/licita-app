@@ -10,12 +10,12 @@ export interface PricingEntry {
   free: boolean;
 }
 
-/** Pure builder (unit-tested). @param stripe stripe deploy state (B2.6):
+/** Pure builder (unit-tested). @param creem creem deploy state (B2.6):
  *  pricing is honest — the subscription arm reflects the actual deployment:
  *  disabled → available:false; enabled → the CONFIGURED monthly price. */
 export function buildPricing(
   paymentsMode: string,
-  stripe?: { enabled: boolean; priceCents: number },
+  creem?: { enabled: boolean; priceCents: number },
 ): {
   currency: string;
   payments_mode: string;
@@ -42,24 +42,24 @@ export function buildPricing(
       usage: 'Send x-client-key on every priced request to pay from balance.',
     },
     // B2.6 pricing honesty: never invent a subscription that is not deployed.
-    // The monthly price is ALWAYS derived from config (PRICE_CENTS), never
-    // hardcoded, so the published number matches the Stripe line item.
+    // The monthly price is ALWAYS derived from config (CREEM_PRICE_CENTS), never
+    // hardcoded, so the published number matches the Creem line item.
     subscription:
-      stripe?.enabled === true
+      creem?.enabled === true
         ? {
             available: true,
-            provider: 'stripe',
+            provider: 'creem',
             currency: 'EUR',
-            price_monthly_cents: stripe.priceCents,
-            price_monthly: (stripe.priceCents / 100).toFixed(2),
-            checkout_endpoint: 'POST /v1/stripe/checkout',
+            price_monthly_cents: creem.priceCents,
+            price_monthly: (creem.priceCents / 100).toFixed(2),
+            checkout_endpoint: 'POST /v1/creem/checkout',
             mechanics:
               'Subscribers get one-time credits per payment: calls debit the credit account (X-PAYMENT: <lct key>), never a per-call fee. The preserved 25 trial calls remain usable.',
           }
         : {
             available: false,
-            provider: 'stripe',
-            reason: 'Stripe billing is not enabled on this deployment (STRIPE_ENABLED=false).',
+            provider: 'creem',
+            reason: 'Creem billing is not enabled on this deployment (CREEM_ENABLED=false).',
           },
     payment_flow: {
       protocol: 'x402',
@@ -84,6 +84,6 @@ export function buildPricing(
 
 export function pricingHandler(ctx: RouteCtx) {
   return async (req: FastifyRequest, reply: FastifyReply) => {
-    return reply.send(envelope(req, buildPricing(ctx.config.paymentsMode, ctx.config.stripe)));
+    return reply.send(envelope(req, buildPricing(ctx.config.paymentsMode, ctx.config.creem)));
   };
 }

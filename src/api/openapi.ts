@@ -944,14 +944,14 @@ function paths(): Record<string, unknown> {
               subscription: {
                 type: 'object',
                 description:
-                  'Stripe subscription arm (B2): honest mirror of the deployment — available:false when STRIPE_ENABLED=false; when enabled the monthly price is ALWAYS the configured PRICE_CENTS / 100, never a hardcoded number.',
+                  'Creem MoR subscription arm (B2): honest mirror of the deployment — available:false when CREEM_ENABLED=false; when enabled the monthly price is ALWAYS the configured CREEM_PRICE_CENTS / 100, never a hardcoded number.',
                 properties: {
                   available: { type: 'boolean' },
-                  provider: { type: 'string', enum: ['stripe'] },
+                  provider: { type: 'string', enum: ['creem'] },
                   currency: { type: 'string', enum: ['EUR'] },
                   price_monthly_cents: { type: 'integer', example: 2900 },
                   price_monthly: { type: 'string', example: '29.00' },
-                  checkout_endpoint: { type: 'string', example: 'POST /v1/stripe/checkout' },
+                  checkout_endpoint: { type: 'string', example: 'POST /v1/creem/checkout' },
                   mechanics: { type: 'string' },
                   reason: { type: 'string' },
                 },
@@ -963,29 +963,29 @@ function paths(): Record<string, unknown> {
         ),
       },
     },
-    '/v1/stripe/webhook': {
+    '/v1/creem/webhook': {
       post: {
-        operationId: 'stripeWebhook',
-        summary: 'Stripe webhook receiver (signature-verified checkout completion)',
+        operationId: 'creemWebhook',
+        summary: 'Creem MoR webhook receiver (signature-verified checkout completion)',
         description:
-          'Receives signed Stripe events. STRIPE_ENABLED=false → 404. Verifies the stripe-signature HMAC over the RAW bytes (1s tolerance, 5-minute clock skew); checkout.session.completed upgrades/creates the api_clients row to kind=stripe with a 30-day period (zero credits granted — calls use one-time credits bought separately). Other event types are acknowledged 200 {ok:true} without side effects. Exempt from the per-key rate limiter; the signature is the throttle.',
+          'Receives signed Creem events. CREEM_ENABLED=false → 404. Verifies the creem-signature HMAC-SHA256 over the RAW bytes (timing-safe comparison); checkout.completed upgrades/creates the api_clients row to kind=creem with a 30-day period (zero credits granted — calls use one-time credits bought separately). Other event types are acknowledged 200 {ok:true} without side effects. Exempt from the per-key rate limiter; the signature is the throttle.',
         responses: {
           '200': {
             description: 'Event processed (or benign event acknowledged)',
             content: { 'application/json': { schema: { type: 'object', properties: { ok: { type: 'boolean', enum: [true] } } } } },
           },
-          '400': errResp('Malformed JSON body or checkout.session.completed event'),
-          '401': errResp('Stripe webhook signature verification failed'),
-          '404': errResp('Stripe billing not enabled'),
+          '400': errResp('Malformed JSON body or checkout.completed event'),
+          '401': errResp('Creem webhook signature verification failed'),
+          '404': errResp('Creem billing not enabled'),
         },
       },
     },
-    '/v1/stripe/checkout': {
+    '/v1/creem/checkout': {
       post: {
-        operationId: 'stripeCheckout',
-        summary: 'Create a Stripe Checkout Session for the monthly subscription',
+        operationId: 'creemCheckout',
+        summary: 'Create a Creem MoR Checkout Session for the monthly subscription',
         description:
-          'STRIPE_ENABLED=false → 404. Creates a Checkout Session for the configured PRICE_CENTS (default 2900 = €29.00/month, subscription mode) and returns 303 with the session URL. Default successUrl is {baseUrl}/?checkout=success, default cancelUrl is {baseUrl}/pricing.',
+          'CREEM_ENABLED=false → 404. Creates a Checkout Session for the configured CREEM_PRODUCT_ID and returns 303 with the session URL. Default successUrl is {baseUrl}/?checkout=success, default cancelUrl is {baseUrl}/pricing.',
         requestBody: {
           required: true,
           content: {
@@ -1004,11 +1004,11 @@ function paths(): Record<string, unknown> {
         },
         responses: {
           '303': {
-            description: 'Redirect to the Stripe Checkout Session',
+            description: 'Redirect to the Creem Checkout Session',
             content: { 'application/json': { schema: envelopeOf({ type: 'object', properties: { url: { type: 'string', format: 'uri' } } }) } },
           },
           '400': errResp('Invalid email or URL'),
-          '404': errResp('Stripe billing not enabled'),
+          '404': errResp('Creem billing not enabled'),
         },
       },
     },

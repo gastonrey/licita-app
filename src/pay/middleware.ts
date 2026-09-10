@@ -94,12 +94,12 @@ export interface CreditDebitResult {
   ok: boolean;
   clientKey?: string;
   /** 'credit' (prepaid account), 'trial' (api_clients quota key) or
-   *  'stripe' (one-time credit debit for a stripe subscriber, B2.4). */
-  provider?: 'credit' | 'trial' | 'stripe';
+   * 'creem' (one-time credit debit for a creem subscriber, B2.4). */
+  provider?: 'credit' | 'trial' | 'creem';
   clientId?: number;
   /** Set when an api_clients row exists but is exhausted/expired (B1.3),
-   *  or when a stripe key's credit debit found nothing to debit (B2.4). */
-  errorCode?: 'trial_exhausted' | 'stripe_insufficient';
+   *  or when a creem key's credit debit found nothing to debit (B2.4). */
+  errorCode?: 'trial_exhausted' | 'creem_insufficient';
   kind?: 'quota_exhausted' | 'key_expired';
   message?: string;
   hint?: string;
@@ -123,14 +123,14 @@ export interface CreditDebitResult {
  *    label as clientKey (Decision 6 — never the raw secret);
  *  - exhausted/expired row → { ok:false, errorCode:'trial_exhausted', kind,
  *    message, hint } so callers can answer 403;
- *  - kind='stripe' row → falls through to the credit UPDATE below (B2.4):
+ *  - kind='creem' row → falls through to the credit UPDATE below (B2.4):
  *    calls consume ONE-TIME credits keyed by the same lct_ key; the payment
- *    row records provider 'stripe'. No (or insufficient) credit row → the
+ *    row records provider 'creem'. No (or insufficient) credit row → the
  *    credit UPDATE matches nothing → { ok:false } → 402 (their choice to
- *    refill). calls_remaining is never decremented for stripe.
+ *    refill). calls_remaining is never decremented for creem.
  *  - unknown key or legacy agent row (quota columns NULL) → { ok:false } so
  *    callers keep the existing proof flow (402 for unknown keys in dev mode).
- *    lct_ keys never reach the credit balance path except stripe fall-through.
+ *    lct_ keys never reach the credit balance path except creem fall-through.
  */
 export async function tryCreditDebit(
   db: Db,
@@ -151,7 +151,7 @@ export async function tryCreditDebit(
 
     // B1.3 trial api_clients branch — BEFORE the credit UPDATE so a trial key
     // can never be double-charged against a prepaid balance.
-    let stripeClientId: number | null = null;
+    let creemClientId: number | null = null;
     if (clientKey.startsWith(KEY_PREFIX)) {
       const row = await client.query(
         `SELECT id, kind, calls_remaining, expires_at FROM api_clients WHERE key_hash = $1`,
@@ -164,12 +164,12 @@ export async function tryCreditDebit(
           calls_remaining: number | null;
           expires_at: Date | null;
         };
-        if (r.kind === 'stripe') {
-          // B2.4: stripe subscribers skip the trial gate entirely — calls
+        if (r.kind === 'creem') {
+          // B2.4: creem subscribers skip the trial gate entirely — calls
           // consume ONE-TIME credits from the credit UPDATE below, keyed by
           // this same lct_ key (their choice to refill). calls_remaining is
           // NEVER decremented: one-time credits WIN vs the preserved 25 calls.
-          stripeClientId = r.id;
+          creemClientId = r.id;
         } else {
           // Legacy agent rows (001 shape, quota columns NULL) keep the old flow.
           const legacy = r.calls_remaining === null && r.expires_at === null;
@@ -182,7 +182,7 @@ export async function tryCreditDebit(
               errorCode: 'trial_exhausted',
               kind,
               message,
-              hint: `Upgrade: see ${baseUrl}/pricing or POST /v1/stripe/checkout`,
+              hint: `Upgrade: see ${baseUrl}/pricing or POST /v1/creem/checkout`,
             });
             const expired = r.expires_at !== null && new Date(r.expires_at).getTime() <= Date.now();
             const active = !expired && r.calls_remaining !== null && r.calls_remaining >= costCents;
@@ -220,7 +220,7 @@ export async function tryCreditDebit(
           }
         }
       }
-      if (stripeClientId === null) {
+      if (creemClientId === null) {
         // Unknown lct_ key or legacy agent row: roll back and let the caller
         // use the proof flow. Never touch the credit account with an lct_ key.
         await client.query('ROLLBACK');
@@ -237,12 +237,12 @@ export async function tryCreditDebit(
     );
     if (updated.rows.length === 0) {
       await client.query('ROLLBACK');
-      if (stripeClientId !== null) {
-        // B2.4: a stripe subscriber with no (or insufficient) credits gets a
+      if (creemClientId !== null) {
+        // B2.4: a creem subscriber with no (or insufficient) credits gets a
         // clear 402 — their choice to refill — instead of a proof-flow error.
         return {
           ok: false,
-          errorCode: 'stripe_insufficient' as const,
+          errorCode: 'creem_insufficient' as const,
           message: `Payment required: ${endpointKey} costs $${price} per call. Prepaid balance insufficient — buy credits at POST /v1/billing/credits/5 (or /10 /25).`,
         };
       }
@@ -251,14 +251,14 @@ export async function tryCreditDebit(
     await client.query(
       `INSERT INTO payments (client_id, endpoint, amount_usd, provider, proof, status)
        VALUES ($1, $2, $3, $4, $5, 'success')`,
-      [stripeClientId, endpointKey, price, stripeClientId !== null ? 'stripe' : 'credit', proof],
+      [creemClientId, endpointKey, price, creemClientId !== null ? 'creem' : 'credit', proof],
     );
     await client.query('COMMIT');
     return {
       ok: true,
       clientKey,
-      provider: stripeClientId !== null ? 'stripe' : 'credit',
-      ...(stripeClientId !== null ? { clientId: stripeClientId } : {}),
+      provider: creemClientId !== null ? 'creem' : 'credit',
+      ...(creemClientId !== null ? { clientId: creemClientId } : {}),
     };
   } catch (err) {
     await client.query('ROLLBACK');
@@ -378,15 +378,15 @@ export function paymentPreHandler(endpointKey: string): preHandlerHookHandler {
         });
         return; // halt: quota gate answered, no proof flow
       }
-      if (debit.errorCode === 'stripe_insufficient' && debit.message) {
-        // B2.4: stripe subscriber's credits ran out — 402 with a refill
+      if (debit.errorCode === 'creem_insufficient' && debit.message) {
+        // B2.4: creem subscriber's credits ran out — 402 with a refill
         // message, NOT the proof flow (their lct_ key is not a proof).
         const requirement = provider.requiredResponse(endpointKey);
         req.errorCode = 'payment_required';
         req.paymentFailureKind = 'payment_required';
         rt.log.info('payment_attempt_failed', {
           endpoint: endpointKey,
-          reason: 'stripe_insufficient',
+          reason: 'creem_insufficient',
           client_key: hashKeyLog(trialKey),
         });
         await reply

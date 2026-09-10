@@ -24,7 +24,7 @@ declare module 'fastify' {
     zeroResult?: boolean;
     /** raw (unparsed) request body string, stashed by the URL-gated JSON
      *  content-type parser in server.ts for signature verification on the
-     *  Stripe webhook route (the signature covers the exact bytes). */
+     *  Creem webhook route (the signature covers the exact bytes). */
     rawBody?: string;
   }
 }
