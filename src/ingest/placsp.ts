@@ -22,6 +22,7 @@
 import { parseAtomFeed, type PlacspFeedEntry } from './placsp-parse.js';
 import { addMonthsIso } from './normalize.js';
 import { sleep } from './ted.js';
+import { backoffDelayMs, createBackoffCircuit, type BackoffCircuit } from './backoff.js';
 
 export const PLACSP_FEEDS = {
   licitaciones:
@@ -53,6 +54,10 @@ export interface PlacspHarvestOptions {
   maxWafRetries?: number;
   /** Fixed wait between WAF-block retries in ms (default 30_000 = 30s). */
   wafBackoffMs?: number;
+  /** Shared circuit-lite guard (C2.3): after 3 consecutive failures the next
+   *  attempt waits the circuit cooldown (60s) instead of the short backoff.
+   *  One instance per harvest run — see createBackoffCircuit. */
+  circuit?: BackoffCircuit;
   /** Feeds to harvest (default: all). */
   feeds?: PlacspFeedName[];
   /** Injectable fetch for tests. */
@@ -109,6 +114,10 @@ export async function placspFetchPage(
   const maxWafRetries = opts.maxWafRetries ?? 3;
   const wafBackoffMs = opts.wafBackoffMs ?? 30_000;
   const log = opts.log ?? defaultLog;
+  const circuit = opts.circuit;
+  /** Retry wait: the circuit cooldown when open, else bounded-jitter backoff. */
+  const retryWait = (attempt: number): number =>
+    circuit && circuit.isOpen() ? circuit.waitMs() : backoffDelayMs(attempt, baseMs);
   let attempt = 0;
   let wafAttempt = 0;
   for (;;) {
@@ -117,8 +126,15 @@ export async function placspFetchPage(
       res = await fetchFn(url, { headers: { accept: 'application/atom+xml, application/xml' } });
     } catch (err) {
       if (attempt >= maxRetries) throw err;
-      const waitMs = 2 ** attempt * baseMs + Math.floor(Math.random() * 250);
-      log({ msg: 'placsp retry (network)', attempt: attempt + 1, waitMs, error: String(err) });
+      circuit?.recordFailure();
+      const waitMs = retryWait(attempt);
+      log({
+        msg: 'placsp retry (network)',
+        url,
+        attempt: attempt + 1,
+        waitMs,
+        error: String(err),
+      });
       await sleep(waitMs);
       attempt += 1;
       continue;
@@ -148,11 +164,13 @@ export async function placspFetchPage(
         }
         throw new PlacspHttpError(res.status, `non-ATOM response from ${url}`);
       }
+      circuit?.recordSuccess();
       return text;
     }
     if ((res.status === 429 || res.status >= 500) && attempt < maxRetries) {
-      const waitMs = 2 ** attempt * baseMs + Math.floor(Math.random() * 250);
-      log({ msg: 'placsp retry', status: res.status, attempt: attempt + 1, waitMs });
+      circuit?.recordFailure();
+      const waitMs = retryWait(attempt);
+      log({ msg: 'placsp retry', url, status: res.status, attempt: attempt + 1, waitMs });
       await sleep(waitMs);
       attempt += 1;
       continue;
@@ -178,6 +196,9 @@ export async function* harvestPlacsp(
   const delayMs = Math.max(opts.requestDelayMs ?? 500, 100);
   const cutoff = windowCutoffIso(opts.months ?? 24, opts.now);
   const feeds = opts.feeds ?? (Object.keys(PLACSP_FEEDS) as PlacspFeedName[]);
+  // One circuit-lite guard per harvest run (C2.3): shared across pages and
+  // feeds so 3 consecutive failures anywhere cool the whole run down.
+  const circuit = opts.circuit ?? createBackoffCircuit();
   const stats: PlacspHarvestStats = {
     entriesSeen: 0,
     deletedSkipped: 0,
@@ -202,7 +223,7 @@ export async function* harvestPlacsp(
       await throttle();
       let page;
       try {
-        page = parseAtomFeed(await placspFetchPage(url, opts), feed);
+        page = parseAtomFeed(await placspFetchPage(url, { ...opts, circuit }), feed);
       } catch (err) {
         stats.feedErrors += 1;
         if (err instanceof PlacspWafError) stats.wafBlocks += 1;

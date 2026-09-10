@@ -13,6 +13,7 @@
 //   never populated, so we read the notice-level total).
 
 import type { TedNotice, TedSearchResponse } from '../domain/types.js';
+import { backoffDelayMs, createBackoffCircuit, type BackoffCircuit } from './backoff.js';
 
 export const TED_SEARCH_URL = 'https://api.ted.europa.eu/v3/notices/search';
 
@@ -58,6 +59,10 @@ export interface TedHarvestOptions {
   maxRetries?: number;
   /** Backoff base in ms (retry wait = base * 2^attempt + jitter; default 1000). */
   backoffBaseMs?: number;
+  /** Shared circuit-lite guard (C2.3): after 3 consecutive failures the next
+   *  attempt waits the circuit cooldown (60s) instead of the short backoff.
+   *  One instance per harvest run — see createBackoffCircuit. */
+  circuit?: BackoffCircuit;
   /** Injectable fetch for tests. */
   fetchFn?: typeof fetch;
   /** Injectable logger; defaults to JSON-lines on stdout. */
@@ -117,6 +122,10 @@ export async function tedSearch(
   const maxRetries = opts.maxRetries ?? 5;
   const baseMs = opts.backoffBaseMs ?? 1000;
   const log = opts.log ?? defaultLog;
+  const circuit = opts.circuit;
+  /** Retry wait: the circuit cooldown when open, else bounded-jitter backoff. */
+  const retryWait = (attempt: number): number =>
+    circuit && circuit.isOpen() ? circuit.waitMs() : backoffDelayMs(attempt, baseMs);
   let attempt = 0;
   for (;;) {
     let res: Response;
@@ -129,18 +138,21 @@ export async function tedSearch(
     } catch (err) {
       // Network-level failure: retry with the same backoff policy.
       if (attempt >= maxRetries) throw err;
-      const waitMs = 2 ** attempt * baseMs + Math.floor(Math.random() * 250);
+      circuit?.recordFailure();
+      const waitMs = retryWait(attempt);
       log({ msg: 'ted retry (network)', attempt: attempt + 1, waitMs, error: String(err) });
       await sleep(waitMs);
       attempt += 1;
       continue;
     }
     if (res.ok) {
+      circuit?.recordSuccess();
       return (await res.json()) as TedSearchResponse;
     }
     const text = await res.text().catch(() => '');
     if ((res.status === 429 || res.status >= 500) && attempt < maxRetries) {
-      const waitMs = 2 ** attempt * baseMs + Math.floor(Math.random() * 250);
+      circuit?.recordFailure();
+      const waitMs = retryWait(attempt);
       log({ msg: 'ted retry', status: res.status, attempt: attempt + 1, waitMs });
       await sleep(waitMs);
       attempt += 1;
@@ -161,6 +173,9 @@ export async function* harvestTedAwards(
   const pageSize = Math.min(opts.pageSize ?? 250, 250);
   const delayMs = Math.max(opts.requestDelayMs ?? 200, 200); // <= 5 req/s, SPEC §8
   const log = opts.log ?? defaultLog;
+  // One circuit-lite guard per harvest run (C2.3): after 3 consecutive
+  // failures the next attempt waits 60s instead of the short backoff.
+  const circuit = opts.circuit ?? createBackoffCircuit();
   const query = buildQuery(windowStartYyyymmdd(opts.months, opts.now));
   log({ msg: 'ted harvest start', query, pageSize, maxNotices: opts.maxNotices ?? null });
 
@@ -184,7 +199,7 @@ export async function* harvestTedAwards(
     };
     if (token) body.iterationNextToken = token;
 
-    const res = await tedSearch(body, opts);
+    const res = await tedSearch(body, { ...opts, circuit });
     pages += 1;
     total = res.totalNoticeCount ?? total;
     const notices = res.notices ?? [];
