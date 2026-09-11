@@ -89,13 +89,15 @@ CREATE TABLE credit_accounts (
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
--- mirrors migrations/004_observability.sql (partial zero_result index kept)
+-- mirrors migrations/004_observability.sql + 011_web_traffic.sql
 CREATE TABLE request_logs (
   id bigserial PRIMARY KEY, ts timestamptz DEFAULT now(),
   client_key text, endpoint text, method text, status int, latency_ms int,
   cpv text, buyer text, company text, error text, paid boolean DEFAULT false,
   q text, zero_result boolean DEFAULT false, user_agent text,
-  source text NOT NULL DEFAULT 'rest' CHECK (source IN ('rest', 'mcp'))
+  source text NOT NULL DEFAULT 'rest' CHECK (source IN ('rest', 'mcp')),
+  kind text NOT NULL DEFAULT 'api' CHECK (kind IN ('api', 'page', 'mcp')),
+  referer text
 );
 CREATE INDEX idx_request_logs_source ON request_logs(source);
 CREATE INDEX idx_request_logs_zero_result ON request_logs(zero_result) WHERE zero_result = true;

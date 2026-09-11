@@ -27,7 +27,9 @@ CREATE TABLE request_logs (
   client_key text, endpoint text, method text, status int, latency_ms int,
   cpv text, buyer text, company text, error text, paid boolean DEFAULT false,
   q text, zero_result boolean DEFAULT false, user_agent text,
-  source text NOT NULL DEFAULT 'rest' CHECK (source IN ('rest', 'mcp'))
+  source text NOT NULL DEFAULT 'rest' CHECK (source IN ('rest', 'mcp')),
+  kind text NOT NULL DEFAULT 'api' CHECK (kind IN ('api', 'page', 'mcp')),
+  referer text
 )`;
 
 const PAYMENTS_DDL = `

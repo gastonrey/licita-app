@@ -10,6 +10,10 @@ import type { Logger } from './log.js';
 
 export type RequestSource = 'rest' | 'mcp';
 
+/** 'page' = public web page view, 'api' = default for REST/API traffic,
+ *  'mcp' = reserved for MCP rows (currently defaults to 'api' via entryValues). */
+export type RequestKind = 'api' | 'page' | 'mcp';
+
 export interface RequestLogEntry {
   client_key: string | null;
   endpoint: string;
@@ -28,11 +32,16 @@ export interface RequestLogEntry {
   /** client user-agent header (truncated to 200 chars) */
   user_agent?: string | null;
   source: RequestSource;
+  /** 'page' for public web page views (status 200 + text/html on known web
+   *  routes), 'api' default for everything else; MCP keeps source='mcp'. */
+  kind?: RequestKind;
+  /** HTTP Referer header for page views (truncated to 200 chars via strField). */
+  referer?: string | null;
 }
 
 const INSERT_SQL = `
-INSERT INTO request_logs (client_key, endpoint, method, status, latency_ms, cpv, buyer, company, error, paid, q, zero_result, user_agent, source)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+INSERT INTO request_logs (client_key, endpoint, method, status, latency_ms, cpv, buyer, company, error, paid, q, zero_result, user_agent, source, kind, referer)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
 `;
 
 export function entryValues(e: RequestLogEntry): unknown[] {
@@ -51,6 +60,8 @@ export function entryValues(e: RequestLogEntry): unknown[] {
     e.zero_result ?? false,
     e.user_agent ?? null,
     e.source,
+    e.kind ?? 'api',
+    strField(e.referer ?? null),
   ];
 }
 
