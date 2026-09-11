@@ -105,5 +105,5 @@ Glama crawls `server.json` and `glama.json` from the repo. Keep both in sync.
 
 - [ ] mcp.so — submitted
 - [ ] Smithery — submitted
-- [ ] Glama — submitted
+- [x] Glama — submitted ✅ live at https://glama.ai/mcp/servers/gastonrey/licita-app (2026-09-10, uses api.eutendersai.com)
 - [ ] awesome-mcp-servers — PR opened/merged
