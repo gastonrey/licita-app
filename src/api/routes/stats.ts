@@ -261,6 +261,20 @@ function rate(part: number, whole: number): number | null {
   return whole > 0 ? Math.round((part / whole) * 10000) / 10000 : null;
 }
 
+/** Host of a Referer header value; '(direct)' for missing/unparseable values.
+ *  PII-safe: only the hostname is kept, never the full URL or query string. */
+export function refererHost(referer: unknown): string {
+  if (referer === null || referer === undefined) return '(direct)';
+  const s = String(referer).trim();
+  if (s.length === 0) return '(direct)';
+  try {
+    const host = new URL(s).hostname;
+    return host.length > 0 ? host : '(direct)';
+  } catch {
+    return '(direct)';
+  }
+}
+
 /** ?limit= — default 50, clamped to [1, 200]; anything invalid falls back to 50. */
 export function parseRecentLimit(v: unknown): number {
   const n = Number(v);
@@ -639,6 +653,46 @@ export function statsHandler(ctx: RouteCtx) {
         error: String(r.error),
         paid: r.paid === true,
       })),
+    };
+    // Web traffic: human page views vs API vs MCP, referrers by host, and
+    // demo conversion (011_web_traffic.sql). Queries use optionalQuery so
+    // old test fixtures and pre-011 databases get zeroed defaults.
+    const pageWhere = range ? 'ts >= $1 AND ts < $2 AND kind = \'page\'' : 'kind = \'page\'';
+    const apiWhere = range ? 'ts >= $1 AND ts < $2 AND kind = \'api\'' : 'kind = \'api\'';
+    const mcpWhere = range ? 'ts >= $1 AND ts < $2 AND source = \'mcp\'' : 'source = \'mcp\'';
+    const demoWhere = range ? 'created_at >= $1 AND created_at < $2' : 'true';
+    const [wtPageViews, wtPaths, wtApi, wtMcp, wtReferrers, wtDemos] = await Promise.all([
+      optionalQuery(db, `SELECT count(*)::int AS n FROM request_logs WHERE ${pageWhere}`, rangeValues),
+      optionalQuery(db, `SELECT endpoint, count(*)::int AS n FROM request_logs WHERE ${pageWhere} GROUP BY endpoint ORDER BY n DESC, endpoint LIMIT 10`, rangeValues),
+      optionalQuery(db, `SELECT count(*)::int AS n FROM request_logs WHERE ${apiWhere}`, rangeValues),
+      optionalQuery(db, `SELECT count(*)::int AS n FROM request_logs WHERE ${mcpWhere}`, rangeValues),
+      optionalQuery(db, `SELECT referer, count(*)::int AS n FROM request_logs WHERE ${pageWhere} GROUP BY referer ORDER BY n DESC, referer`, rangeValues),
+      optionalQuery(db, `SELECT count(*)::int AS n FROM demo_requests WHERE ${demoWhere}`, rangeValues),
+    ]);
+    const pageViewsTotal = Number(wtPageViews.rows[0]?.n ?? 0);
+    const demoRequestsTotal = Number(wtDemos.rows[0]?.n ?? 0);
+    const refererHostCounts = new Map<string, number>();
+    for (const r of wtReferrers.rows) {
+      const host = refererHost(r.referer);
+      refererHostCounts.set(host, (refererHostCounts.get(host) ?? 0) + Number(r.n));
+    }
+    (data as Record<string, unknown>).web_traffic = {
+      page_views: pageViewsTotal,
+      page_views_by_path: wtPaths.rows.map((r) => ({
+        path: String(r.endpoint).replace(/^GET /, ''),
+        requests: Number(r.n),
+      })),
+      api_requests: Number(wtApi.rows[0]?.n ?? 0),
+      mcp_requests: Number(wtMcp.rows[0]?.n ?? 0),
+      referrers: [...refererHostCounts.entries()]
+        .map(([referrer, requests]) => ({ referrer, requests }))
+        .sort((a, b) => b.requests - a.requests || a.referrer.localeCompare(b.referrer))
+        .slice(0, 10),
+      demo_conversion: {
+        page_views: pageViewsTotal,
+        demo_requests: demoRequestsTotal,
+        conversion_rate: pageViewsTotal > 0 ? Math.round((demoRequestsTotal / pageViewsTotal) * 100) / 100 : 0,
+      },
     };
 
     return reply.send(envelope(req, data));

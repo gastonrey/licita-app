@@ -55,6 +55,36 @@ export function rateLimitKey(req: FastifyRequest): string {
   return `ip:${req.ip}`;
 }
 
+// Public web page routes served by registerWeb (011_web_traffic.sql: kind='page').
+// Exact paths (TRUST_PAGES slugs + explicit data/spain, data/eu, data)
+// plus prefix rules for dynamic slugs (/use-cases/:slug, /data/:region).
+// The content-type gate (text/html) keeps /mcp (SSE) and /llms.txt (text/plain)
+// out of the page bucket; /dashboard/* pages are operator-only, not public.
+const PUBLIC_WEB_EXACT = new Set([
+  '/',
+  '/pricing',
+  '/docs',
+  '/use-cases',
+  '/data',
+  '/data/spain',
+  '/data/eu',
+  '/methodology',
+  '/security',
+  '/privacy',
+  '/terms',
+  '/status',
+]);
+const PUBLIC_WEB_PREFIX = ['/use-cases/', '/data/'];
+
+function isPublicWebPage(req: FastifyRequest, reply: FastifyReply): boolean {
+  if (reply.statusCode !== 200) return false;
+  const ct = reply.getHeader('content-type');
+  const contentType = typeof ct === 'string' ? ct : Array.isArray(ct) ? String(ct[0]) : '';
+  if (!contentType.toLowerCase().startsWith('text/html')) return false;
+  const path = (req.url ?? '').split('?')[0];
+  return PUBLIC_WEB_EXACT.has(path) || PUBLIC_WEB_PREFIX.some((p) => path.startsWith(p));
+}
+
 export async function buildServer(config: AppConfig, db: Db): Promise<FastifyInstance> {
   // Own payment initialization: REST payment enforcement must not depend on
   // mountMcp. mountMcp reuses this initialized runtime via getPaymentProvider().
@@ -124,6 +154,7 @@ export async function buildServer(config: AppConfig, db: Db): Promise<FastifyIns
     const query = (req.query ?? {}) as Record<string, unknown>;
     const params = (req.params ?? {}) as Record<string, unknown>;
     const routeUrl = req.routeOptions?.url;
+    const webPage = isPublicWebPage(req, reply);
     logRequest(db, log, {
       client_key: req.payment?.clientKey ?? hashIp(req.ip, config.operatorKey),
       endpoint: `${req.method} ${typeof routeUrl === 'string' ? routeUrl : req.url.split('?')[0]}`,
@@ -150,6 +181,8 @@ export async function buildServer(config: AppConfig, db: Db): Promise<FastifyIns
       zero_result: req.zeroResult === true,
       user_agent: strField(req.headers['user-agent']),
       source: 'rest',
+      kind: webPage ? 'page' : 'api',
+      referer: webPage ? strField(req.headers['referer'] as string | undefined) : null,
     });
     done();
   });
