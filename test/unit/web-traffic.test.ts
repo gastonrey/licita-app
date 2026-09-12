@@ -126,6 +126,28 @@ describe('onResponse page classification (011)', () => {
     await app.close();
   });
 
+  it('marks GET /en as kind=page (bilingual English homepage)', async () => {
+    const { db, logs } = await makeHookDb();
+    const app = await buildServer(config, db);
+    registerWeb(app, config);
+    await app.inject({ method: 'GET', url: '/en' });
+    await waitForRows(logs, 1);
+    const { rows } = await logs.query('SELECT kind, endpoint FROM request_logs ORDER BY id');
+    expect(rows[0]).toMatchObject({ kind: 'page', endpoint: 'GET /en' });
+    await app.close();
+  });
+
+  it('does not count the /es 301 redirect as a page view (status !== 200)', async () => {
+    const { db, logs } = await makeHookDb();
+    const app = await buildServer(config, db);
+    registerWeb(app, config);
+    await app.inject({ method: 'GET', url: '/es' });
+    await waitForRows(logs, 1);
+    const { rows } = await logs.query('SELECT kind, status FROM request_logs ORDER BY id');
+    expect(rows[0]).toMatchObject({ kind: 'api', status: 301 });
+    await app.close();
+  });
+
   it('uses referer=(direct) equivalent when referer header is absent', async () => {
     const { db, logs } = await makeHookDb();
     const app = await buildServer(config, db);

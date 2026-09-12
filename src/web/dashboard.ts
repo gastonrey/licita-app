@@ -46,6 +46,11 @@ const PAGE = `<!doctype html>
   --space-4: 1rem;
   --space-5: 1.25rem;
   --space-6: 1.5rem;
+  --space-7: 1.75rem;
+  --space-8: 2rem;
+  --space-9: 2.25rem;
+  --space-10: 2.5rem;
+  --space-16: 4rem;
   --font-body: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
   --font-heading: 'Source Serif 4', Georgia, serif;
   --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
@@ -125,7 +130,7 @@ summary { cursor: pointer; color: var(--link-color); font-weight: 600; }
 /* === INPUTS === */
 input, button, select { font: inherit; }
 input[type="date"], input[type="password"], input[type="search"], select {
-  height: 36px;
+  height: var(--space-9);
   padding: 0 var(--space-3);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
@@ -141,7 +146,7 @@ input:focus-visible, select:focus-visible {
 button {
   cursor: pointer;
   touch-action: manipulation;
-  min-height: 36px;
+  min-height: var(--space-9);
   border: none;
   border-radius: var(--radius-default);
   padding: 0 var(--space-4);
@@ -251,7 +256,7 @@ button:focus-visible { outline: 3px solid var(--color-brand); outline-offset: 3p
   padding: var(--space-3) var(--space-6);
   background: var(--color-surface);
   border-bottom: 1px solid var(--color-border);
-  min-height: 64px;
+  min-height: var(--space-16);
 }
 .header-bar .page-title-wrap { min-width: 220px; }
 .header-bar .page-title-wrap h1 { font-size: var(--text-xl); line-height: 1.2; }
@@ -523,7 +528,7 @@ section[role="tabpanel"] > :first-child:is(h2) { margin-top: 0; }
 .traffic-chart .chart-selected { pointer-events: none; }
 .chart-tooltip { position: absolute; transform: translate(-50%, -100%); background: var(--color-foreground); color: var(--color-ink); padding: .4rem .6rem; border-radius: var(--radius-sm); font-size: var(--text-sm); line-height: 1.4; display: flex; flex-direction: column; gap: .1rem; pointer-events: none; box-shadow: 0 4px 12px rgba(0, 0, 0, .4); white-space: nowrap; z-index: 10; }
 .chart-tooltip strong { font-weight: 600; }
-.chart-tooltip::after { content: ''; position: absolute; bottom: -4px; left: 50%; transform: translateX(-50%) rotate(45deg); width: 8px; height: 8px; background: var(--color-foreground); }
+.chart-tooltip::after { content: ''; position: absolute; bottom: -4px; left: 50%; transform: translateX(-50%) rotate(45deg); width: var(--space-2); height: var(--space-2); background: var(--color-foreground); }
 .chart-hint { font-size: var(--text-sm); margin: var(--space-2) 0 0; }
 .chart-filter-banner { background: var(--color-brand-soft); border: 1px solid var(--color-brand); border-radius: var(--radius-sm); padding: var(--space-2) var(--space-3); margin: 0 0 var(--space-3); font-size: var(--text-sm); display: flex; align-items: center; gap: var(--space-2); }
 .chart-filter-banner a { color: var(--color-brand); font-weight: 600; text-decoration: underline; }
@@ -555,7 +560,7 @@ section[role="tabpanel"] > :first-child:is(h2) { margin-top: 0; }
 .endpoint-bar[aria-pressed="true"] { background: var(--color-brand-soft); border-color: var(--color-brand); }
 .endpoint-bar-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .endpoint-bar-label code { font-family: var(--font-mono); font-size: var(--text-sm); color: var(--color-foreground); background: transparent; padding: 0; }
-.endpoint-bar-track { position: relative; height: 8px; background: var(--color-ink-mid); border-radius: 4px; overflow: hidden; min-width: 3rem; }
+.endpoint-bar-track { position: relative; height: var(--space-2); background: var(--color-ink-mid); border-radius: 4px; overflow: hidden; min-width: 3rem; }
 .endpoint-bar-fill { display: block; height: 100%; border-radius: 4px; transition: width .3s ease; }
 .endpoint-bar-stats { display: flex; gap: var(--space-3); align-items: baseline; font-size: var(--text-sm); color: var(--color-muted-foreground); justify-content: flex-end; }
 .endpoint-bar-visits { font-weight: 600; color: var(--color-foreground); font-variant-numeric: tabular-nums; }
@@ -587,7 +592,7 @@ section[role="tabpanel"] > :first-child:is(h2) { margin-top: 0; }
 .pagination { display: flex; align-items: center; justify-content: center; gap: var(--space-3); margin: var(--space-3) 0; }
 .pagination button {
   min-width: 2.75rem;
-  height: 36px;
+  height: var(--space-9);
   border: 1px solid var(--card-border);
   border-radius: var(--radius-sm);
   background: var(--tab-bg);
@@ -617,7 +622,7 @@ section[role="tabpanel"] > :first-child:is(h2) { margin-top: 0; }
 /* === TOOLBAR === */
 .toolbar { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: center; }
 .btn-sm {
-  height: 36px;
+  height: var(--space-9);
   padding: 0 var(--space-3);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
@@ -640,7 +645,7 @@ section[role="tabpanel"] > :first-child:is(h2) { margin-top: 0; }
 .st-5 { color: var(--color-destructive); font-weight: 600; }
 
 /* === BAR === */
-.bar { background: var(--color-success); height: 8px; min-width: 2px; }
+.bar { background: var(--color-success); height: var(--space-2); min-width: 2px; }
 
 /* === WARNING === */
 .warning { color: #e3c077; background: rgba(210, 153, 34, 0.1); border: 1px solid rgba(210, 153, 34, 0.4); padding: var(--space-3) var(--space-4); border-radius: var(--radius-sm); font-size: var(--text-sm); }
@@ -649,10 +654,10 @@ section[role="tabpanel"] > :first-child:is(h2) { margin-top: 0; }
 .funnel { display: flex; flex-direction: column; gap: var(--space-2); margin: var(--space-2) 0 var(--space-4); }
 .funnel-row { display: grid; grid-template-columns: 9rem 1fr 5rem; align-items: center; gap: var(--space-3); font-size: var(--text-sm); }
 .funnel-row .f-label { color: var(--color-muted-foreground); text-align: right; font-weight: 500; }
-.funnel-track { height: 22px; background: var(--color-ink-mid); border-radius: 6px; overflow: hidden; }
+.funnel-track { height: var(--space-6); background: var(--color-ink-mid); border-radius: var(--radius-sm); overflow: hidden; }
 .funnel-fill {
-  height: 100%; border-radius: 6px; display: flex; align-items: center; justify-content: flex-end;
-  padding-right: 8px; font-size: 11px; font-weight: 700; color: #0d1117; min-width: 2.25rem;
+  height: 100%; border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: flex-end;
+  padding-right: var(--space-2); font-size: 11px; font-weight: 700; color: #0d1117; min-width: 2.25rem;
 }
 .funnel-fill.s1 { background: #8b949e; }
 .funnel-fill.s2 { background: #58a6ff; }
@@ -668,13 +673,13 @@ section[role="tabpanel"] > :first-child:is(h2) { margin-top: 0; }
 .lb-row .lb-top { display: flex; justify-content: space-between; font-size: var(--text-sm); margin-bottom: 4px; gap: var(--space-2); }
 .lb-row .lb-name { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lb-row .lb-val { color: var(--color-muted-foreground); font-variant-numeric: tabular-nums; flex-shrink: 0; }
-.lb-track { height: 7px; background: var(--color-ink-mid); border-radius: 6px; overflow: hidden; }
-.lb-fill { height: 100%; background: var(--color-info); border-radius: 6px; }
+.lb-track { height: 7px; background: var(--color-ink-mid); border-radius: var(--radius-sm); overflow: hidden; }
+.lb-fill { height: 100%; background: var(--color-info); border-radius: var(--radius-sm); }
 
 /* === COHORT ROWS === */
 .cohort-wrap { overflow-x: auto; }
-.cohort-grid { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; min-width: 640px; }
-.cohort-row { display: grid; grid-template-columns: 110px repeat(6, 1fr); gap: 8px; align-items: center; font-size: 12.5px; }
+.cohort-grid { display: flex; flex-direction: column; gap: var(--space-2); margin-top: var(--space-2); min-width: 640px; }
+.cohort-row { display: grid; grid-template-columns: 110px repeat(6, 1fr); gap: var(--space-2); align-items: center; font-size: 12.5px; }
 .cohort-row.head { color: var(--color-muted-foreground); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
 .cohort-cell { text-align: right; font-variant-numeric: tabular-nums; }
 .cohort-cell:first-child { text-align: left; }
@@ -849,7 +854,7 @@ section[hidden] { display: none; }
 
     <!-- Drill-down detail header (hidden unless a detail view is open) -->
     <div id="detail-head" class="detail-head" hidden>
-      <button id="detail-back" class="detail-back" type="button" aria-label="Back to the full view">← Volver</button>
+      <button id="detail-back" class="detail-back" type="button" aria-label="Back to the full view">← Back</button>
       <span id="detail-breadcrumb" class="breadcrumb"></span>
     </div>
 

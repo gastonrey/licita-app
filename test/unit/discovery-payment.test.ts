@@ -129,21 +129,29 @@ describe('discovery surfaces teach the x402 v2 flow', () => {
 
   it('/pricing page advertises prepaid credit bundles and x-client-key usage', async () => {
     const app = await webApp();
-    const res = await app.inject({ method: 'GET', url: '/pricing' });
-    expect(res.statusCode).toBe(200);
-    for (const needle of [
-      'Credits',
-      'POST /v1/billing/credits/5',
-      'POST /v1/billing/credits/10',
-      'POST /v1/billing/credits/25',
-      '$5.00',
-      '$10.00',
-      '$25.00',
-      'x-client-key',
-      'no subscription',
-    ]) {
-      expect(res.body, `/pricing missing "${needle}"`).toContain(needle);
+    // Contract tokens assert on both locales; text needles assert ES at /, EN at /en
+    // (content flip S2.2, needle migration matrix S2.3).
+    for (const url of ['/pricing', '/en/pricing']) {
+      const res = await app.inject({ method: 'GET', url });
+      expect(res.statusCode, `${url} status`).toBe(200);
+      for (const needle of [
+        'POST /v1/billing/credits/5',
+        'POST /v1/billing/credits/10',
+        'POST /v1/billing/credits/25',
+        '$5.00',
+        '$10.00',
+        '$25.00',
+        'x-client-key',
+      ]) {
+        expect(res.body, `${url} missing "${needle}"`).toContain(needle);
+      }
     }
+    const es = await app.inject({ method: 'GET', url: '/pricing' });
+    expect(es.body).toContain('Créditos');
+    expect(es.body).toContain('sin suscripción');
+    const en = await app.inject({ method: 'GET', url: '/en/pricing' });
+    expect(en.body).toContain('Credits');
+    expect(en.body).toContain('no subscription');
     await app.close();
   });
 
@@ -211,11 +219,21 @@ describe('discovery surfaces teach the x402 v2 flow', () => {
 
   it('/pricing advertises the creem monthly subscription arm when enabled (B2.6)', async () => {
     const app = await webApp('dev', { creem: { enabled: true, apiKey: 'creem_test_x', webhookSecret: 'whsec_x', productId: 'prod_x', priceCents: 4950 } });
-    const res = await app.inject({ method: 'GET', url: '/pricing' });
-    expect(res.statusCode).toBe(200);
-    for (const needle of ['Monthly subscription', '€49.50/month', 'POST /v1/creem/checkout', 'POST /v1/creem/webhook', 'kind=creem', '402']) {
-      expect(res.body, `/pricing missing "${needle}"`).toContain(needle);
+    // Contract tokens assert on both locales; text needles assert ES at /, EN at /en
+    // (content flip S2.2, needle migration matrix S2.3). Prices derive from config, never hardcoded.
+    for (const url of ['/pricing', '/en/pricing']) {
+      const res = await app.inject({ method: 'GET', url });
+      expect(res.statusCode, `${url} status`).toBe(200);
+      for (const needle of ['POST /v1/creem/checkout', 'POST /v1/creem/webhook', 'kind=creem', '402']) {
+        expect(res.body, `${url} missing "${needle}"`).toContain(needle);
+      }
     }
+    const es = await app.inject({ method: 'GET', url: '/pricing' });
+    expect(es.body).toContain('Suscripción mensual');
+    expect(es.body).toContain('€49.50/mes'); // derived from CREEM_PRICE_CENTS=4950
+    const en = await app.inject({ method: 'GET', url: '/en/pricing' });
+    expect(en.body).toContain('Monthly subscription');
+    expect(en.body).toContain('€49.50/month'); // derived from CREEM_PRICE_CENTS=4950
     await app.close();
   });
 });
@@ -245,11 +263,20 @@ describe('P1 use-case and data pages (agent-first discovery)', () => {
       ['buyer-intelligence', 'GET /v1/buyers/:id/history'],
       ['renewals-forecasting', 'GET /v1/renewals'],
     ];
+    // Root pages are Spanish after the content flip (S2.2): text needles assert ES.
     for (const [slug, endpoint] of cases) {
       const res = await app.inject({ method: 'GET', url: `/use-cases/${slug}` });
       expect(res.statusCode, `use-case ${slug} status`).toBe(200);
-      for (const needle of [endpoint, 'labeled sample', 'Honesty note', 'provenance']) {
+      for (const needle of [endpoint, 'muestra etiquetada', 'Nota de honestidad', 'provenance']) {
         expect(res.body, `${slug} missing "${needle}"`).toContain(needle);
+      }
+    }
+    // English variants live at /en/use-cases/<slug> (needle migration matrix S2.3).
+    for (const [slug, endpoint] of cases) {
+      const res = await app.inject({ method: 'GET', url: `/en/use-cases/${slug}` });
+      expect(res.statusCode, `use-case ${slug} en status`).toBe(200);
+      for (const needle of [endpoint, 'labeled sample', 'Honesty note', 'provenance']) {
+        expect(res.body, `${slug} en missing "${needle}"`).toContain(needle);
       }
     }
     const missing = await app.inject({ method: 'GET', url: '/use-cases/nope' });
@@ -259,8 +286,11 @@ describe('P1 use-case and data pages (agent-first discovery)', () => {
 
   it('data pages describe sources, coverage and provenance honestly', async () => {
     const app = await webApp();
+    // Root pages are Spanish after the content flip (S2.2): /data needles assert ES,
+    // /en/data asserts the EN variants (needle migration matrix S2.3).
     const data: Array<[string, string[]]> = [
-       ['/data', ['Current records and indexed ranges', 'TED', 'PLACSP', '/data/spain', '/data/eu']],
+      ['/data', ['Registros actuales y rangos indexados', 'TED', 'PLACSP', '/data/spain', '/data/eu']],
+      ['/en/data', ['Current records and indexed ranges', 'TED', 'PLACSP', '/en/data/spain', '/en/data/eu']],
       ['/data/spain', ['PLACSP', '2026/CONTRAT/000064', 'Oleiros', 'GET /v1/search']],
       ['/data/eu', ['TED', 'ted.europa.eu', 'GET /v1/tenders/:id']],
     ];
