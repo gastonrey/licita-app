@@ -23,7 +23,9 @@ describe('GET /sitemap.xml (DR3)', () => {
     const res = await app.inject({ method: 'GET', url: '/sitemap.xml' });
     expect(res.statusCode).toBe(200);
     expect(res.headers['content-type']).toMatch(/^application\/xml/);
-    expect(res.body).toContain('<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">');
+    // DISCLOSED change (spec R3): the urlset tag additionally declares the
+    // xhtml namespace for the per-locale hreflang alternates emitted below.
+    expect(res.body).toContain('<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">');
     expect(res.body).toContain('</urlset>');
     for (const path of [
       '/', '/pricing', '/docs', '/use-cases', '/use-cases/tender-intelligence',
@@ -96,6 +98,77 @@ describe('page() head: canonical + OG + meta description (DR4)', () => {
     // No hardcoded deployment host. (The public contact email
     // eutendersai@gmail.com is an address, not a host — hence eutenders\.)
     expect(res.body).not.toMatch(/duckdns|licita\.app|eutenders\./);
+    await app.close();
+  });
+});
+
+describe('per-locale SEO head (R3)', () => {
+  it('homepage pair: per-locale canonical, hreflang es/en + x-default→/, og:locale pair, JSON-LD inLanguage', async () => {
+    const app = await webApp();
+    const es = await app.inject({ method: 'GET', url: '/' });
+    expect(es.statusCode).toBe(200);
+    expect(es.body).toContain(`<link rel="canonical" href="${BASE}/">`);
+    expect(es.body).toContain(`<link rel="alternate" hreflang="es" href="${BASE}/">`);
+    expect(es.body).toContain(`<link rel="alternate" hreflang="en" href="${BASE}/en">`);
+    expect(es.body).toContain(`<link rel="alternate" hreflang="x-default" href="${BASE}/">`);
+    expect(es.body).toContain('<meta property="og:locale" content="es_ES">');
+    expect(es.body).toContain('<meta property="og:locale:alternate" content="en_US">');
+    expect(es.body).toContain('"inLanguage": "es"');
+
+    const en = await app.inject({ method: 'GET', url: '/en' });
+    expect(en.statusCode).toBe(200);
+    expect(en.body).toContain(`<link rel="canonical" href="${BASE}/en">`);
+    expect(en.body).toContain(`<link rel="alternate" hreflang="es" href="${BASE}/">`);
+    expect(en.body).toContain(`<link rel="alternate" hreflang="en" href="${BASE}/en">`);
+    expect(en.body).toContain(`<link rel="alternate" hreflang="x-default" href="${BASE}/">`);
+    expect(en.body).toContain('<meta property="og:locale" content="en_US">');
+    expect(en.body).toContain('<meta property="og:locale:alternate" content="es_ES">');
+    expect(en.body).toContain('"inLanguage": "en"');
+    await app.close();
+  });
+
+  it('/docs stays single-locale: canonical + lone og:locale, no hreflang/x-default/og:locale:alternate, switcher suppressed', async () => {
+    const app = await webApp();
+    const res = await app.inject({ method: 'GET', url: '/docs' });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toContain(`<link rel="canonical" href="${BASE}/docs">`);
+    expect(res.body).toContain('<meta property="og:locale" content="en_US">');
+    expect(res.body).not.toContain('hreflang="x-default"');
+    expect(res.body).not.toContain('<link rel="alternate" hreflang="');
+    expect(res.body).not.toContain('<meta property="og:locale:alternate"');
+    expect(res.body).not.toContain('class="lang-switch"');
+    await app.close();
+  });
+});
+
+describe('sitemap.xml per-locale alternates (R3)', () => {
+  it('emits xhtml:link alternates (es | en | x-default) per human pair, no /es URLs, single-locale /docs entry', async () => {
+    const app = await webApp();
+    const res = await app.inject({ method: 'GET', url: '/sitemap.xml' });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toContain('xmlns:xhtml="http://www.w3.org/1999/xhtml"');
+    // Per-pair alternates on a human route.
+    expect(res.body).toContain(`<xhtml:link rel="alternate" hreflang="es" href="${BASE}/pricing" />`);
+    expect(res.body).toContain(`<xhtml:link rel="alternate" hreflang="en" href="${BASE}/en/pricing" />`);
+    expect(res.body).toContain(`<xhtml:link rel="alternate" hreflang="x-default" href="${BASE}/" />`);
+    // Home pair: the en alternate is /en, never /en/.
+    expect(res.body).toContain(`<xhtml:link rel="alternate" hreflang="en" href="${BASE}/en" />`);
+    // No /es URLs anywhere — locs or alternative hrefs (301'd out of the sitemap).
+    expect(res.body).not.toContain(`${BASE}/es`);
+    // /docs is single-locale: a bare loc entry with NO alternates before the close.
+    expect(res.body).toContain(`<url><loc>${BASE}/docs</loc></url>`);
+    expect(res.body).toMatch(new RegExp(`<url><loc>${BASE}/docs</loc></url>\\s*</urlset>`));
+    await app.close();
+  });
+
+  it('uses root-relative alternate hrefs when BASE_URL is unset', async () => {
+    const app = await webApp('');
+    const res = await app.inject({ method: 'GET', url: '/sitemap.xml' });
+    expect(res.body).toContain('<xhtml:link rel="alternate" hreflang="es" href="/pricing" />');
+    expect(res.body).toContain('<xhtml:link rel="alternate" hreflang="en" href="/en/pricing" />');
+    expect(res.body).toContain('<xhtml:link rel="alternate" hreflang="x-default" href="/" />');
+    // Alternate hrefs never carry a hardcoded host.
+    expect(res.body).not.toMatch(/hreflang="[^"]*" href="[^"]*https?:\/\//);
     await app.close();
   });
 });

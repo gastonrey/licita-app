@@ -45,6 +45,8 @@ import { pricingHandler } from './routes/pricing.js';
 import { healthFeatures, readinessHandler } from './routes/readiness.js';
 import { billingAmountValidation, billingGetHandler, billingPurchaseHandler, creemCheckoutHandler, creemCheckoutValidation, creemWebhookHandler } from './routes/billing.js';
 import { demoStatsHandler, paymentsStatsHandler, recentStatsHandler, statsAuth, statsHandler, statsQueryValidation } from './routes/stats.js';
+import { renderWeb404 } from '../web/pages.js';
+import { localeFromPath } from '../web/i18n.js';
 
 /** Rate-limit identity: X-PAYMENT-derived (proof hash) when present, else client IP. */
 export function rateLimitKey(req: FastifyRequest): string {
@@ -62,6 +64,7 @@ export function rateLimitKey(req: FastifyRequest): string {
 // out of the page bucket; /dashboard/* pages are operator-only, not public.
 const PUBLIC_WEB_EXACT = new Set([
   '/',
+  '/en',
   '/pricing',
   '/docs',
   '/use-cases',
@@ -74,7 +77,7 @@ const PUBLIC_WEB_EXACT = new Set([
   '/terms',
   '/status',
 ]);
-const PUBLIC_WEB_PREFIX = ['/use-cases/', '/data/'];
+const PUBLIC_WEB_PREFIX = ['/use-cases/', '/data/', '/en/'];
 
 function isPublicWebPage(req: FastifyRequest, reply: FastifyReply): boolean {
   if (reply.statusCode !== 200) return false;
@@ -218,15 +221,28 @@ export async function buildServer(config: AppConfig, db: Db): Promise<FastifyIns
 
   app.setNotFoundHandler((req, reply) => {
     req.errorCode = 'not_found';
-    void reply
+    const path = req.url.split('?')[0];
+    // Machine/API paths keep the JSON not_found envelope; everything else
+    // renders the locale-aware HTML 404 (spec R4/M2 + R4.1.1 JSON drift).
+    const isMachinePath =
+      /^\/(?:v1|mcp)(?:\/|$)/.test(path) ||
+      /\.json$/.test(path) ||
+      /^\/(?:openapi\.json|\.well-known|llms\.txt|robots\.txt|styles\.css|sitemap\.xml|health)(?:\/|$)/.test(path);
+    if (isMachinePath) {
+      return reply
+        .code(404)
+        .send(
+          errorEnvelope(
+            'not_found',
+            `Route ${req.method} ${path} not found.`,
+            'See GET /openapi.json or /llms.txt for available endpoints.',
+          ),
+        );
+    }
+    return reply
       .code(404)
-      .send(
-        errorEnvelope(
-          'not_found',
-          `Route ${req.method} ${req.url.split('?')[0]} not found.`,
-          'See GET /openapi.json or /llms.txt for available endpoints.',
-        ),
-      );
+      .type('text/html; charset=utf-8')
+      .send(renderWeb404(config, localeFromPath(path)));
   });
 
   // --- routes -------------------------------------------------------------------

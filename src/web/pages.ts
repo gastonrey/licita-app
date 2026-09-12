@@ -3,11 +3,13 @@
 // semantic HTML, no JS. Customer-facing brand is "Licita".
 // /openapi.json is served by src/api/server.ts (W2); we only link to it.
 
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { CREDIT_BUNDLES, ENDPOINT_PRICES } from '../domain/types.js';
 import { absoluteUrl, type AppConfig } from '../config.js';
 import { registerDevFaucet } from '../pay/devProvider.js';
 import { HUMAN_CSS } from './site.css.js';
+import { t, href, otherLocale, languageName, type LocaleCode } from './i18n.js';
+import type { TrustPageSlug } from './locales/types.js';
 
 const CSS = `
 :root { color-scheme: light; }
@@ -29,29 +31,64 @@ const SITE_DESCRIPTION =
   'Licita — evidence-backed public procurement intelligence: EU (TED) and Spain (PLACSP) tenders, buyers, suppliers and deterministic renewal signals, queryable over REST and MCP.';
 
 /**
- * SEO/social head extras for a human page (spec DR4): per-path canonical,
+ * SEO/social head extras for a human page (spec DR3/DR4 + R3): per-locale
+ * canonical, hreflang pair (es | en) + x-default→/, og:locale + og:locale:alternate,
  * og:type/site_name/title/url and meta description, all derived from
  * config.baseUrl (root-relative fallback when BASE_URL is unset — dev/test).
+ * Single-locale pages (/docs) render canonical + their own og:locale only —
+ * no hreflang alternates, no x-default (design: docs opts.switcher=false).
  */
-function pageMeta(config: AppConfig, path: string, title: string, description?: string): string {
+function pageMeta(
+  locale: LocaleCode,
+  config: AppConfig,
+  path: string,
+  title: string,
+  description?: string,
+  opts: { singleLocale?: boolean } = {},
+): string {
   const url = escapeAttr(absoluteUrl(config.baseUrl, path));
-  return [
-    `<link rel="canonical" href="${url}">`,
+  const esHref = absoluteUrl(
+    config.baseUrl,
+    locale === 'es' ? path : path === '/en' ? '/' : path.replace(/^\/en(?=\/|$)/, '') || '/',
+  );
+  const enHref = absoluteUrl(
+    config.baseUrl,
+    locale === 'en' ? path : path === '/' ? '/en' : `/en${path}`,
+  );
+  const lines = [`<link rel="canonical" href="${url}">`];
+  if (!opts.singleLocale) {
+    lines.push(
+      `<link rel="alternate" hreflang="es" href="${escapeAttr(esHref)}">`,
+      `<link rel="alternate" hreflang="en" href="${escapeAttr(enHref)}">`,
+      `<link rel="alternate" hreflang="x-default" href="${escapeAttr(absoluteUrl(config.baseUrl, '/'))}">`,
+    );
+  }
+  lines.push(`<meta property="og:locale" content="${locale === 'es' ? 'es_ES' : 'en_US'}">`);
+  if (!opts.singleLocale) {
+    lines.push(`<meta property="og:locale:alternate" content="${locale === 'es' ? 'en_US' : 'es_ES'}">`);
+  }
+  lines.push(
     '<meta property="og:type" content="website">',
     '<meta property="og:site_name" content="Licita">',
     `<meta property="og:title" content="${escapeAttr(`${title} — Licita`)}">`,
     `<meta property="og:url" content="${url}">`,
     `<meta name="description" content="${escapeAttr(description ?? SITE_DESCRIPTION)}">`,
-  ].join('\n');
+  );
+  return lines.join('\n');
 }
 
 function page(
+  locale: LocaleCode,
   title: string,
   body: string,
-  opts: { config?: AppConfig; path?: string; description?: string } = {},
+  opts: { config?: AppConfig; path?: string; description?: string; switcher?: boolean; noindex?: boolean } = {},
 ): string {
   const meta =
-    opts.config && opts.path !== undefined ? pageMeta(opts.config, opts.path, title, opts.description) : '';
+    opts.config && opts.path !== undefined
+      ? pageMeta(locale, opts.config, opts.path, title, opts.description, {
+          singleLocale: opts.switcher === false,
+        })
+      : '';
   const jsonLd = `
 <script type="application/ld+json">
 {
@@ -59,17 +96,19 @@ function page(
   "@type": ["WebSite", "SoftwareApplication"],
   "name": "Licita",
   "url": "${opts.config && opts.path !== undefined ? absoluteUrl(opts.config.baseUrl, opts.path) : opts.config?.baseUrl ?? ''}",
-  "description": "${opts.description ?? 'Evidence-backed public procurement intelligence: EU (TED) and Spain (PLACSP) tenders, buyers, suppliers and deterministic renewal signals, queryable over REST and MCP.'}",
+  "inLanguage": "${locale}",
+  "description": "${opts.description ?? t(locale, 'jsonLd.description')}",
   "applicationCategory": "BusinessApplication",
   "operatingSystem": "Web"
 }
 </script>`.trim();
   return `<!doctype html>
-<html lang="en">
+<html lang="${locale}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#F6F3EA">
+${opts.noindex ? '<meta name="robots" content="noindex">' : ''}
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=Source+Serif+4:wght@400;600;700&display=swap" rel="stylesheet">
@@ -80,44 +119,59 @@ ${jsonLd}
 <style>${CSS}</style>
 </head>
 <body>
-${nav()}
+${nav(locale, opts.path ?? '/', opts.switcher !== false)}
 <main id="main-content">
 ${body}
 </main>
-${footer()}
+${footer(locale)}
 <script>(function(){var b=document.getElementById('burger'),n=document.getElementById('primary-nav');if(b&&n){b.addEventListener('click',function(){var o=n.classList.toggle('open');b.setAttribute('aria-expanded',o?'true':'false');b.textContent=o?'✕':'☰';});}})();</script>
 </body></html>`;
 }
 
-/** Header Charlie (static, single header) — shared across every public page. */
-function nav(): string {
-  return `<a class="skip-link" href="#main-content">Skip to content</a>
+/**
+ * Header Charlie (static, single header) — shared across every public page.
+ * `path` is the page's own route (used to keep the locale switcher on the
+ * same page); `withSwitch` renders the path-preserving `.lang-switch` link.
+ */
+function nav(locale: LocaleCode, path: string, withSwitch: boolean): string {
+  const l = locale;
+  const target = otherLocale(l);
+  const switchHref =
+    l === 'en' ? (path === '/en' ? '/' : path.replace(/^\/en(?=\/|$)/, '') || '/') : href('en', path);
+  const switcher = withSwitch
+    ? `\n<a class="lang-switch" lang="${target}" hreflang="${target}" href="${switchHref}">${languageName(target)}</a>`
+    : '';
+  return `<a class="skip-link" href="#main-content">${t(l, 'nav.skipToContent')}</a>
 <header class="site-header">
 <div class="header-bar">
-<a class="site-brand" href="/">Licita</a>
-<nav class="site-nav" id="primary-nav" aria-label="Primary"><a href="/">Home</a><a href="/use-cases">Use cases</a><a href="/data">Coverage &amp; methodology</a><a href="/pricing">Pricing</a><a href="/docs">Docs</a><a href="/mcp">MCP</a></nav>
-<button class="burger" id="burger" type="button" aria-expanded="false" aria-controls="primary-nav" aria-label="Toggle menu">☰</button>
-<span class="header-cta"><a class="btn btn-sm" href="/#demo">Request demo</a></span>
+<a class="site-brand" href="${href(l, '/')}">${t(l, 'nav.brand')}</a>
+<nav class="site-nav" id="primary-nav" aria-label="${t(l, 'nav.navLabel')}"><a href="${href(l, '/')}">${t(l, 'nav.home')}</a><a href="${href(l, '/use-cases')}">${t(l, 'nav.useCases')}</a><a href="${href(l, '/data')}">${t(l, 'nav.coverageAndMethodology')}</a><a href="${href(l, '/pricing')}">${t(l, 'nav.pricing')}</a><a href="${href(l, '/docs')}">${t(l, 'nav.docs')}</a><a href="${href(l, '/mcp')}">${t(l, 'nav.mcp')}</a></nav>
+<button class="burger" id="burger" type="button" aria-expanded="false" aria-controls="primary-nav" aria-label="${t(l, 'nav.toggleMenu')}">☰</button>
+<span class="header-cta"><a class="btn btn-sm" href="${href(l, '/#demo')}">${t(l, 'nav.requestDemo')}</a></span>${switcher}
 </div>
 </header>`;
 }
 
 /** ENDPOINT_PRICES rows (Research is config-owned and rendered separately). */
-const ENDPOINT_ROWS = Object.entries(ENDPOINT_PRICES)
-  .map(
-    ([endpoint, price]) =>
-      `<tr><td><code>${endpoint}</code></td><td class="num">${price === '0.00' ? '<span class="tag">free</span>' : `$${price}`}</td></tr>`,
-  )
-  .join('\n');
+function endpointRows(locale: LocaleCode): string {
+  return Object.entries(ENDPOINT_PRICES)
+    .map(
+      ([endpoint, price]) =>
+        `<tr><td><code>${endpoint}</code></td><td class="num">${
+          price === '0.00' ? `<span class="tag">${t(locale, 'pricing.priceTable.freeTag')}</span>` : `$${price}`
+        }</td></tr>`,
+    )
+    .join('\n');
+}
 
 /** Price table: POST /v1/research (config-driven price) above the fixed ladder. */
-function priceTable(config: AppConfig): string {
+function priceTable(config: AppConfig, locale: LocaleCode): string {
   const researchRow = `<tr><td><code>POST /v1/research</code></td><td class="num">$${config.researchPriceUsd}</td></tr>`;
   return `<table>
-<thead><tr><th>Endpoint</th><th>Price (USD / call)</th></tr></thead>
+<thead><tr><th>${t(locale, 'pricing.priceTable.endpointHeader')}</th><th>${t(locale, 'pricing.priceTable.priceHeader')}</th></tr></thead>
 <tbody>
 ${researchRow}
-${ENDPOINT_ROWS}
+${endpointRows(locale)}
 </tbody>
 </table>`;
 }
@@ -185,183 +239,199 @@ const MCP_TOOLS = [
 const CONTACT_EMAIL = 'eutendersai@gmail.com';
 
 /** Footer Alfa (paper) — shared across every public page. */
-function footer(): string {
+function footer(locale: LocaleCode): string {
+  const l = locale;
+  const year = String(new Date().getFullYear());
   return `<footer class="site-footer">
 <div class="footer-top">
   <div>
     <div class="footer-brand">Licita</div>
-    <p class="footer-desc">Evidence-backed EU public procurement intelligence for professional teams and AI agents.</p>
+    <p class="footer-desc">${t(l, 'footer.desc')}</p>
   </div>
   <div class="footer-col">
-    <h4>Product</h4>
+    <h4>${t(l, 'footer.product')}</h4>
     <ul>
-      <li><a href="/use-cases">Use cases</a></li>
-      <li><a href="/pricing">Pricing</a></li>
-      <li><a href="/docs">Docs</a></li>
-      <li><a href="/mcp">MCP</a></li>
-      <li><a href="/data">Coverage &amp; methodology</a></li>
+      <li><a href="${href(l, '/use-cases')}">${t(l, 'footer.useCases')}</a></li>
+      <li><a href="${href(l, '/pricing')}">${t(l, 'footer.pricing')}</a></li>
+      <li><a href="${href(l, '/docs')}">${t(l, 'footer.docs')}</a></li>
+      <li><a href="${href(l, '/mcp')}">${t(l, 'footer.mcp')}</a></li>
+      <li><a href="${href(l, '/data')}">${t(l, 'footer.coverageAndMethodology')}</a></li>
     </ul>
   </div>
   <div class="footer-col">
-    <h4>Company</h4>
+    <h4>${t(l, 'footer.company')}</h4>
     <ul>
-      <li><a href="/methodology">Methodology</a></li>
-      <li><a href="/security">Security</a></li>
-      <li><a href="/privacy">Privacy</a></li>
-      <li><a href="/terms">Terms</a></li>
-      <li><a href="/status">Status</a></li>
+      <li><a href="${href(l, '/methodology')}">${t(l, 'footer.methodology')}</a></li>
+      <li><a href="${href(l, '/security')}">${t(l, 'footer.security')}</a></li>
+      <li><a href="${href(l, '/privacy')}">${t(l, 'footer.privacy')}</a></li>
+      <li><a href="${href(l, '/terms')}">${t(l, 'footer.terms')}</a></li>
+      <li><a href="${href(l, '/status')}">${t(l, 'footer.status')}</a></li>
     </ul>
   </div>
   <div class="footer-col">
-    <h4>Contact</h4>
+    <h4>${t(l, 'footer.contact')}</h4>
     <ul>
       <li><a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a></li>
-      <li><a href="https://github.com/gastonrey/licita-app">GitHub (MIT)</a></li>
+      <li><a href="https://github.com/gastonrey/licita-app">${t(l, 'footer.github')}</a></li>
     </ul>
   </div>
 </div>
 <div class="footer-bottom">
-  <span>&copy; ${new Date().getFullYear()} Licita</span>
-  <span>Provenance: every data row exposes <code>meta.provenance</code> as <code>[{ source, source_ref, url }]</code>.</span>
+  <span>${t(l, 'footer.copyright', { year })}</span>
+  <span>${t(l, 'footer.provenance')}</span>
 </div>
 </footer>`;
 }
 
 
-function homePage(config: AppConfig, demoStatus = false): string {
+// Frozen demo-sample + demo-request script: byte-identical on both locales
+// (S2.1 needle). Extracted by tests via the `<script>const sample=...` block.
+const HOME_SCRIPT = `<script>const sample=document.getElementById('demo-sample');const safe=(v)=>String(v??'Not reported').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));const lines=(xs)=>'<ul class="evidence-lines">'+(xs||[]).map(x=>'<li>'+safe(x)+'</li>').join('')+'</ul>';fetch('/v1/demo').then(r=>{if(!r.ok)throw new Error('sample unavailable');return r.json()}).then(({data,meta})=>{const t=data.tender,r=data.renewal;sample.dataset.state='ready';sample.innerHTML=(t?'<h3>'+safe(t.title)+'</h3><p><strong>Buyer:</strong> '+safe(t.buyer?.name)+' · <strong>Value:</strong> '+safe(t.estimated_value)+' '+safe(t.currency||'')+' · <strong>Published:</strong> '+safe(t.published_at)+'</p>'+lines(t.evidence):'<p>No current sample is available.</p>')+(r?'<p><strong>Renewal signal:</strong> '+safe(r.signal_type)+' · '+safe(r.confidence)+' confidence · '+safe(r.contract?.end_date)+'</p>'+lines(r.evidence):'<p>No current renewal sample is available.</p>')+'<p class="source-stamp">'+safe(t?.source||r?.source||'source')+' · '+safe(t?.source_ref||r?.source_ref)+' · generated '+safe(meta?.generated_at)+'</p>'+((t?.url||r?.url)?'<p><a class="upstream" href="'+safe(t?.url||r?.url)+'" target="_blank" rel="noreferrer">Open upstream source</a></p>':'')+'<p class="source-stamp">source_metadata: '+safe(JSON.stringify(data.source_metadata||[]))+'</p>'}).catch(()=>{sample.dataset.state='error';sample.innerHTML='<p>Sample unavailable. <a href="/docs">Read the methodology</a>.</p>'});document.getElementById('demo-request').addEventListener('submit',async(e)=>{e.preventDefault();const f=e.currentTarget,m=document.getElementById('demo-message'),b=f.querySelector('button');m.textContent='Requesting a demo…';b.disabled=true;try{const r=await fetch('/v1/demo/request?source=homepage',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({email:f.email.value})});if(!r.ok){const body=await r.json().catch(()=>({}));throw new Error(body.error?.hint||'Check your email and try again.')}m.textContent='Request received. We will follow up by email; no meeting was booked.';f.reset()}catch(err){m.textContent=err.message+' You can also email ${CONTACT_EMAIL}.'}finally{b.disabled=false}})</script>`;
+
+function homePage(config: AppConfig, locale: LocaleCode, demoStatus = false): string {
+  const l = locale;
   const mcpEndpoint = absoluteUrl(config.apiBaseUrl ?? config.baseUrl, '/mcp');
+  const path = href(l, '/');
+  const vars = {
+    creemPrice: (config.creem.priceCents / 100).toFixed(2),
+    researchPrice: config.researchPriceUsd,
+    mcpEndpoint,
+    email: CONTACT_EMAIL,
+    year: String(new Date().getFullYear()),
+    paymentsMode: config.paymentsMode,
+  };
   return page(
-    'Public procurement intelligence for EU & Spain',
+    l,
+    t(l, 'home.title'),
     `
-<header class="hero-grid">
+<header class="hero hero-grid">
 <div class="hero-copy">
-<p class="hero-eyebrow">EU Public Procurement Intelligence<span class="eyebrow-dot">·</span>Evidence First</p>
-<h1>Know which public contracts deserve your next conversation.</h1>
-<p class="hero-subtitle">Licita turns indexed procurement notices into evidence-backed opportunities, buyers, suppliers and deterministic renewal signals for professional teams.</p>
+<p class="hero-eyebrow">${t(l, 'home.heroEyebrow')}<span class="eyebrow-dot">·</span>${t(l, 'home.heroEyebrowTag')}</p>
+<h1>${t(l, 'home.heroTitle')}</h1>
+<p class="hero-subtitle">${t(l, 'home.heroSubtitle')}</p>
 <div class="hero-ctas">
-<a class="btn btn-lg" href="#demo">Request the product demo</a>
-<a class="btn btn-secondary btn-lg" href="/v1/demo">GET /v1/demo — free sample</a>
+<a class="btn btn-lg" href="${href(l, '/#demo')}">${t(l, 'home.heroCtas.demo')}</a>
+<a class="btn btn-secondary btn-lg" href="/v1/demo">${t(l, 'home.heroCtas.sample')}</a>
 </div>
-<p class="hero-caption">A free labeled sample from the live index—recent tender and renewal signal, with evidence.</p>
+<p class="hero-caption">${t(l, 'home.heroCaption')}</p>
 </div>
-<aside class="evidence-card" aria-label="Live sample — GET /v1/demo">
-<div class="evidence-card-head"><span class="title"><span class="live-dot" aria-hidden="true"></span>Live sample — GET /v1/demo</span><span class="stamp">Sample</span></div>
-<article id="demo-sample" class="evidence-body evidence-rail" data-state="loading" aria-live="polite"><p>Loading…</p><p class="source-stamp">GET /v1/demo · sample status</p></article>
+<aside class="evidence-card" aria-label="${t(l, 'home.evidenceCard.aria')}">
+<div class="evidence-card-head"><span class="title"><span class="live-dot" aria-hidden="true"></span>${t(l, 'home.evidenceCard.title')}</span><span class="stamp">${t(l, 'home.evidenceCard.stamp')}</span></div>
+<article id="demo-sample" class="evidence-body evidence-rail" data-state="loading" aria-live="polite"><p>${t(l, 'home.evidenceCard.loading')}</p><p class="source-stamp">${t(l, 'home.evidenceCard.sourceStamp')}</p></article>
 </aside>
 </header>
 
-<section>
-<h2>Built on primary sources</h2>
+<section class="section">
+<h2>${t(l, 'home.builtOn')}</h2>
 <div class="trust-strip">
-  <a class="chip" href="/data/eu"><span class="chip-kicker">EU — TED</span>Tenders Electronic Daily</a>
-  <a class="chip" href="/data/spain"><span class="chip-kicker">ES — PLACSP</span>Spain contracts when enabled</a>
-  <a class="chip" href="/data"><span class="chip-kicker">Dates</span>Not reported when unknown</a>
-  <a class="chip" href="https://github.com/gastonrey/licita-app"><span class="chip-kicker">Open source</span>MIT — auditable</a>
-  <a class="chip" href="/status"><span class="chip-kicker">Status</span>Live freshness</a>
+  <a class="chip" href="${href(l, '/data/eu')}"><span class="chip-kicker">${t(l, 'home.trustStrip.eu.kicker')}</span>${t(l, 'home.trustStrip.eu.label')}</a>
+  <a class="chip" href="${href(l, '/data/spain')}"><span class="chip-kicker">${t(l, 'home.trustStrip.es.kicker')}</span>${t(l, 'home.trustStrip.es.label')}</a>
+  <a class="chip" href="${href(l, '/data')}"><span class="chip-kicker">${t(l, 'home.trustStrip.dates.kicker')}</span>${t(l, 'home.trustStrip.dates.label')}</a>
+  <a class="chip" href="https://github.com/gastonrey/licita-app"><span class="chip-kicker">${t(l, 'home.trustStrip.openSource.kicker')}</span>${t(l, 'home.trustStrip.openSource.label')}</a>
+  <a class="chip" href="${href(l, '/status')}"><span class="chip-kicker">${t(l, 'home.trustStrip.status.kicker')}</span>${t(l, 'home.trustStrip.status.label')}</a>
 </div>
 </section>
 
-<section class="cta-section" id="demo">
-<h2>See your next opportunity in context.</h2>
-<p>A free labeled sample from the current index, followed by a guided review of your market. Demo emails are kept while the request is new; once a lead advances to contacted, used, paid or lost it is purged after 180 days.</p>
+<section class="section cta-section" id="demo">
+<h2>${t(l, 'home.ctaDemo.title')}</h2>
+<p>${t(l, 'home.ctaDemo.body')}</p>
 <form id="demo-request" class="cta-form" method="post" action="/v1/demo/request">
-<label for="demo-email">Work email</label>
-<input id="demo-email" name="email" type="email" inputmode="email" autocomplete="email" spellcheck="false" required placeholder="name@company.com">
-<button class="btn" type="submit">Request the product demo</button>
-<p id="demo-message" class="cta-message" role="status" aria-live="polite">${demoStatus ? 'Demo request received. We will follow up by email; no meeting was booked.' : ''}</p>
+<label for="demo-email">${t(l, 'home.ctaDemo.emailLabel')}</label>
+<input id="demo-email" name="email" type="email" inputmode="email" autocomplete="email" spellcheck="false" required placeholder="${t(l, 'home.ctaDemo.emailPlaceholder')}">
+<button class="btn" type="submit">${t(l, 'home.ctaDemo.submit')}</button>
+<p id="demo-message" class="cta-message" role="status" aria-live="polite">${demoStatus ? t(l, 'home.ctaDemo.success') : ''}</p>
 </form>
-<noscript><p>Email <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a> to request a demo.</p></noscript>
+<noscript><p>${t(l, 'home.ctaDemo.noscript', vars)}</p></noscript>
 </section>
 
-<section>
-<h2>Use cases</h2>
+<section class="section">
+<h2>${t(l, 'home.usecases.title')}</h2>
 <div class="usecase-grid">
-  <a class="usecase-card" href="/use-cases/tender-intelligence"><h3>Tender intelligence</h3><p>Find recent tenders and who won, with provenance.</p></a>
-  <a class="usecase-card" href="/use-cases/company-research"><h3>Company research</h3><p>Track record and live matching opportunities.</p></a>
-  <a class="usecase-card" href="/use-cases/buyer-intelligence"><h3>Buyer intelligence</h3><p>Activity, supplier concentration, recurrence.</p></a>
-  <a class="usecase-card" href="/use-cases/renewals-forecasting"><h3>Renewals forecasting</h3><p>Which contracts will be re-tendered, with evidence.</p></a>
+  <a class="usecase-card" href="${href(l, '/use-cases/tender-intelligence')}"><h3>${t(l, 'home.usecases.cards.tender-intelligence.title')}</h3><p>${t(l, 'home.usecases.cards.tender-intelligence.desc')}</p></a>
+  <a class="usecase-card" href="${href(l, '/use-cases/company-research')}"><h3>${t(l, 'home.usecases.cards.company-research.title')}</h3><p>${t(l, 'home.usecases.cards.company-research.desc')}</p></a>
+  <a class="usecase-card" href="${href(l, '/use-cases/buyer-intelligence')}"><h3>${t(l, 'home.usecases.cards.buyer-intelligence.title')}</h3><p>${t(l, 'home.usecases.cards.buyer-intelligence.desc')}</p></a>
+  <a class="usecase-card" href="${href(l, '/use-cases/renewals-forecasting')}"><h3>${t(l, 'home.usecases.cards.renewals-forecasting.title')}</h3><p>${t(l, 'home.usecases.cards.renewals-forecasting.desc')}</p></a>
 </div>
 </section>
 
-<section>
-<h2>Pricing</h2>
-<p class="muted">${config.creem.enabled ? 'Pay per call — no signup, machine-to-machine. Or subscribe monthly via Creem checkout. Start at <a href="/v1/pricing">GET /v1/pricing</a> for the full ladder.' : 'Pay per call — no subscriptions, no signup, machine-to-machine. Start at <a href="/v1/pricing">GET /v1/pricing</a> for the full ladder.'}</p>
+<section class="section">
+<h2>${t(l, 'home.pricing.title')}</h2>
+<p class="muted">${config.creem.enabled ? t(l, 'home.pricing.introCreem') : t(l, 'home.pricing.intro')}</p>
 <div class="pricing-grid">
   ${config.creem.enabled ? `
   <div class="price-card featured">
-    <span class="plan">Monthly plan</span>
-    <div class="amount"><span class="n">€${(config.creem.priceCents / 100).toFixed(2)}</span><span class="u">per month</span></div>
-    <p class="desc">One monthly payment unlocks the paid endpoints: subscriber calls debit one-time credits, and the account stays active for 30 days. Creem handles payment; Licita never sees a card number.</p>
-    <span class="tag">POST /v1/creem/checkout</span>
+    <span class="plan">${t(l, 'home.pricing.cards.monthly.plan')}</span>
+    <div class="amount"><span class="n">${t(l, 'home.pricing.cards.monthly.amountN', vars)}</span><span class="u">${t(l, 'home.pricing.cards.monthly.amountU')}</span></div>
+    <p class="desc">${t(l, 'home.pricing.cards.monthly.desc')}</p>
+    <span class="tag">${t(l, 'home.pricing.cards.monthly.tag')}</span>
   </div>` : ''}
   <div class="price-card">
-    <span class="plan">Research brief</span>
-    <div class="amount"><span class="n">$${config.researchPriceUsd}</span><span class="u">per call</span></div>
-    <p class="desc">One paid call turns a topic into a deterministic, evidence-backed research brief. NO LLM, fully auditable.</p>
-    <span class="tag">POST /v1/research</span>
+    <span class="plan">${t(l, 'home.pricing.cards.research.plan')}</span>
+    <div class="amount"><span class="n">${t(l, 'home.pricing.cards.research.amountN', vars)}</span><span class="u">${t(l, 'home.pricing.cards.research.amountU')}</span></div>
+    <p class="desc">${t(l, 'home.pricing.cards.research.desc')}</p>
+    <span class="tag">${t(l, 'home.pricing.cards.research.tag')}</span>
   </div>
   <div class="price-card${config.creem.enabled ? '' : ' featured'}">
-    <span class="plan">Core endpoints</span>
-    <div class="amount"><span class="n">from $0.02</span><span class="u">per call</span></div>
-    <p class="desc">Contract data, renewals signals, buyer and supplier profiles — every row carries provenance.</p>
-    <span class="tag">GET /v1/search</span>
+    <span class="plan">${t(l, 'home.pricing.cards.core.plan')}</span>
+    <div class="amount"><span class="n">${t(l, 'home.pricing.cards.core.amountN')}</span><span class="u">${t(l, 'home.pricing.cards.core.amountU')}</span></div>
+    <p class="desc">${t(l, 'home.pricing.cards.core.desc')}</p>
+    <span class="tag">${t(l, 'home.pricing.cards.core.tag')}</span>
   </div>
   <div class="price-card">
-    <span class="plan">Credits</span>
-    <div class="amount"><span class="n">$5–$25</span><span class="u">packs</span></div>
-    <p class="desc">Dollar-denominated credits for convenience. No signup, no seats, no subscriptions.</p>
-    <span class="tag">Prepaid</span>
+    <span class="plan">${t(l, 'home.pricing.cards.credits.plan')}</span>
+    <div class="amount"><span class="n">${t(l, 'home.pricing.cards.credits.amountN')}</span><span class="u">${t(l, 'home.pricing.cards.credits.amountU')}</span></div>
+    <p class="desc">${t(l, 'home.pricing.cards.credits.desc')}</p>
+    <span class="tag">${t(l, 'home.pricing.cards.credits.tag')}</span>
   </div>
 </div>
-<p class="pricing-note">Transparent per-call pricing — see the full ladder at <a href="/v1/pricing">GET /v1/pricing</a>.</p>
+<p class="pricing-note">${t(l, 'home.pricing.note')}</p>
 </section>
 
-<section class="grid-2">
+<section class="section grid-2">
 <div>
-<h2>Coverage &amp; methodology</h2>
-<p class="muted">Coverage is strongest in the indexed IT, software and cyber vertical. See <a href="/data">source scope and methodology</a> for enabled sources, date ranges and last successful ingestion. Every finding carries a source reference and upstream link where known.</p>
-<p class="muted"><a href="/data/spain">Spain (PLACSP)</a> · <a href="/data/eu">EU (TED)</a> · <a href="/data">Data overview</a></p>
+<h2>${t(l, 'home.coverage.title')}</h2>
+<p class="muted">${t(l, 'home.coverage.body')}</p>
+<p class="muted">${t(l, 'home.coverage.dataLinks')}</p>
 </div>
 <div>
-<h2>For developers</h2>
-<p class="muted">Priced REST + Streamable-HTTP MCP. Start at <a href="/llms.txt">/llms.txt</a> → <a href="/openapi.json">/openapi.json</a> → <a href="/v1/pricing">/v1/pricing</a>.</p>
+<h2>${t(l, 'home.developers.title')}</h2>
+<p class="muted">${t(l, 'home.developers.body')}</p>
 </div>
 </section>
 
-<section>
-<h2>FAQ</h2>
+<section class="section">
+<h2>${t(l, 'home.faq.title')}</h2>
 <div class="faq-list">
   <details class="faq-item" open>
-    <summary>Do I need an account or subscription?<span class="chev" aria-hidden="true">▾</span></summary>
-    <p class="answer">${config.creem.enabled ? 'No account needed for pay-per-call — no signup. Prefer a plan? A monthly subscription is available via Creem checkout at <code>POST /v1/creem/checkout</code> — your API key is emailed right after checkout, marked <code>kind=creem</code>, and stays active for 30 days.' : 'No. Licita is pay-per-call — no signup, no seats, no subscriptions.'}</p>
+    <summary>${t(l, 'home.faq.items.accountSubscription.question')}<span class="chev" aria-hidden="true">▾</span></summary>
+    <p class="answer">${config.creem.enabled ? t(l, 'home.faq.items.accountSubscription.answerCreem') : t(l, 'home.faq.items.accountSubscription.answer')}</p>
   </details>
   <details class="faq-item">
-    <summary>How do credits or client keys work?<span class="chev" aria-hidden="true">▾</span></summary>
-    <p class="answer">Buy dollar-denominated credits in $5–$25 packs at <code>POST /v1/billing/credits/5</code> (or /10, /25) with your own <code>x-client-key</code> string, then send that same key as the <code>x-client-key</code> header on priced calls to pay from your balance. Keep the key safe — it is the only identifier of your balance, and if it is lost the balance cannot currently be recovered.</p>
+    <summary>${t(l, 'home.faq.items.creditsAndKeys.question')}<span class="chev" aria-hidden="true">▾</span></summary>
+    <p class="answer">${t(l, 'home.faq.items.creditsAndKeys.answer')}</p>
   </details>
   <details class="faq-item">
-    <summary>Do I need USDC or a crypto wallet for the monthly subscription?<span class="chev" aria-hidden="true">▾</span></summary>
-    <p class="answer">No. The monthly subscription is paid by card through Creem (Merchant of Record); Licita never sees your card number. The x402/USDC flow is only for pay-per-call and prepaid credits — no subscription, no crypto wallet needed.</p>
+    <summary>${t(l, 'home.faq.items.usdcWallet.question')}<span class="chev" aria-hidden="true">▾</span></summary>
+    <p class="answer">${t(l, 'home.faq.items.usdcWallet.answer')}</p>
   </details>
   <details class="faq-item">
-    <summary>How long do you keep demo emails?<span class="chev" aria-hidden="true">▾</span></summary>
-    <p class="answer">Demo emails are kept while the request is new; once a lead advances to contacted, used, paid or lost it is purged after <strong>180 days</strong>.</p>
+    <summary>${t(l, 'home.faq.items.demoRetention.question')}<span class="chev" aria-hidden="true">▾</span></summary>
+    <p class="answer">${t(l, 'home.faq.items.demoRetention.answer')}</p>
   </details>
 </div>
 </section>
 
-<section class="cta-section">
-<h2>Connectable right now.</h2>
-<p>Point an MCP client at <code>${mcpEndpoint}</code> and try the free demo before paying.</p>
-<p><a class="btn btn-secondary" href="/docs">Read the docs</a> <a class="btn btn-secondary" href="/v1/demo">GET /v1/demo</a></p>
+<section class="section cta-section">
+<h2>${t(l, 'home.connect.title')}</h2>
+<p>${t(l, 'home.connect.body', vars)}</p>
+<p><a class="btn btn-secondary" href="${href(l, '/docs')}">${t(l, 'home.connect.docsLink')}</a> <a class="btn btn-secondary" href="/v1/demo">${t(l, 'home.connect.sampleLink')}</a></p>
 </section>
 
- <script>const sample=document.getElementById('demo-sample');const safe=(v)=>String(v??'Not reported').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));const lines=(xs)=>'<ul class="evidence-lines">'+(xs||[]).map(x=>'<li>'+safe(x)+'</li>').join('')+'</ul>';fetch('/v1/demo').then(r=>{if(!r.ok)throw new Error('sample unavailable');return r.json()}).then(({data,meta})=>{const t=data.tender,r=data.renewal;sample.dataset.state='ready';sample.innerHTML=(t?'<h3>'+safe(t.title)+'</h3><p><strong>Buyer:</strong> '+safe(t.buyer?.name)+' · <strong>Value:</strong> '+safe(t.estimated_value)+' '+safe(t.currency||'')+' · <strong>Published:</strong> '+safe(t.published_at)+'</p>'+lines(t.evidence):'<p>No current sample is available.</p>')+(r?'<p><strong>Renewal signal:</strong> '+safe(r.signal_type)+' · '+safe(r.confidence)+' confidence · '+safe(r.contract?.end_date)+'</p>'+lines(r.evidence):'<p>No current renewal sample is available.</p>')+'<p class="source-stamp">'+safe(t?.source||r?.source||'source')+' · '+safe(t?.source_ref||r?.source_ref)+' · generated '+safe(meta?.generated_at)+'</p>'+((t?.url||r?.url)?'<p><a class="upstream" href="'+safe(t?.url||r?.url)+'" target="_blank" rel="noreferrer">Open upstream source</a></p>':'')+'<p class="source-stamp">source_metadata: '+safe(JSON.stringify(data.source_metadata||[]))+'</p>'}).catch(()=>{sample.dataset.state='error';sample.innerHTML='<p>Sample unavailable. <a href="/docs">Read the methodology</a>.</p>'});document.getElementById('demo-request').addEventListener('submit',async(e)=>{e.preventDefault();const f=e.currentTarget,m=document.getElementById('demo-message'),b=f.querySelector('button');m.textContent='Requesting a demo…';b.disabled=true;try{const r=await fetch('/v1/demo/request?source=homepage',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({email:f.email.value})});if(!r.ok){const body=await r.json().catch(()=>({}));throw new Error(body.error?.hint||'Check your email and try again.')}m.textContent='Request received. We will follow up by email; no meeting was booked.';f.reset()}catch(err){m.textContent=err.message+' You can also email ${CONTACT_EMAIL}.'}finally{b.disabled=false}})</script>`,
+${HOME_SCRIPT}`,
     {
       config,
-      path: '/',
-      description:
-        'Evidence-backed tenders, buyers, suppliers and deterministic renewal signals from TED (EU) and PLACSP (Spain) for professional teams. REST API + MCP.',
+      path,
+      description: t(l, 'home.metaDescription'),
     },
   );
 }
@@ -391,6 +461,7 @@ curl -s 'http://localhost:3000/v1/search?q=software&type=award' \\
 
 function docsPage(config: AppConfig): string {
   return page(
+    'en',
     'Docs',
     `
 <h1>Docs — Licita</h1>
@@ -485,7 +556,7 @@ api_clients keys are inert and fall back to the credit/x402 proof path. Creem-su
 }
 
 <h2>Endpoints</h2>
-${priceTable(config)}
+${priceTable(config, 'en')}
 <p class="muted"><code>GET /v1/stats</code> additionally requires header
 <code>x-operator-key</code>. Common query params: <code>page</code>, <code>size</code> (≤100),
 <code>cpv</code> (prefix), <code>region</code> (NUTS), <code>from</code>/<code>to</code> (YYYY-MM-DD).</p>
@@ -534,56 +605,53 @@ Read the card at <code>/.well-known/mcp/server-card.json</code> for the MCP surf
 and contract dates with confidence <code>low</code>/<code>medium</code>/<code>high</code> — not calibrated
 probabilities. Each signal exposes its full evidence in <code>basis</code>.</li>
 </ul>`,
-    { config, path: '/docs', description: 'How to call Licita: discovery order, x402 payment flow, credits, MCP tools, server card and response conventions.' },
+    { config, path: '/docs', description: 'How to call Licita: discovery order, x402 payment flow, credits, MCP tools, server card and response conventions.', switcher: false },
   );
 }
 
-function pricingPage(config: AppConfig): string {
+function pricingPage(config: AppConfig, locale: LocaleCode): string {
+  const l = locale;
+  const vars = {
+    creemPrice: (config.creem.priceCents / 100).toFixed(2),
+    researchPrice: config.researchPriceUsd,
+    paymentsMode: config.paymentsMode,
+    email: CONTACT_EMAIL,
+    year: String(new Date().getFullYear()),
+    mcpEndpoint: absoluteUrl(config.apiBaseUrl ?? config.baseUrl, '/mcp'),
+  };
+  const bundles = Object.entries(CREDIT_BUNDLES)
+    .map(
+      ([endpoint, cents]) =>
+        `<tr><td><code>${endpoint}</code></td><td class="num">$${(cents / 100).toFixed(2)}</td></tr>`,
+    )
+    .join('\n');
   return page(
-    'Pricing',
+    l,
+    t(l, 'pricing.title'),
     `
-<h1>Pricing</h1>
-<p class="muted">Per-call prices in USD. Machine-readable version:
-<a href="/v1/pricing">/v1/pricing</a>. Payments mode: <code>${config.paymentsMode}</code>.
-<code>POST /v1/research</code> costs <code>$${config.researchPriceUsd}</code> per call (config-driven).</p>
-${priceTable(config)}
-<p class="muted"><code>GET /v1/demo</code> is free: a labeled sample of the paid data (recent tender +
-renewal signal), so agents can validate quality before paying.</p>
-<h2>Credits &amp; billing</h2>
-${config.creem.enabled
-  ? '<p class="muted">Prepaid credit bundles — a one-time purchase. Buy a bundle, then\npay every call from your balance by sending <code>x-client-key: &lt;your key&gt;</code> on the request\n(instead of a per-call payment proof).</p>'
-  : '<p class="muted">Prepaid credit bundles — a one-time purchase, no subscription. Buy a bundle, then\npay every call from your balance by sending <code>x-client-key: &lt;your key&gt;</code> on the request\n(instead of a per-call payment proof).</p>'}
+<h1>${t(l, 'pricing.title')}</h1>
+<p class="muted">${t(l, 'pricing.intro', vars)}</p>
+${priceTable(config, l)}
+<p class="muted">${t(l, 'pricing.demoFreeNote')}</p>
+<h2>${t(l, 'pricing.creditsTitle')}</h2>
+${config.creem.enabled ? `<p class="muted">${t(l, 'pricing.creditsIntroCreem')}</p>` : `<p class="muted">${t(l, 'pricing.creditsIntro')}</p>`}
 <table>
-<thead><tr><th>Bundle</th><th>Price (USD)</th></tr></thead>
+<thead><tr><th>${t(l, 'pricing.bundles.bundleHeader')}</th><th>${t(l, 'pricing.bundles.priceHeader')}</th></tr></thead>
 <tbody>
-${Object.entries(CREDIT_BUNDLES)
-  .map(
-    ([endpoint, cents]) =>
-      `<tr><td><code>${endpoint}</code></td><td class="num">$${(cents / 100).toFixed(2)}</td></tr>`,
-  )
-  .join('\n')}
+${bundles}
 </tbody>
 </table>
-<p class="muted">Two payment rails, chosen by how you buy: the monthly subscription is paid in <strong>EUR</strong> by card via Creem (no crypto wallet); pay-per-call and prepaid credits are priced in <strong>USD</strong> and paid with USDC proofs via x402.</p>
-${config.creem.enabled
-  ? '<h2>Monthly subscription</h2>\n<p class="muted"><strong>Creem MoR</strong>: subscribe at <code>POST /v1/creem/checkout</code> for\n<code>€' + (config.creem.priceCents / 100).toFixed(2) + '/month</code> (config-driven — always the configured\n<code>CREEM_PRICE_CENTS</code>). After payment Creem calls <code>POST /v1/creem/webhook</code>\n(signature-verified) and the account is marked <code>kind=creem</code> for 30 days. Subscriber calls\ndebit one-time credits — running out returns <code>402</code> until you refill.</p>\n'
-  : ''}
-<p class="muted">Buy: <code>POST /v1/billing/credits/5</code> (or <code>/10</code> <code>/25</code>) with
-the normal machine-to-machine payment flow (402 → <code>PAYMENT-SIGNATURE</code> retry). Check balance:
-<code>GET /v1/billing</code> with header <code>x-client-key: &lt;your key&gt;</code>. MCP:
-<code>billing_purchase_credits</code> / <code>billing_get_balance</code>.</p>
-<h2>How payment works</h2>
+<p class="muted">${t(l, 'pricing.twoRails')}</p>
+${config.creem.enabled ? `<h2>${t(l, 'pricing.monthlyTitle')}</h2>\n<p class="muted">${t(l, 'pricing.monthlyBody', vars)}</p>\n` : ''}
+<p class="muted">${t(l, 'pricing.buyLine')}</p>
+<h2>${t(l, 'pricing.howPaymentTitle')}</h2>
 <ol>
-<li>Call a paid endpoint → <code>402</code> with a base64 <code>PAYMENT-REQUIRED</code> header
-describing the exact USDC requirement (scheme <code>exact</code>, EIP-3009 transferWithAuthorization).</li>
-<li>Sign the authorization with an x402 client and retry with
-<code>PAYMENT-SIGNATURE: &lt;payload&gt;</code> (v2; the legacy <code>X-PAYMENT</code> header still works).</li>
-<li>The server verifies and settles the payment before serving content; proofs are single-use.</li>
-<li>Local dev only (<code>PAYMENTS_MODE=dev</code>): <code>POST /v1/dev-faucet {"endpoint":"&lt;METHOD PATH&gt;"}</code>
-→ <code>{ token, expires_at }</code>, then retry with <code>X-PAYMENT</code> (REST) or
-<code>payment_token</code> (MCP). Not available in production.</li>
+<li>${t(l, 'pricing.steps.0')}</li>
+<li>${t(l, 'pricing.steps.1')}</li>
+<li>${t(l, 'pricing.steps.2')}</li>
+<li>${t(l, 'pricing.steps.3')}</li>
 </ol>`,
-    { config, path: '/pricing', description: 'Per-call USD prices for every Licita endpoint, prepaid credit bundles, and how payment works.' },
+    { config, path: href(l, '/pricing'), description: t(l, 'pricing.metaDescription') },
   );
 }
 
@@ -893,62 +961,35 @@ const SERVER_CARD_TOOLS: Array<{
 
 interface UseCase {
   slug: string;
-  title: string;
-  problem: string;
-  tools: string; // prose: which endpoints/MCP tools + price
-  example: string; // pre block, labeled example
-  honestNote: string;
+  example: string; // pre block, labeled example (locale-independent)
 }
 
 const USECASES: UseCase[] = [
   {
     slug: 'tender-intelligence',
-    title: 'Tender intelligence — find recent tenders and who won',
-    problem:
-      'An agent needs recent procurement activity on a topic: which tenders were published or awarded, by whom, for how much, with provenance.',
-    tools:
-      '<code>GET /v1/search</code> ($0.02/call) for compact rows, <code>GET /v1/tenders/:id</code> ($0.02/call) for full tender + award detail. MCP: <code>search_tenders</code>, <code>get_tender</code>.',
     example: `# GET /v1/search?q=proteccion+de+datos&type=award  ($0.02 USDC)
 → {"data":[{ "id": 8684, "source": "placsp", "source_ref": "2026/CONTRAT/000064",
    "buyer": "Alcaldía del Ayuntamiento de Oleiros", "type": "award",
    "title": "Servizo de desenvolvemento de funcións e obrigas do delegado de protección de datos..." }],
    "meta": {"paid": true, "price_usd": "0.02", "provenance": [{"source":"placsp","source_ref":"2026/CONTRAT/000064"}]}}`,
-    honestNote: 'Every row exposes meta.provenance (source + source_ref + upstream url). Nulls are never fabricated.',
   },
   {
     slug: 'company-research',
-    title: 'Company research — track record and live opportunities',
-    problem:
-      'An agent evaluating a supplier needs wins, total awarded value, top CPVs and buyers, plus tenders matching that company profile right now.',
-    tools:
-      '<code>GET /v1/companies/:id</code> ($0.05), <code>GET /v1/companies/:id/awards</code> ($0.05), <code>GET /v1/companies/:id/opportunities</code> ($0.10). MCP: <code>get_company</code>, <code>get_company_awards</code>, <code>get_company_opportunities</code>.',
     example: `# GET /v1/companies/:id  ($0.05 USDC)
 → {"data": {"name": "APDTIC PROFESIONALES S.L.", "country": "ES", "nif": "...",
    "wins": 1, "total_awarded_eur": 18000, "top_cpvs": [{"cpv": "79000000", "count": 1}],
    "top_buyers": [{"buyer": "Alcaldía del Ayuntamiento de Oleiros", "count": 1}]},
    "meta": {"paid": true, "price_usd": "0.05"}}`,
-    honestNote: 'Company identity is cross-source (NIF + aliases + source identifiers); aggregates are computed over the indexed history only and every response exposes meta.provenance.',
   },
   {
     slug: 'buyer-intelligence',
-    title: 'Buyer intelligence — activity, concentration, recurrence',
-    problem:
-      'An agent needs a buyer profile: award history, supplier concentration (top-supplier share) and per-CPV recurrence so it can time outreach.',
-    tools:
-      '<code>GET /v1/buyers/:id/history</code> ($0.05/call). MCP: <code>get_buyer_history</code>.',
     example: `# GET /v1/buyers/:id/history  ($0.05 USDC)
 → {"data": {"id": 1680, "name": "Alcaldía del Ayuntamiento de Oleiros", "awards_total": 1,
    "supplier_concentration": 1.0, "recurrence": [{"cpv": "79000000", "median_months": null}]},
    "meta": {"paid": true, "price_usd": "0.05"}}`,
-    honestNote: 'Concentration/recurrence are derived from indexed awards; small histories can show 1.0 concentration — read counts alongside ratios. Every response exposes meta.provenance.',
   },
   {
     slug: 'renewals-forecasting',
-    title: 'Renewals forecasting — which contracts will be re-tendered',
-    problem:
-      'An agent hunting pipeline wants contracts and frameworks likely to be re-tendered in a window, with per-signal evidence.',
-    tools:
-      '<code>GET /v1/renewals?window_months=12</code> ($0.25/call) or <code>POST /v1/research</code> ($0.50/call) for a full brief. MCP: <code>get_renewals</code>, <code>research</code>.',
     example: `# GET /v1/renewals?window_months=12&cpv=72  ($0.25 USDC)
 → {"data": {"signals": [{"id": 1, "signal_type": "duration_expiry", "cpv": "72000000",
    "buyer": {"name": "Consorci Hospital Clínic de Barcelona"},
@@ -956,135 +997,86 @@ const USECASES: UseCase[] = [
    "basis": {"signal_type": "duration_expiry", "tender_ref": "..."}}],
    "meta": {"paid": true, "price_usd": "0.25",
    "methodology": "Deterministic heuristic — NOT calibrated probabilities."}}`,
-    honestNote:
-      'Signals are a deterministic heuristic over historical awards and dates with confidence low|medium|high — never a probability estimate. Every signal exposes its full evidence in basis, and the envelope carries meta.provenance.',
   },
 ];
 
-const USECASE_INDEX = `
-<h1>Use cases</h1>
-<p class="muted">Concrete agent missions, the exact endpoints and MCP tools that solve them, their cost,
-and what a real response looks like. Every example is a labeled sample — agents get the same shapes
-after paying per call.</p>
-${USECASES.map(
-  (uc) => `<h2><a href="/use-cases/${uc.slug}">${uc.title}</a></h2>
-<p>${uc.problem}</p>
-<p class="muted">${uc.tools}</p>`,
-).join('\n')}
-<h2>Free first look</h2>
-<p>Validate the data before paying: <a href="/v1/demo">GET /v1/demo</a> returns a labeled sample of the
-most recent tender + renewal signal at no cost.</p>`;
+const USECASE_SLUGS: string[] = USECASES.map((uc) => uc.slug);
+const EXAMPLE_BY_SLUG: Record<string, string> = Object.fromEntries(USECASES.map((uc) => [uc.slug, uc.example]));
 
-function useCasePage(config: AppConfig, slug: string): string | null {
-  const uc = USECASES.find((u) => u.slug === slug);
-  if (!uc) return null;
+function useCasesIndex(config: AppConfig, locale: LocaleCode): string {
+  const l = locale;
   return page(
-    `Use case: ${uc.title}`,
+    l,
+    t(l, 'usecases.title'),
     `
-<h1>${uc.title}</h1>
-<p>${uc.problem}</p>
-<h2>Tools</h2>
-<p>${uc.tools}</p>
-<h2>Example response (labeled sample)</h2>
-<pre>${uc.example}</pre>
-<h2>Honesty note</h2>
-<p class="muted">${uc.honestNote}</p>
-<p class="muted"><a href="/use-cases">all use cases</a></p>`,
-    { config, path: `/use-cases/${uc.slug}`, description: uc.problem },
+<h1>${t(l, 'usecases.title')}</h1>
+<p class="muted">${t(l, 'usecases.intro')}</p>
+${USECASE_SLUGS.map(
+  (slug) => `<h2><a href="${href(l, `/use-cases/${slug}`)}">${t(l, `usecaseDetail.${slug}.title`)}</a></h2>
+<p>${t(l, `usecaseDetail.${slug}.problem`)}</p>
+<p class="muted">${t(l, `usecaseDetail.${slug}.tools`)}</p>`,
+).join('\n')}
+<h2>${t(l, 'usecases.freeTitle')}</h2>
+<p>${t(l, 'usecases.freeBody')}</p>`,
+    { config, path: href(l, '/use-cases'), description: t(l, 'usecases.metaDescription') },
   );
 }
 
-const DATA_OVERVIEW = `
-<h1>Data</h1>
-<p class="muted">What Licita indexes, where it comes from, and how agents can validate it before paying.
-Counts are updated on ingestion — they are operational facts, not projections.</p>
-<ul>
-<li><strong>Current records and indexed ranges</strong> are returned from live source metadata; no fixed coverage claim is made.</li>
-<li><strong>TED</strong> (Tenders Electronic Daily) — EU award notices, live by default:
-<a href="/data/eu">EU data page</a>.</li>
-<li><strong>PLACSP</strong> — Spanish public-sector contracts (<code>2026/CONTRAT/…</code> refs) when PLACSP
-ingestion is enabled: <a href="/data/spain">Spain data page</a>.</li>
-</ul>
-<h2>Access</h2>
-<p>Free: <a href="/v1/demo">GET /v1/demo</a> (labeled sample), <a href="/v1/pricing">price ladder</a>,
-<a href="/llms.txt">/llms.txt</a>, <a href="/openapi.json">OpenAPI</a>. Paid: every row returns
-<code>meta.provenance</code> (source + source_ref + upstream url); nulls are never fabricated.</p>`;
-
-const DATA_SPAIN = `
-<h1>Data — Spain (PLACSP)</h1>
-<p class="muted">Spanish public-sector procurement contracts ingested from PLACSP when enabled.
-Publication references look like <code>2026/CONTRAT/000064</code>.</p>
-<ul>
-<li><strong>Coverage</strong> — awards with buyer, winner, CPV codes, values and publication refs;
-Spanish public-sector entities (city councils, regional governments, agencies).</li>
-<li><strong>Example rows</strong> — award by Alcaldía del Ayuntamiento de Oleiros to
-APDTIC PROFESIONALES S.L. (ref <code>2026/CONTRAT/000064</code>); award by Dirección General de
-IBERMUTUA to Mnemo Evolution &amp; Integration Services, S.A.</li>
-<li><strong>Query</strong> — <code>GET /v1/search?q=…&amp;type=award</code>, <code>GET /v1/companies/:id</code>,
-<code>GET /v1/buyers/:id/history</code>, <code>GET /v1/renewals</code>.</li>
-</ul>
-<p class="muted"><a href="/data">data overview</a></p>`;
-
-const DATA_EU = `
-<h1>Data — EU (TED)</h1>
-<p class="muted">EU public procurement award notices ingested from TED (Tenders Electronic Daily).
-Provenance links to the original notice (<code>ted.europa.eu/udl?uri=TED:NOTICE:…</code>).</p>
-<ul>
-<li><strong>Coverage</strong> — notices with publication-number, buyer, winner, CPV, values,
-submissions and framework-agreement flags across EU member states.</li>
-<li><strong>Renewal signals</strong> — duration-expiry, framework-expiry and recurrence signals are
-derived from historical awards (deterministic heuristic, confidence low|medium|high).</li>
-<li><strong>Query</strong> — <code>GET /v1/search</code>, <code>GET /v1/tenders/:id</code>,
-<code>POST /v1/research</code> (topic brief), <code>GET /v1/renewals</code>.</li>
-</ul>
-<p class="muted"><a href="/data">data overview</a></p>`;
-
-function dataPage(config: AppConfig, kind: 'overview' | 'spain' | 'eu'): string {
-  const map = {
-    overview: ['Data', '/data', DATA_OVERVIEW],
-    spain: ['Data — Spain (PLACSP)', '/data/spain', DATA_SPAIN],
-    eu: ['Data — EU (TED)', '/data/eu', DATA_EU],
-  } as const;
-  const [title, path, body] = map[kind];
-  return page(title, `\n${body}`, { config, path });
+function useCasePage(config: AppConfig, locale: LocaleCode, slug: string): string | null {
+  if (!USECASE_SLUGS.includes(slug)) return null;
+  const l = locale;
+  return page(
+    l,
+    `Use case: ${t(l, `usecaseDetail.${slug}.title`)}`,
+    `
+<h1>${t(l, `usecaseDetail.${slug}.title`)}</h1>
+<p>${t(l, `usecaseDetail.${slug}.problem`)}</p>
+<h2>${t(l, 'usecases.detail.toolsTitle')}</h2>
+<p>${t(l, `usecaseDetail.${slug}.tools`)}</p>
+<h2>${t(l, 'usecases.detail.exampleTitle')}</h2>
+<pre>${EXAMPLE_BY_SLUG[slug]}</pre>
+<h2>${t(l, 'usecases.detail.honestyTitle')}</h2>
+<p class="muted">${t(l, `usecaseDetail.${slug}.honestNote`)}</p>
+<p class="muted"><a href="${href(l, '/use-cases')}">${t(l, 'usecases.detail.allUseCases')}</a></p>`,
+    { config, path: href(l, `/use-cases/${slug}`), description: t(l, `usecaseDetail.${slug}.problem`) },
+  );
 }
 
-const TRUST_PAGES: Record<string, [string, string]> = {
-  methodology: ['Methodology', '<p>Licita presents source rows and deterministic heuristics with their evidence. Confidence is evidence strength, not a probability. Coverage counts, indexed ranges and freshness are shown only when supplied by the live index; unknown values are Not reported.</p>'],
-  security: ['Security', '<p>Operator statistics and lead details require the server-side operator key. Public demo capture is rate limited and stores only a normalized email, channel, source URL and lifecycle timestamps. Licita does not claim a certification or SLA on this page.</p>'],
-  privacy: ['Privacy Policy', `
-<h2>What data Licita holds</h2>
-<p>Licita is an agent-native public procurement intelligence service. It indexes public data from TED and PLACSP and exposes it through REST and MCP. The personal data we process is limited to what is needed to operate the service:</p>
+function dataPage(config: AppConfig, locale: LocaleCode, kind: 'overview' | 'spain' | 'eu'): string {
+  const l = locale;
+  const base = kind === 'overview' ? 'data.overview' : kind === 'spain' ? 'data.spain' : 'data.eu';
+  const path = kind === 'overview' ? '/data' : kind === 'spain' ? '/data/spain' : '/data/eu';
+  const bullets = [0, 1, 2].map((i) => `<li>${t(l, `${base}.bullets.${i}`)}</li>`).join('\n');
+  const tail =
+    kind === 'overview'
+      ? `<h2>${t(l, 'data.overview.accessTitle')}</h2>
+<p>${t(l, 'data.overview.accessBody')}</p>`
+      : `<p class="muted"><a href="${href(l, '/data')}">${t(l, `${base}.overviewLink`)}</a></p>`;
+  return page(
+    l,
+    t(l, `${base}.h1`),
+    `
+<h1>${t(l, `${base}.h1`)}</h1>
+<p class="muted">${t(l, `${base}.intro`)}</p>
 <ul>
-  <li><strong>Demo requests</strong> — when you request a demo, we store only the email address you provide, plus the channel, the source URL and lifecycle timestamps.</li>
-  <li><strong>Subscription emails</strong> — when you subscribe via Creem checkout, we store the checkout email to set up your API key and billing account.</li>
-  <li><strong>API keys</strong> — we generate your client key at checkout and send it to you by email. Only a cryptographic hash of the key is stored server-side; the raw key is never persisted after delivery.</li>
-  <li><strong>Payment proofs</strong> — per-call payments (x402) and credit purchases are recorded as proof rows with amount, endpoint, provider and status. Card payments are handled end-to-end by Creem (Merchant of Record); we never see or store card numbers.</li>
+${bullets}
 </ul>
-<h2>How long we keep data</h2>
-<p>Demo emails are kept while the request is new; once a lead advances to contacted, used, paid or lost it is purged after 180 days. New leads are never auto-deleted. Subscription and payment records are kept while an account is active and for the period required by applicable payment and reconciliation rules.</p>
-<h2>Who can access data</h2>
-<p>Access is restricted to operators via a server-side operator key. We do not sell, rent or share personal data with third parties for marketing. We rely on limited processors: Creem (payments), Resend (transactional email) and the x402 facilitator (proof verification).</p>
-<h2>Your rights</h2>
-<p>Request deletion or ask a privacy question by email at <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>.</p>`],
-  terms: ['Terms of Service', `
-<h2>Service</h2>
-<p>Licita provides evidence-backed public procurement intelligence: EU (TED) and Spain (PLACSP) tenders, buyers, suppliers and deterministic renewal signals, queryable over REST and MCP. All values come from public sources or deterministic heuristics over them; Licita never fabricates data.</p>
-<h2>Use</h2>
-<p>You may use the service for professional evaluation of public procurement opportunities and for integration into your own tools and agents, subject to these terms and to the applicable terms of the upstream sources (TED, PLACSP). You must not use the service to violate law, to abuse or overload the API, to resell the raw index as a competing product, or to circumvent payment.</p>
-<h2>Pricing and payment</h2>
-<p>Endpoints are priced per call; full prices are published at <a href="/v1/pricing">/v1/pricing</a>. You pay with x402 payment proofs, with prepaid credit bundles (<code>x-client-key</code>), or with a monthly subscription via Creem checkout (<code>POST /v1/creem/checkout</code>). Proofs are single-use and expire after 5 minutes. Card payments are processed by Creem as Merchant of Record; we never see card details.</p>
-<h2>API keys and credits</h2>
-<p>Your API key is issued once and sent to you by email after checkout; only a hash is stored server-side. Keep the key safe — it is the only identifier of your credit balance, and a lost balance cannot currently be recovered. Prepaid credits never expire.</p>
-<h2>Data quality</h2>
-<p>Indexed values come from public sources with provenance. Renewal and opportunity signals are deterministic heuristics; confidence reflects evidence strength, not a probability. Licita does not claim a certification, an uptime SLA, or fitness for a particular decision. Verify before relying on the data for a material decision.</p>
-<h2>Intellectual property</h2>
-<p>The Licita application is open source under the MIT license (<a href="https://github.com/gastonrey/licita-app">github.com/gastonrey/licita-app</a>). The indexed data remains subject to the terms of its upstream sources.</p>
-<h2>Changes and contact</h2>
-<p>We may update these terms; continued use after a change is posted constitutes acceptance. Questions? Email <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>.</p>
-<p><em>Last updated: September 2026.</em></p>`],
-  status: ['Status', '<p>Service status and source freshness are operational values, not guarantees. Check the response metadata and contact us to report an issue. No uptime SLA is claimed here.</p>'],
-};
+${tail}`,
+    { config, path: href(l, path) },
+  );
+}
+
+const TRUST_SLUGS: TrustPageSlug[] = ['methodology', 'security', 'privacy', 'terms', 'status'];
+
+function trustPage(config: AppConfig, locale: LocaleCode, slug: TrustPageSlug): string {
+  const l = locale;
+  return page(
+    l,
+    t(l, `trust.${slug}.title`),
+    `\n<h1>${t(l, `trust.${slug}.title`)}</h1>${t(l, `trust.${slug}.body`, { email: CONTACT_EMAIL })}<p><a href="${href(l, '/')}">${t(l, 'footer.backToLicita')}</a></p>`,
+    { config, path: href(l, `/${slug}`) },
+  );
+}
 
 function serverCard(config: AppConfig): Record<string, unknown> {
   return {
@@ -1107,57 +1099,106 @@ function serverCard(config: AppConfig): Record<string, unknown> {
 const SITEMAP_PATHS = [
   '/',
   '/use-cases',
-  ...USECASES.map((uc) => `/use-cases/${uc.slug}`),
+  ...USECASE_SLUGS.map((slug) => `/use-cases/${slug}`),
   '/data',
   '/data/spain',
   '/data/eu',
   '/pricing',
   '/docs',
-  ...Object.keys(TRUST_PAGES).map((slug) => `/${slug}`),
+  ...TRUST_SLUGS.map((slug) => `/${slug}`),
 ];
 
+/**
+ * Sitemap (spec DR3 + R3): every human pair contributes its own <url> carrying
+ * es | en | x-default xhtml:link alternates; /docs is single-locale and emits a
+ * bare <loc> entry with no alternates. No /es URLs ever appear. Alternate hrefs
+ * are derived from config.baseUrl (root-relative fallback in dev/test).
+ */
 function sitemapXml(config: AppConfig): string {
-  const urls = SITEMAP_PATHS.map(
-    (path) => `  <url><loc>${escapeXml(absoluteUrl(config.baseUrl, path))}</loc></url>`,
-  ).join('\n');
-  return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}\n</urlset>\n`;
+  const human = SITEMAP_PATHS.filter((p) => p !== '/docs');
+  const entries = human
+    .map((path) => {
+      const es = absoluteUrl(config.baseUrl, path);
+      const en = absoluteUrl(config.baseUrl, path === '/' ? '/en' : `/en${path}`);
+      const def = absoluteUrl(config.baseUrl, '/');
+      return `  <url><loc>${escapeXml(es)}</loc>
+    <xhtml:link rel="alternate" hreflang="es" href="${escapeXml(es)}" />
+    <xhtml:link rel="alternate" hreflang="en" href="${escapeXml(en)}" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="${escapeXml(def)}" />
+  </url>`;
+    })
+    .join('\n');
+  const docs = `  <url><loc>${escapeXml(absoluteUrl(config.baseUrl, '/docs'))}</loc></url>`;
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">
+${entries}
+${docs}
+</urlset>
+`;
 }
 
 /**
- * Register web discovery surfaces: GET /, /docs, /pricing, /llms.txt,
+ * Locale-aware HTML 404 (spec R4/M2): es at root, en under /en. noindex (never
+ * index an error page), no canonical/hreflang/OG — informational head only.
+ */
+export function renderWeb404(_config: AppConfig, locale: LocaleCode): string {
+  return page(locale, t(locale, 'notFound.title'), `\n<h1>${t(locale, 'notFound.heading')}</h1>`, {
+    switcher: false,
+    noindex: true,
+  });
+}
+
+/**
+ * Register web discovery surfaces: bilingual human pages (ES at root, EN under
+ * `/en`), /docs (EN root, single-locale), /styles.css, /llms.txt,
  * /.well-known/mcp/server-card.json, /robots.txt, /sitemap.xml — all free —
  * plus the dev faucet (POST /v1/dev-faucet).
  */
 export function registerWeb(app: FastifyInstance, config: AppConfig): void {
-  app.get('/', async (req, reply) => reply.type('text/html; charset=utf-8').send(homePage(config, (req.query as { demo?: string }).demo === 'success')));
+  const demoStatus = (req: FastifyRequest) => (req.query as { demo?: string }).demo === 'success';
+  const notFound = (locale: LocaleCode) => renderWeb404(config, locale);
+
+  app.get('/', async (req, reply) => reply.type('text/html; charset=utf-8').send(homePage(config, 'es', demoStatus(req))));
+  app.get('/en', async (req, reply) => reply.type('text/html; charset=utf-8').send(homePage(config, 'en', demoStatus(req))));
   app.get('/styles.css', async (_req, reply) => reply.type('text/css; charset=utf-8').send(HUMAN_CSS));
   app.get('/docs', async (_req, reply) => reply.type('text/html; charset=utf-8').send(docsPage(config)));
   app.get('/use-cases', async (_req, reply) =>
-    reply
-      .type('text/html; charset=utf-8')
-      .send(
-        page('Use cases', `\n${USECASE_INDEX}`, {
-          config,
-          path: '/use-cases',
-          description: 'Concrete agent missions for Licita: exact endpoints, MCP tools, costs and real response shapes.',
-        }),
-      ),
+    reply.type('text/html; charset=utf-8').send(useCasesIndex(config, 'es')),
+  );
+  app.get('/en/use-cases', async (_req, reply) =>
+    reply.type('text/html; charset=utf-8').send(useCasesIndex(config, 'en')),
   );
   app.get('/use-cases/:slug', async (req, reply) => {
     const slug = (req.params as { slug: string }).slug;
-    const html = useCasePage(config, slug);
-    if (!html) return reply.code(404).type('text/html; charset=utf-8').send(page('Not found', `\n<h1>Not found</h1>`));
+    const html = useCasePage(config, 'es', slug);
+    if (!html) return reply.code(404).type('text/html; charset=utf-8').send(notFound('es'));
+    return reply.type('text/html; charset=utf-8').send(html);
+  });
+  app.get('/en/use-cases/:slug', async (req, reply) => {
+    const slug = (req.params as { slug: string }).slug;
+    const html = useCasePage(config, 'en', slug);
+    if (!html) return reply.code(404).type('text/html; charset=utf-8').send(notFound('en'));
     return reply.type('text/html; charset=utf-8').send(html);
   });
   app.get('/data', async (_req, reply) =>
-    reply.type('text/html; charset=utf-8').send(dataPage(config, 'overview')),
+    reply.type('text/html; charset=utf-8').send(dataPage(config, 'es', 'overview')),
   );
-  app.get('/data/spain', async (_req, reply) => reply.type('text/html; charset=utf-8').send(dataPage(config, 'spain')));
-  app.get('/data/eu', async (_req, reply) => reply.type('text/html; charset=utf-8').send(dataPage(config, 'eu')));
-  for (const [slug, [title, body]] of Object.entries(TRUST_PAGES)) {
-    app.get(`/${slug}`, async (_req, reply) => reply.type('text/html; charset=utf-8').send(page(title, `\n<h1>${title}</h1>${body}<p><a href="/">Back to Licita</a></p>`, { config, path: `/${slug}` })));
+  app.get('/en/data', async (_req, reply) =>
+    reply.type('text/html; charset=utf-8').send(dataPage(config, 'en', 'overview')),
+  );
+  app.get('/data/spain', async (_req, reply) => reply.type('text/html; charset=utf-8').send(dataPage(config, 'es', 'spain')));
+  app.get('/en/data/spain', async (_req, reply) => reply.type('text/html; charset=utf-8').send(dataPage(config, 'en', 'spain')));
+  app.get('/data/eu', async (_req, reply) => reply.type('text/html; charset=utf-8').send(dataPage(config, 'es', 'eu')));
+  app.get('/en/data/eu', async (_req, reply) => reply.type('text/html; charset=utf-8').send(dataPage(config, 'en', 'eu')));
+  for (const slug of TRUST_SLUGS) {
+    app.get(`/${slug}`, async (_req, reply) => reply.type('text/html; charset=utf-8').send(trustPage(config, 'es', slug)));
+    app.get(`/en/${slug}`, async (_req, reply) => reply.type('text/html; charset=utf-8').send(trustPage(config, 'en', slug)));
   }
-  app.get('/pricing', async (_req, reply) => reply.type('text/html; charset=utf-8').send(pricingPage(config)));
+  app.get('/pricing', async (_req, reply) => reply.type('text/html; charset=utf-8').send(pricingPage(config, 'es')));
+  app.get('/en/pricing', async (_req, reply) => reply.type('text/html; charset=utf-8').send(pricingPage(config, 'en')));
+  app.get('/en/', async (_req, reply) => reply.redirect('/en', 301));
+  app.get('/es', async (req, reply) => reply.redirect(req.url.replace(/^\/es(?=\/|$)/, '') || '/', 301));
+  app.get('/es/*', async (req, reply) => reply.redirect(req.url.replace(/^\/es(?=\/|$)/, '') || '/', 301));
   app.get('/llms.txt', async (_req, reply) => reply.type('text/plain; charset=utf-8').send(llmsTxt(config)));
   app.get('/robots.txt', async (_req, reply) =>
     reply.type('text/plain; charset=utf-8').send('User-agent: *\nAllow: /\n'),

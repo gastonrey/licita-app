@@ -74,13 +74,20 @@ describe('agent-surface preservation after homepage changes', () => {
     registerWeb(app, config);
     mountMcp(app, config, db);
 
+    // Content-flip needle migration matrix (S2.2/S2.3): /docs is a single-locale
+    // English dev page that stays at root; human pages serve ES at / and EN at /en.
     const htmlContracts = [
       ['/docs', '<h1>Docs — Licita</h1>'],
-      ['/use-cases', 'Concrete agent missions'],
-      ['/use-cases/tender-intelligence', 'Tender intelligence — find recent tenders and who won'],
-      ['/data', '<h1>Data</h1>'],
-      ['/data/spain', '<h1>Data — Spain (PLACSP)</h1>'],
-      ['/data/eu', '<h1>Data — EU (TED)</h1>'],
+      ['/en/use-cases', 'Concrete agent missions'],
+      ['/use-cases', 'Misiones concretas de agente'],
+      ['/en/use-cases/tender-intelligence', 'Tender intelligence — find recent tenders and who won'],
+      ['/use-cases/tender-intelligence', 'Inteligencia de licitaciones — encuentra licitaciones recientes y quién ganó'],
+      ['/en/data', '<h1>Data</h1>'],
+      ['/data', '<h1>Datos</h1>'],
+      ['/en/data/spain', '<h1>Data — Spain (PLACSP)</h1>'],
+      ['/data/spain', '<h1>Datos — España (PLACSP)</h1>'],
+      ['/en/data/eu', '<h1>Data — EU (TED)</h1>'],
+      ['/data/eu', '<h1>Datos — UE (TED)</h1>'],
     ] as const;
 
     for (const [url, marker] of htmlContracts) {

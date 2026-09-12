@@ -119,4 +119,14 @@ describe('GET /dashboard', () => {
     expect(html).toMatch(/Settled.*Verify failed.*Payment required \(no proof\).*Facilitator unavailable/s);
     await app.close();
   });
+
+  it('keeps the drill-down back control in English chrome (U7: ← Back, never ← Volver)', async () => {
+    const app = buildApp();
+    const res = await app.inject({ method: 'GET', url: '/dashboard' });
+    const html = res.body;
+    // U7: the operator dashboard is English-only and must not be locale-prefixed.
+    expect(html).toContain('← Back');
+    expect(html).not.toContain('← Volver');
+    await app.close();
+  });
 });
