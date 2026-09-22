@@ -926,6 +926,17 @@ section[hidden] { display: none; }
       <section id="panel-payments" role="tabpanel" data-tab="payments" aria-label="Payments" hidden>
         <div class="card">
           <div class="card-head">
+            <h2>Payments</h2>
+          </div>
+          <p class="muted" aria-live="polite">One screen answer: has anyone paid, and has anyone tried?</p>
+          <div id="payments-kpis" class="kpis" aria-label="Payment KPIs: settled revenue, settled payments, distinct payers, failed attempts"></div>
+          <h3 class="h3">Payment funnel</h3>
+          <div id="payments-funnel" class="payment-health-grid" aria-label="Payment funnel: checkout initiated, webhook confirmed, paying agents, settled"></div>
+          <div id="payments-empty"></div>
+        </div>
+
+        <div class="card">
+          <div class="card-head">
             <h2>Payment attempts</h2>
           </div>
           <p class="muted" aria-live="polite">Every payment attempt: settled payments and failed attempts (proof rejected, no proof sent, facilitator unavailable), newest first.</p>
@@ -1216,12 +1227,71 @@ function renderPaymentHealth(ph) {
       '<td class="num">' + esc(ts) + '</td>' +
       '<td>' + esc(f.method || '') + ' ' + esc(f.endpoint || '') + '</td>' +
       '<td class="num">' + esc(f.status ?? '') + '</td>' +
-      '<td><span style="color:' + badgeColor + ';font-weight:600;font-size:var(--text-xs)">' + esc(f.error || '') + '</span></td>' +
+      '<td><span style="color:' + badgeColor + ';font-weight:600;font-size:var(--text-xs)">' + failureLabel(f.error) + '</span></td>' +
       '</tr>';
   }).join('');
   $('payment-health-failures').innerHTML = rows === ''
     ? '<p class="muted">No payment failures recorded yet.</p>'
     : '<div class="payment-failures-table"><table><thead><tr><th class="num">Time</th><th>Endpoint</th><th class="num">Status</th><th>Reason</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+}
+
+function failureLabel(error) {
+  // Friendly operator wording for the granular 402 reasons set by
+  // pay/middleware.ts (paymentFailureKind). Unknown kinds render verbatim.
+  const labels = {
+    payment_required: 'No proof sent',
+    verify_failed: 'Proof rejected',
+    facilitator_unavailable: 'Facilitator down',
+  };
+  return labels[error] || esc(error);
+}
+
+function renderPaymentsVisibility(stats) {
+  // The payments tab answers two questions at a glance:
+  // 1) Has anyone PAID?      → settled revenue / settled payments / payers
+  // 2) Has anyone TRIED?     → failed attempts + checkout/webhook funnel
+  const ph = stats.payment_health || {};
+  const settled = ph.settled || { count: 0, amount_usd: 0 };
+  const pay = stats.payments || {};
+  const payers = Number(pay.payers ?? 0);
+  const failed = Number(ph.verify_failed ?? 0) + Number(ph.payment_required ?? 0) + Number(ph.facilitator_unavailable ?? 0);
+  const metricsBlock = stats.in_memory_metrics || {};
+  const checkoutStarted = Number(metricsBlock.checkout_started_total ?? 0);
+  const subtreeActivated = Number(metricsBlock.subscription_activated_total ?? 0);
+  const kpis = [
+    ['Settled revenue', '$' + esc(money(settled.amount_usd))],
+    ['Settled payments', esc(settled.count)],
+    ['Distinct payers', esc(payers)],
+    ['Failed attempts', esc(failed)],
+  ];
+  const kpisEl = $('payments-kpis');
+  if (kpisEl) {
+    kpisEl.innerHTML = kpis
+      .map((p) => '<div class="kpi"><div class="kpi-label">' + p[0] + '</div><div class="kpi-val">' + p[1] + '</div></div>')
+      .join('');
+  }
+  const funnel = [
+    { label: 'Checkout initiated', value: esc(checkoutStarted), state: checkoutStarted > 0 ? 'warn' : 'ok' },
+    { label: 'Webhook confirmed', value: esc(subtreeActivated), state: subtreeActivated > 0 ? 'ok' : 'ok' },
+    { label: 'Paying agents', value: esc(payers), state: payers > 0 ? 'ok' : 'warn' },
+    { label: 'Settled', value: esc(settled.count) + ' · $' + esc(money(settled.amount_usd)), state: settled.count > 0 ? 'ok' : 'warn' },
+  ];
+  const funnelEl = $('payments-funnel');
+  if (funnelEl) {
+    funnelEl.innerHTML = funnel.map((t) =>
+      '<div class="payment-tile is-' + t.state + '">' +
+      '<div class="payment-tile-label">' + t.label + '</div>' +
+      '<div class="payment-tile-val">' + t.value + '</div>' +
+      '</div>'
+    ).join('');
+  }
+  let emptyNote = '';
+  if (Number(settled.count) === 0) {
+    const failedTxt = failed > 0 ? ' ' + esc(failed) + ' attempt' + (failed === 1 ? '' : 's') + ' did not complete.' : '';
+    emptyNote = '<p class="payment-empty banner warn" role="status">No settled payments yet — $' + esc(money(settled.amount_usd)) + ' settled in this range.' + failedTxt + '</p>';
+  }
+  const bannerHost = $('payments-empty');
+  if (bannerHost) bannerHost.innerHTML = emptyNote;
 }
 
 function renderPaymentAttempts(attempts) {
@@ -1231,21 +1301,21 @@ function renderPaymentAttempts(attempts) {
     const settled = rows.filter((a) => a.kind === 'payment').length;
     const failed = rows.filter((a) => a.kind === 'failure').length;
     summary.textContent = rows.length === 0
-      ? 'No payment attempts recorded yet.'
+      ? 'Nobody has attempted payment yet — zero settled payments and zero 402 payment-required calls in this range.'
       : rows.length + ' attempt' + (rows.length === 1 ? '' : 's') + ' shown · ' + settled + ' settled · ' + failed + ' failed';
   }
   const renderAttemptRows = (pageRows2) => pageRows2.length === 0
-    ? '<p class="muted">No payment attempts recorded yet.</p>'
+    ? '<p class="muted">Nobody has attempted payment yet — 0 settled payments, 0 failed attempts in this range.</p>'
     : '<table><thead><tr><th class="num">Time</th><th>Kind</th><th>Endpoint</th><th>Provider / source</th><th class="num">Status</th><th>Reason / tx</th><th class="num">Amount</th><th>Payer / client</th><th>Network</th></tr></thead><tbody>' +
        pageRows2.map((a) => {
         const when = a.ts ? dateFormat.format(new Date(a.ts)) : '—';
         const endpoint = a.method && !String(a.endpoint).startsWith(a.method) ? a.method + ' ' + a.endpoint : a.endpoint;
         const provider = a.kind === 'payment' ? a.provider : a.source;
         const statusCell = a.kind === 'failure'
-          ? '<span class="payment-badge is-err">' + esc(statusClass(a.status)) + '</span>'
+          ? '<span class="payment-badge is-err">' + esc(String(a.status ?? '')) + '</span>'
           : '<span class="payment-badge is-ok">' + esc(a.status) + '</span>';
         const reason = a.kind === 'failure'
-          ? '<span style="color:var(--color-destructive);font-weight:600">' + esc(a.error || '') + '</span>'
+          ? '<span style="color:var(--color-destructive);font-weight:600">' + failureLabel(a.error) + '</span>'
           : a.tx_hash
             ? '<span title="' + esc(a.tx_hash) + '">' + esc(short(a.tx_hash, 12)) + '</span>'
             : '—';
@@ -1280,7 +1350,9 @@ function render(stats, recent) {
   lastRecent = recent;
   const paidTotal = (stats.requests_by_endpoint || []).reduce((s, r) => s + Number(r.paid_requests || 0), 0);
   const kpis = [
-      ['Revenue', esc(money((stats.payments || {}).revenue_usd))],
+      // Settled revenue IS the money: by_status.settled is authoritative on-chain.
+      // Legacy payments.revenue_usd counted only dev-mode 'success' rows (0).
+      ['Revenue', esc(money(((stats.payment_health || {}).settled || { amount_usd: (stats.payments || {}).revenue_usd }).amount_usd))],
       ['Unique clients', esc(stats.unique_clients ?? 0)],
       ['Total requests', esc(stats.total_requests ?? (stats.failed_requests_rate || {}).total ?? 0)],
       ['Paid requests', esc(paidTotal)],
@@ -1296,6 +1368,7 @@ function render(stats, recent) {
   // Distinguishes on-chain settlement from the three operator-actionable failure
   // modes: no proof sent, proof rejected at verify, facilitator unreachable.
   renderPaymentHealth(stats.payment_health);
+  renderPaymentsVisibility(stats);
   renderPaymentAttempts(lastPaymentAttempts);
 
   const g = stats.growth || {};
