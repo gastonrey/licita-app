@@ -1312,7 +1312,7 @@ function renderPaymentAttempts(attempts) {
         const endpoint = a.method && !String(a.endpoint).startsWith(a.method) ? a.method + ' ' + a.endpoint : a.endpoint;
         const provider = a.kind === 'payment' ? a.provider : a.source;
         const statusCell = a.kind === 'failure'
-          ? '<span class="payment-badge is-err">' + esc(statusClass(a.status)) + '</span>'
+          ? '<span class="payment-badge is-err">' + esc(String(a.status ?? '')) + '</span>'
           : '<span class="payment-badge is-ok">' + esc(a.status) + '</span>';
         const reason = a.kind === 'failure'
           ? '<span style="color:var(--color-destructive);font-weight:600">' + failureLabel(a.error) + '</span>'
