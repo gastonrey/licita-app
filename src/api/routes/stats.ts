@@ -97,6 +97,12 @@ FROM request_logs
 WHERE error IN ('verify_failed','facilitator_unavailable','payment_required')
 ORDER BY ts DESC LIMIT 10
 `;
+// Distinct payers: settled x402 rows carry payer_address; dev/credit rows
+// never set it, so payers counts real money agents only.
+const PAYMENTS_PAYERS_SQL = `
+SELECT count(DISTINCT payer_address)::int AS n
+FROM payments WHERE payer_address IS NOT NULL
+`;
 const PAYMENTS_BY_NETWORK_SQL = `
 SELECT provider, coalesce(network, provider) AS network,
        count(*)::int AS n, coalesce(sum(amount_usd), 0) AS amount
@@ -319,6 +325,7 @@ export function statsHandler(ctx: RouteCtx) {
       zeroResult,
       paymentRequired,
       payments,
+      paymentsPayers,
       paymentsByNetwork,
       repeatClients,
       topCpv,
@@ -344,7 +351,8 @@ export function statsHandler(ctx: RouteCtx) {
        db.query(requestSql(DAILY_TRAFFIC_SQL), rangeValues),
        db.query(requestSql(ZERO_RESULT_SQL), rangeValues),
        db.query(requestSql(PAYMENT_REQUIRED_SQL), rangeValues),
-       db.query(paymentSql(PAYMENTS_SQL), rangeValues),
+        db.query(paymentSql(PAYMENTS_SQL), rangeValues),
+        db.query(paymentSql(PAYMENTS_PAYERS_SQL), rangeValues),
        db.query(paymentSql(PAYMENTS_BY_NETWORK_SQL), rangeValues),
        db.query(requestSql(REPEAT_CLIENTS_SQL), rangeValues),
        db.query(requestSql(TOP_FIELD_SQL('cpv')), rangeValues),
@@ -381,12 +389,29 @@ export function statsHandler(ctx: RouteCtx) {
       }
     }
 
+    // Dashboard-facing settled metrics: by_status alone hid real revenue
+    // (prod 2026-09-22: 38 settled / $2.81 while successes=0, revenue_usd=0).
+    // settled* counts real money ('settled' on-chain rows); successes keeps
+    // its legacy dev-mode meaning and is unchanged.
+    const settledStatus = paymentsByStatus.settled ?? { count: 0, amount_usd: 0 };
+
     const revenueByNetwork = paymentsByNetwork.rows.map((r) => ({
       provider: String(r.provider),
       network: String(r.network),
       count: Number(r.n),
       amount_usd: Math.round(Number(r.amount) * 100) / 100,
     }));
+
+    const paymentsBlock = {
+      attempts,
+      successes,
+      revenue_usd: Math.round(revenue * 100) / 100,
+      settled_count: settledStatus.count,
+      settled_revenue_usd: Math.round(settledStatus.amount_usd * 100) / 100,
+      payers: Number(paymentsPayers.rows[0]?.n ?? 0),
+      by_status: paymentsByStatus,
+      by_network_provider: revenueByNetwork,
+    };
 
     const repeatRows = repeatClients.rows;
     const repeatTotal = repeatRows.reduce((s, r) => s + Number(r.paid_requests), 0);
@@ -498,13 +523,7 @@ export function statsHandler(ctx: RouteCtx) {
         top: topZeroQueries.rows.map((r) => ({ q: String(r.q), requests: Number(r.n) })),
       },
       payment_required_responses: Number(paymentRequired.rows[0]?.n ?? 0),
-      payments: {
-        attempts,
-        successes,
-        revenue_usd: Math.round(revenue * 100) / 100,
-        by_status: paymentsByStatus,
-        by_network_provider: revenueByNetwork,
-      },
+      payments: paymentsBlock,
       repeat_clients: {
         count: repeatRows.length,
         paid_requests_total: repeatTotal,
