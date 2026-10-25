@@ -231,11 +231,15 @@ function bootRadar(root){
   load(initial, false);
 }
 function relicitaApplyPlan(){
-  var plan = new URLSearchParams(location.search).get('plan') || '';
+  var params = new URLSearchParams(location.search);
+  var plan = params.get('plan') || '';
   if (plan !== 'free' && plan !== 'radar' && plan !== 'pro' && plan !== 'team') plan = '';
+  var interval = params.get('interval') === 'annual' ? 'annual' : 'monthly';
+  if (plan === 'team' || plan === 'free') interval = 'monthly';
   if (plan) {
     document.querySelectorAll('input[name=plan]').forEach(function(el){ el.value = plan; });
   }
+  document.querySelectorAll('input[name=interval]').forEach(function(el){ el.value = interval; });
   var note = document.getElementById('plan-choice');
   if (!note) return;
   var text = plan ? (note.dataset[plan] || '') : '';
@@ -250,15 +254,42 @@ function bindExtraSignups(){
       var b = f.querySelector('button');
       if (m) m.textContent = f.dataset.pending || '';
       if (b) b.disabled = true;
-      var url = '/v1/demo/request?source=' + encodeURIComponent(f.dataset.signupSource || 'signup')
-        + '&cpv=' + encodeURIComponent(f.cpv ? f.cpv.value : '')
-        + '&region=' + encodeURIComponent(f.region ? f.region.value : '')
-        + '&plan=' + encodeURIComponent(f.plan ? f.plan.value : '');
-      fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: f.email.value }) })
-        .then(function(r){ if (!r.ok) return r.json().catch(function(){ return {}; }).then(function(body){ throw new Error((body.error && (body.error.hint || body.error.message)) || f.dataset.error || 'Error'); }); return r.json(); })
-        .then(function(){ if (m) m.textContent = f.dataset.success || ''; f.reset(); relicitaApplyPlan(); })
-        .catch(function(err){ if (m) m.textContent = err.message; })
-        .then(function(){ if (b) b.disabled = false; });
+      function done(){ if (b) b.disabled = false; }
+      function fail(err){ if (m) m.textContent = err.message; done(); }
+      function registerInterest(){
+        var url = '/v1/demo/request?source=' + encodeURIComponent(f.dataset.signupSource || 'signup')
+          + '&cpv=' + encodeURIComponent(f.cpv ? f.cpv.value : '')
+          + '&region=' + encodeURIComponent(f.region ? f.region.value : '')
+          + '&plan=' + encodeURIComponent(f.plan ? f.plan.value : '');
+        if (f.interval && f.interval.value) url += '&interval=' + encodeURIComponent(f.interval.value);
+        return fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: f.email.value }) })
+          .then(function(r){ if (!r.ok) return r.json().catch(function(){ return {}; }).then(function(body){ throw new Error((body.error && (body.error.hint || body.error.message)) || f.dataset.error || 'Error'); }); return r.json(); })
+          .then(function(){ if (m) m.textContent = f.dataset.success || ''; f.reset(); relicitaApplyPlan(); done(); })
+          .catch(fail);
+      }
+      if (f.dataset.checkout === '1' && f.plan && f.plan.value && f.plan.value !== 'free') {
+        fetch('/v1/creem/checkout', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            email: f.email.value,
+            plan: f.plan.value,
+            interval: (f.interval && f.interval.value) || 'monthly',
+            successUrl: location.origin + '/?checkout=success',
+            cancelUrl: location.origin + location.pathname + location.search
+          })
+        }).then(function(r){
+          if (r.status === 409) return registerInterest();
+          if (r.status !== 303 && !r.ok) return r.json().catch(function(){ return {}; }).then(function(body){ throw new Error((body.error && (body.error.hint || body.error.message)) || f.dataset.error || 'Error'); });
+          return r.json().then(function(body){
+            var url = body && body.data && body.data.url;
+            if (!url) throw new Error(f.dataset.error || 'Error');
+            location.assign(url);
+          });
+        }).catch(fail);
+        return;
+      }
+      registerInterest();
     });
   });
 }

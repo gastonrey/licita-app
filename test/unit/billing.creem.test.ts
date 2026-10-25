@@ -258,3 +258,188 @@ describe('POST /v1/creem/checkout', () => {
     expect(mocks.fetch).not.toHaveBeenCalled();
   });
 });
+
+const TEST_PLAN_IDS = {
+  radarMonthly: 'prod_DQLeAZkGLgSWSBe79doNr',
+  radarAnnual: 'prod_39q3c29aWwXvkE4pqU4YUT',
+  proMonthly: 'prod_4Iyrui9hjVwSeftMImc9Yg',
+  proAnnual: 'prod_3vkS91sGzp4aueHBuRCNEH',
+  teamMonthly: 'prod_5z4JBpuINvsVJNU0avrcy0',
+};
+
+function planConfig(plans: Partial<typeof TEST_PLAN_IDS> = TEST_PLAN_IDS) {
+  return makeTestConfig({
+    creem: {
+      enabled: true,
+      apiKey: 'creem_test_placeholder',
+      webhookSecret: 'whsec_creem_placeholder',
+      productId: 'prod_creem_placeholder',
+      priceCents: 2900,
+      plans: { ...TEST_PLAN_IDS, ...plans },
+    },
+  });
+}
+
+describe('POST /v1/creem/checkout plan products', () => {
+  let db: Db;
+  let app: FastifyInstance;
+
+  beforeEach(async () => {
+    mocks.fetch.mockReset();
+    mocks.fetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ checkout_url: 'https://checkout.creem.io/c/pay/cs_plan' }),
+    });
+    db = await makeTestDb();
+    app = await buildServer(planConfig(), db);
+  });
+
+  afterEach(async () => {
+    await app.close();
+    resetPayments();
+  });
+
+  it('keeps a checkout without plan on the legacy CREEM_PRODUCT_ID', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/creem/checkout',
+      payload: { email: 'legacy@example.com', successUrl: 'https://licita.example/s', cancelUrl: 'https://licita.example/c' },
+    });
+    expect(res.statusCode).toBe(303);
+    const body = JSON.parse(mocks.fetch.mock.calls[0][1].body);
+    expect(body.product_id).toBe('prod_creem_placeholder');
+  });
+
+  it('charges the annual Radar test product and not the legacy id', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/creem/checkout',
+      payload: {
+        email: 'radar@example.com',
+        plan: 'radar',
+        interval: 'annual',
+        successUrl: 'https://licita.example/s',
+        cancelUrl: 'https://licita.example/c',
+      },
+    });
+    expect(res.statusCode).toBe(303);
+    expect(res.json().data.url).toBe('https://checkout.creem.io/c/pay/cs_plan');
+    const body = JSON.parse(mocks.fetch.mock.calls[0][1].body);
+    expect(body.product_id).toBe(TEST_PLAN_IDS.radarAnnual);
+    expect(body.product_id).not.toBe('prod_creem_placeholder');
+  });
+
+  it('defaults a plan with no interval to the monthly product', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/creem/checkout',
+      payload: { email: 'pro@example.com', plan: 'pro', successUrl: 'https://licita.example/s', cancelUrl: 'https://licita.example/c' },
+    });
+    expect(res.statusCode).toBe(303);
+    const body = JSON.parse(mocks.fetch.mock.calls[0][1].body);
+    expect(body.product_id).toBe(TEST_PLAN_IDS.proMonthly);
+  });
+
+  it('returns 409 and does not call Creem when the chosen plan product is unset', async () => {
+    await app.close();
+    app = await buildServer(planConfig({ radarMonthly: '' }), db);
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/creem/checkout',
+      payload: { email: 'radar@example.com', plan: 'radar', interval: 'monthly', successUrl: 'https://licita.example/s', cancelUrl: 'https://licita.example/c' },
+    });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error.code).toBe('invalid_query');
+    expect(mocks.fetch).not.toHaveBeenCalled();
+  });
+
+  it('rejects Team annual because that price does not exist', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/creem/checkout',
+      payload: { email: 'team@example.com', plan: 'team', interval: 'annual', successUrl: 'https://licita.example/s', cancelUrl: 'https://licita.example/c' },
+    });
+    expect(res.statusCode).toBe(422);
+    expect(mocks.fetch).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /v1/creem/webhook plan products', () => {
+  let db: Db;
+  let app: FastifyInstance;
+
+  beforeEach(async () => {
+    mocks.fetch.mockReset();
+    db = await makeTestDb();
+    app = await buildServer(planConfig(), db);
+  });
+
+  afterEach(async () => {
+    await app.close();
+    resetPayments();
+  });
+
+  async function post(event: Record<string, unknown>) {
+    const payload = JSON.stringify(event);
+    return app.inject({
+      method: 'POST',
+      url: '/v1/creem/webhook',
+      headers: { 'content-type': 'application/json', 'creem-signature': creemSignature(payload) },
+      payload,
+    });
+  }
+
+  it('activates a subscription when the product is a plan id, not CREEM_PRODUCT_ID', async () => {
+    const res = await post({
+      id: 'evt_radar_annual',
+      eventType: 'checkout.completed',
+      object: {
+        id: 'cs_radar',
+        customer: { email: 'annual@example.com' },
+        product: { id: TEST_PLAN_IDS.radarAnnual },
+      },
+    });
+    expect(res.statusCode).toBe(200);
+    const rows = await db.query(`SELECT kind FROM api_clients WHERE lower(email) = lower($1)`, ['annual@example.com']);
+    expect(rows.rows).toEqual([{ kind: 'creem' }]);
+  });
+
+  it('still activates the legacy product id', async () => {
+    const res = await post({
+      id: 'evt_legacy',
+      eventType: 'checkout.completed',
+      object: {
+        id: 'cs_legacy',
+        customer: { email: 'legacy@example.com' },
+        product_id: 'prod_creem_placeholder',
+      },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(await countRows(db, 'api_clients')).toBe(1);
+  });
+
+  it('still activates an event that carries no product id', async () => {
+    const res = await post({
+      id: 'evt_noproduct',
+      eventType: 'checkout.completed',
+      object: { id: 'cs_none', customer: { email: 'none@example.com' } },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(await countRows(db, 'api_clients')).toBe(1);
+  });
+
+  it('acknowledges an unknown product id without granting a subscription', async () => {
+    const res = await post({
+      id: 'evt_unknown',
+      eventType: 'checkout.completed',
+      object: {
+        id: 'cs_unknown',
+        customer: { email: 'stranger@example.com' },
+        product: { id: 'prod_not_configured' },
+      },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ ok: true });
+    expect(await countRows(db, 'api_clients')).toBe(0);
+  });
+});

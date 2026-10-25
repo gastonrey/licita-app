@@ -725,6 +725,20 @@ td.num, th.num { font-variant-numeric: tabular-nums; text-align: right; font-fam
 .price-card .amount .u { font-size: var(--text-sm); color: var(--color-muted); font-family: var(--font-mono); }
 .price-card .desc { font-size: var(--text-sm); color: var(--color-foreground-mid); flex: 1; }
 .pricing-note { font-size: var(--text-sm); color: var(--color-muted); margin-top: var(--space-3); }
+.plan-intervals { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.plan-intervals a {
+  font: 600 0.75rem var(--font-mono);
+  text-decoration: none;
+  border: 1px solid var(--color-rule);
+  border-radius: 999px;
+  padding: 0.25rem 0.65rem;
+  color: var(--color-ink);
+}
+.plan-intervals a[aria-current="true"] {
+  background: var(--color-signal);
+  border-color: var(--color-signal);
+  color: #fff;
+}
 @media (max-width: 768px) {
   .pricing-grid { grid-template-columns: 1fr; max-width: 26rem; }
 }

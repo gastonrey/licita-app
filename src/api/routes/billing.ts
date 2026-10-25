@@ -14,7 +14,16 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { envelope, HttpError, validate, type RouteCtx } from './common.js';
 import { completeCheckout } from '../../pay/billing.js';
-import { checkoutCompleted, createCheckoutSession, verifyWebhookSignature } from '../../pay/creem.js';
+import {
+  acceptsCreemProduct,
+  checkoutCompleted,
+  checkoutProductId,
+  createCheckoutSession,
+  planProductId,
+  verifyWebhookSignature,
+  type CreemInterval,
+  type CreemPlan,
+} from '../../pay/creem.js';
 import { notifySubscriberKey } from '../../obs/notify.js';
 
 export const billingAmountSchema = z.object({
@@ -33,6 +42,10 @@ export const creemCheckoutSchema = z.object({
   /** Where Creem returns the subscriber after cancel. Defaults to
    *  {baseUrl}/pricing (Decision 8) when omitted. */
   cancelUrl: z.string().url('cancelUrl must be an absolute URL').optional(),
+  /** Public SME plan. Omitted = the legacy CREEM_PRODUCT_ID checkout. */
+  plan: z.enum(['radar', 'pro', 'team']).optional(),
+  /** monthly (default) or annual. Team has no annual price. */
+  interval: z.enum(['monthly', 'annual']).optional(),
 });
 
 export const creemCheckoutValidation = validate(creemCheckoutSchema, 'body');
@@ -113,16 +126,24 @@ const eventId = typeof event.id === 'string' ? event.id : '';
       // completeCheckout returns issuedKey only when a NEW lct_ key was generated
       // (new subscriber, or legacy 'creem:' hash repaired). On pure replays the
       // hash is no longer 'creem:' so issuedKey is undefined — idempotent.
-      const completed2 = await completeCheckout(ctx.db, ctx.config, { email: completed.email, eventId: completed.eventId });
-      if (completed2.issuedKey) {
-        notifySubscriberKey(req.log, completed.email, completed2.issuedKey, {
-          notifyEmail: ctx.config.notifyEmail,
-          resendApiKey: ctx.config.resendApiKey,
-          resendFrom: ctx.config.resendFrom,
-          baseUrl: ctx.config.baseUrl,
-        });
+      const productId = checkoutProductId(event);
+      if (!acceptsCreemProduct(creem, productId)) {
+        // Known-but-unconfigured products must not grant kind=creem. Ack so
+        // Creem does not retry. Events with no product id still activate:
+        // that is the historical payload.
+        ctx.log.warn('creem webhook product not configured', { eventId, productId: productId ?? '' });
+      } else {
+        const completed2 = await completeCheckout(ctx.db, ctx.config, { email: completed.email, eventId: completed.eventId });
+        if (completed2.issuedKey) {
+          notifySubscriberKey(req.log, completed.email, completed2.issuedKey, {
+            notifyEmail: ctx.config.notifyEmail,
+            resendApiKey: ctx.config.resendApiKey,
+            resendFrom: ctx.config.resendFrom,
+            baseUrl: ctx.config.baseUrl,
+          });
+        }
+        ctx.metrics.inc('subscription_activated_total');
       }
-      ctx.metrics.inc('subscription_activated_total');
     }
     await ctx.db.query(
       `UPDATE webhook_events SET status = 'completed', updated_at = now() WHERE event_id = $1`,
@@ -136,10 +157,11 @@ const eventId = typeof event.id === 'string' ? event.id : '';
 }
 
 /**
- * POST /v1/creem/checkout — creates a Creem checkout session for the
- * configured product (CREEM_PRODUCT_ID) and returns
- * the session URL as 303 {url}. 404 when CREEM_ENABLED=false (tagged
- * paymentFailureKind 'payment_disabled' for operator request logs).
+ * POST /v1/creem/checkout — creates a Creem checkout session and returns
+ * the session URL as 303 {url}. Without `plan`, the product is CREEM_PRODUCT_ID.
+ * With `plan` and `interval`, the product is that plan's env id. A missing
+ * plan id is 409 (the page records interest instead). 404 when
+ * CREEM_ENABLED=false (tagged paymentFailureKind 'payment_disabled').
  */
 export function creemCheckoutHandler(ctx: RouteCtx) {
   return async (req: FastifyRequest, reply: FastifyReply) => {
@@ -148,16 +170,45 @@ export function creemCheckoutHandler(ctx: RouteCtx) {
       req.paymentFailureKind = 'payment_disabled';
       throw creemDisabled();
     }
-    const body = req.body as { email: string; successUrl?: string; cancelUrl?: string };
+    const body = req.body as {
+      email: string;
+      successUrl?: string;
+      cancelUrl?: string;
+      plan?: CreemPlan;
+      interval?: CreemInterval;
+    };
     const url =
       body.successUrl ??
       `${ctx.config.baseUrl.replace(/\/+$/, '')}/?checkout=success`;
     const cancelUrl =
       body.cancelUrl ?? `${ctx.config.baseUrl.replace(/\/+$/, '')}/pricing`;
+    let productId: string | undefined;
+    if (body.plan) {
+      const interval = body.interval ?? 'monthly';
+      if (body.plan === 'team' && interval === 'annual') {
+        throw new HttpError(
+          422,
+          'invalid_query',
+          'Team has no annual price.',
+          'Choose monthly for Team.',
+        );
+      }
+      const planProduct = planProductId(creem, body.plan, interval);
+      if (!planProduct) {
+        throw new HttpError(
+          409,
+          'invalid_query',
+          'This plan is not connected to checkout.',
+          'Leave the product id empty and the pricing form records interest instead.',
+        );
+      }
+      productId = planProduct;
+    }
     const sessionUrl = await createCheckoutSession(ctx.config, {
       email: body.email,
       successUrl: url,
       cancelUrl,
+      ...(productId ? { productId } : {}),
     });
     ctx.metrics.inc('checkout_started_total');
     return reply.code(303).send(envelope(req, { url: sessionUrl }));

@@ -140,8 +140,11 @@ describe('human homepage (Spanish at /, English at /en)', () => {
     expect(es.body).toContain('39 €');
     expect(es.body).toContain('99 €');
     expect(es.body).toContain('199 €');
-    expect(es.body).toContain('TODO(owner):');
-    expect(es.body).toContain('CREEM_PRODUCT_ID_RADAR');
+    expect(es.body).toContain('interval=monthly');
+    expect(es.body).toContain('interval=annual');
+    expect(es.body).not.toContain('plan=team&amp;interval=annual');
+    expect(es.body).not.toContain('TODO(owner)');
+    expect(es.body).not.toContain('CREEM_PRODUCT_ID_RADAR');
     expect(es.body).not.toContain('x-client-key');
     expect(es.body).not.toContain('USDC');
 
@@ -149,9 +152,54 @@ describe('human homepage (Spanish at /, English at /en)', () => {
     expect(en.body).toContain('€39');
     expect(en.body).toContain('€99');
     expect(en.body).toContain('€199');
-    expect(en.body).toContain('CREEM_PRODUCT_ID_PRO');
+    expect(en.body).not.toContain('CREEM_PRODUCT_ID_PRO');
+    expect(en.body).not.toContain('TODO(owner)');
     expect(en.body).not.toContain('x-client-key');
     expect(en.body).not.toContain('pay-per-call');
+  });
+
+  it('opens Creem checkout for a configured plan and records interest when the product id is missing', async () => {
+    const plans = {
+      radarMonthly: 'prod_DQLeAZkGLgSWSBe79doNr',
+      radarAnnual: 'prod_39q3c29aWwXvkE4pqU4YUT',
+      proMonthly: 'prod_4Iyrui9hjVwSeftMImc9Yg',
+      proAnnual: 'prod_3vkS91sGzp4aueHBuRCNEH',
+      teamMonthly: 'prod_5z4JBpuINvsVJNU0avrcy0',
+    };
+    const interest = await page('/pricing?plan=radar&interval=annual', CREEM_ON);
+    expect(interest.statusCode).toBe(200);
+    expect(interest.body).not.toContain('data-checkout="1"');
+    expect(interest.body).toContain('Guardar mi interés');
+    expect(interest.body).not.toContain('todavía no está activado');
+    expect(interest.body).toContain('plan=radar&amp;interval=annual');
+    expect(interest.body).toContain('href="/en/pricing?plan=radar&amp;interval=annual#alta"');
+    expect(interest.body).toContain('aria-current="true"');
+    expect(interest.body).not.toContain('TODO(owner)');
+
+    const paying = await page('/pricing?plan=radar&interval=annual', {
+      creem: { ...CREEM_ON.creem!, plans },
+    });
+    expect(paying.body).toContain('data-checkout="1"');
+    expect(paying.body).toContain('Continuar al pago');
+    expect(paying.body).toContain('El pago continúa en Creem');
+    expect(paying.body).toContain("fetch('/v1/creem/checkout'");
+    expect(paying.body).toContain('r.status === 409');
+    expect(paying.body).not.toContain(plans.radarAnnual);
+    expect(paying.body).not.toContain('TODO(owner)');
+
+    const teamOff = await page('/en/pricing?plan=team&interval=monthly', {
+      creem: { ...CREEM_ON.creem!, plans: { ...plans, teamMonthly: '' } },
+    });
+    expect(teamOff.body).not.toContain('data-checkout="1"');
+    expect(teamOff.body).toContain('href="/pricing?plan=team&amp;interval=monthly#alta"');
+    expect(teamOff.body).toContain('Save my interest');
+    expect(teamOff.body).not.toContain('not switched on yet');
+
+    const creemOff = await page('/pricing?plan=pro&interval=monthly', {
+      creem: { enabled: false, apiKey: '', webhookSecret: '', productId: '', priceCents: 2900, plans },
+    });
+    expect(creemOff.body).not.toContain('data-checkout="1"');
+    expect(creemOff.body).toContain('Guardar mi interés');
   });
 
   it('moves pay-per-call and the research brief onto /developers', async () => {

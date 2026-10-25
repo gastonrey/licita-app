@@ -64,10 +64,15 @@ export interface AppConfig {
     enabled: boolean;
     apiKey: string;
     webhookSecret: string;
-    /** Creem product ID (env CREEM_PRODUCT_ID). */
+    /** Legacy single product (env CREEM_PRODUCT_ID). POST /v1/creem/checkout
+     *  without a plan still charges this product. */
     productId: string;
-    /** Monthly subscription price in cents (env CREEM_PRICE_CENTS, default 2900). */
+    /** Monthly subscription price in cents (env CREEM_PRICE_CENTS, default 2900).
+     *  Display price for the legacy API subscription, not the SME plans. */
     priceCents: number;
+    /** SME plan products. Empty string = that button keeps recording interest.
+     *  Never defaulted to a live or test Creem id. */
+    plans?: CreemPlanProducts;
   };
   /** Master gate for ALL periodic scheduled jobs (ingest + digest).
    *  env SCHEDULED_GENERATION_EVENTS, default true — off disables every
@@ -96,6 +101,15 @@ export interface AppConfig {
    *  The only addresses a digest ever sends to — the rate-guard that makes
    *  test/dev digest runs incapable of emailing strangers. */
   digestBcc: string;
+}
+
+/** Creem product ids for the public Radar / Pro / Team prices. */
+export interface CreemPlanProducts {
+  radarMonthly: string;
+  radarAnnual: string;
+  proMonthly: string;
+  proAnnual: string;
+  teamMonthly: string;
 }
 
 function env(name: string, fallback = ''): string {
@@ -183,6 +197,13 @@ export function loadConfig(): AppConfig {
       webhookSecret: env('CREEM_WEBHOOK_SECRET'),
       productId: env('CREEM_PRODUCT_ID'),
       priceCents: parseInt(env('CREEM_PRICE_CENTS', '2900'), 10),
+      plans: {
+        radarMonthly: env('CREEM_PRODUCT_ID_RADAR_MONTHLY'),
+        radarAnnual: env('CREEM_PRODUCT_ID_RADAR_ANNUAL'),
+        proMonthly: env('CREEM_PRODUCT_ID_PRO_MONTHLY'),
+        proAnnual: env('CREEM_PRODUCT_ID_PRO_ANNUAL'),
+        teamMonthly: env('CREEM_PRODUCT_ID_TEAM_MONTHLY'),
+      },
     },
     scheduledGenerationEvents: env('SCHEDULED_GENERATION_EVENTS', 'true') === 'true',
     digestEnabled: env('DIGEST_ENABLED', 'false') === 'true',

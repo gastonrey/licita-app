@@ -6,6 +6,7 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { CREDIT_BUNDLES, ENDPOINT_PRICES } from '../domain/types.js';
 import { absoluteUrl, type AppConfig } from '../config.js';
+import { planProductId, type CreemInterval } from '../pay/creem.js';
 import { registerDevFaucet } from '../pay/devProvider.js';
 import { HUMAN_CSS } from './site.css.js';
 import { t, href, otherLocale, languageName, type LocaleCode } from './i18n.js';
@@ -82,7 +83,7 @@ function page(
   locale: LocaleCode,
   title: string,
   body: string,
-  opts: { config?: AppConfig; path?: string; description?: string; switcher?: boolean; noindex?: boolean } = {},
+  opts: { config?: AppConfig; path?: string; description?: string; switcher?: boolean; noindex?: boolean; switchSearch?: string } = {},
 ): string {
   const meta =
     opts.config && opts.path !== undefined
@@ -120,7 +121,7 @@ ${jsonLd}
 <style>${CSS}</style>
 </head>
 <body>
-${nav(locale, opts.path ?? '/', opts.switcher !== false)}
+${nav(locale, opts.path ?? '/', opts.switcher !== false, opts.switchSearch ?? '')}
 <main id="main-content">
 ${body}
 </main>
@@ -134,11 +135,12 @@ ${footer(locale)}
  * `path` is the page's own route (used to keep the locale switcher on the
  * same page); `withSwitch` renders the path-preserving `.lang-switch` link.
  */
-function nav(locale: LocaleCode, path: string, withSwitch: boolean): string {
+function nav(locale: LocaleCode, path: string, withSwitch: boolean, search = ''): string {
   const l = locale;
   const target = otherLocale(l);
-  const switchHref =
+  const switchPath =
     l === 'en' ? (path === '/en' ? '/' : path.replace(/^\/en(?=\/|$)/, '') || '/') : href('en', path);
+  const switchHref = escapeAttr(`${switchPath}${search}`);
   const switcher = withSwitch
     ? `\n<a class="lang-switch" lang="${target}" hreflang="${target}" href="${switchHref}">${languageName(target)}</a>`
     : '';
@@ -318,18 +320,61 @@ function renewalShell(locale: LocaleCode, id: string): string {
   ><p>${t(l, 'home.renewalTable.loading')}</p></div>`;
 }
 
-function planGrid(locale: LocaleCode): string {
+type PlanKey = 'free' | 'radar' | 'pro' | 'team';
+
+function billingIntervalFor(plan: string, requested: CreemInterval): CreemInterval {
+  if (plan === 'radar' || plan === 'pro') return requested;
+  return 'monthly';
+}
+
+function planIsCheckout(config: AppConfig, plan: string, interval: CreemInterval): boolean {
+  if (!config.creem.enabled) return false;
+  if (plan !== 'radar' && plan !== 'pro' && plan !== 'team') return false;
+  return planProductId(config.creem, plan, interval).length > 0;
+}
+
+function choiceText(locale: LocaleCode, plan: PlanKey, interval: CreemInterval, paying: boolean): string {
+  if (!paying || plan === 'free') return t(locale, CHOSEN_PLAN_KEY[plan]);
+  if (plan === 'radar') return t(locale, interval === 'annual' ? 'plans.payRadarAnnual' : 'plans.payRadarMonthly');
+  if (plan === 'pro') return t(locale, interval === 'annual' ? 'plans.payProAnnual' : 'plans.payProMonthly');
+  return t(locale, 'plans.payTeamMonthly');
+}
+
+function intervalChooser(
+  locale: LocaleCode,
+  plan: 'radar' | 'pro',
+  current: { plan: string; interval: CreemInterval } | null,
+): string {
+  const label = `${t(locale, 'plans.intervalLabel')} ${t(locale, `plans.${plan}.name`)}`;
+  const copy = {
+    radar: { monthly: 'plans.monthlyRadar', annual: 'plans.annualRadar' },
+    pro: { monthly: 'plans.monthlyPro', annual: 'plans.annualPro' },
+  } as const;
+  const links = (['monthly', 'annual'] as const)
+    .map((interval) => {
+      const hrefValue = `${href(locale, '/pricing')}?plan=${plan}&interval=${interval}#alta`;
+      const currentAttr = current && current.plan === plan && current.interval === interval ? ' aria-current="true"' : '';
+      return `<a href="${escapeAttr(hrefValue)}"${currentAttr}>${t(locale, copy[plan][interval])}</a>`;
+    })
+    .join('');
+  return `<div class="plan-intervals" role="group" aria-label="${escapeAttr(label)}">${links}</div>`;
+}
+
+function planGrid(locale: LocaleCode, current: { plan: string; interval: CreemInterval } | null = null): string {
   const l = locale;
   const keys = ['free', 'radar', 'pro', 'team'] as const;
   return `<div class="pricing-grid" id="planes">
 ${keys
   .map((key) => {
     const featured = key === 'radar' ? ' featured' : '';
-    const target = key === 'free' ? href(l, '/#alta') : `${href(l, '/pricing')}?plan=${key}#alta`;
+    const interval = billingIntervalFor(key, current?.plan === key ? current.interval : 'monthly');
+    const target = key === 'free' ? href(l, '/#alta') : escapeAttr(`${href(l, '/pricing')}?plan=${key}&interval=${interval}#alta`);
+    const chooser = key === 'radar' || key === 'pro' ? intervalChooser(l, key, current) : '';
     return `<article class="price-card${featured}">
 <h3 class="plan">${t(l, `plans.${key}.name`)}</h3>
 <div class="amount"><span class="n">${t(l, `plans.${key}.price`)}</span><span class="u">${t(l, `plans.${key}.period`)}</span></div>
 <p class="desc">${t(l, `plans.${key}.desc`)}</p>
+${chooser}
 <a class="btn${key === 'free' || key === 'radar' ? '' : ' btn-secondary'}" href="${target}">${t(l, `plans.${key}.cta`)}</a>
 </article>`;
   })
@@ -338,26 +383,24 @@ ${keys
 <p class="pricing-note">${t(l, 'plans.vat')}</p>`;
 }
 
-function ownerTodos(locale: LocaleCode): string {
-  return `<details class="product-note">
-<summary>${t(locale, 'plans.todoSummary')}</summary>
-<p>${t(locale, 'plans.todoCreem')}</p>
-<p>${t(locale, 'plans.todoDigest')}</p>
-</details>`;
-}
-
 function signupForm(
   locale: LocaleCode,
-  opts: { id: string; messageId: string; source: 'homepage' | 'pricing' | 'radar'; plan?: string },
+  opts: {
+    id: string;
+    messageId: string;
+    source: 'homepage' | 'pricing' | 'radar';
+    plan?: string;
+    interval?: CreemInterval;
+    checkout?: boolean;
+  },
 ): string {
   const l = locale;
   const prefix = opts.id;
-  const extra =
-    opts.source === 'homepage'
-      ? ''
-      : ` data-signup-source="${opts.source}"`;
+  const extra = opts.source === 'homepage' ? '' : ` data-signup-source="${opts.source}"`;
   const messageAttr = opts.source === 'homepage' ? '' : ' data-signup-message="1"';
-  return `<form id="${opts.id}" class="cta-form signup-form" method="post" action="/v1/demo/request"${extra}
+  const checkoutAttr = opts.checkout ? ' data-checkout="1"' : '';
+  const buttonKey = opts.checkout ? 'plans.payCta' : opts.plan ? 'plans.interestCta' : 'home.ctaDemo.submit';
+  return `<form id="${opts.id}" class="cta-form signup-form" method="post" action="/v1/demo/request"${extra}${checkoutAttr}
  data-pending="${escapeAttr(t(l, 'home.signupExtra.pending'))}"
  data-success="${escapeAttr(t(l, 'home.ctaDemo.success'))}"
  data-error="${escapeAttr(t(l, 'home.signupExtra.error'))}">
@@ -372,7 +415,8 @@ function signupForm(
 <label for="${prefix}-region">${t(l, 'home.signupExtra.regionLabel')}</label>
 <input id="${prefix}-region" name="region" type="text" autocomplete="off" spellcheck="false" maxlength="5" placeholder="${escapeAttr(t(l, 'home.signupExtra.regionPlaceholder'))}">
 ${opts.plan ? `<input type="hidden" name="plan" value="${escapeAttr(opts.plan)}">` : '<input type="hidden" name="plan" value="">'}
-<button class="btn" type="submit">${t(l, opts.plan ? 'plans.interestCta' : 'home.ctaDemo.submit')}</button>
+<input type="hidden" name="interval" value="${opts.interval ?? 'monthly'}">
+<button class="btn" type="submit">${t(l, buttonKey)}</button>
 <p id="${opts.messageId}" class="cta-message" role="status" aria-live="polite"${messageAttr}></p>
 </form>`;
 }
@@ -442,7 +486,6 @@ ${renewalShell(l, 'renewal-table')}
 ${signupForm(l, { id: 'demo-request', messageId: 'demo-message', source: 'homepage' })}
 <p id="demo-server-status" class="cta-message" role="status">${demoStatus ? t(l, 'home.ctaDemo.success') : ''}</p>
 <noscript><p>${t(l, 'home.ctaDemo.noscript', vars)}</p></noscript>
-${ownerTodos(l)}
 </section>
 
 <section class="section">
@@ -655,7 +698,11 @@ function chosenPlan(req: FastifyRequest): '' | ChosenPlan {
   return '';
 }
 
-function pricingPage(config: AppConfig, locale: LocaleCode, plan: '' | ChosenPlan = ''): string {
+function chosenInterval(req: FastifyRequest): CreemInterval {
+  return (req.query as { interval?: string }).interval === 'annual' ? 'annual' : 'monthly';
+}
+
+function pricingPage(config: AppConfig, locale: LocaleCode, plan: '' | ChosenPlan = '', requestedInterval: CreemInterval = 'monthly'): string {
   const l = locale;
   const vars = {
     creemPrice: (config.creem.priceCents / 100).toFixed(2),
@@ -677,18 +724,25 @@ function pricingPage(config: AppConfig, locale: LocaleCode, plan: '' | ChosenPla
     `
 <h1>${t(l, 'pricing.title')}</h1>
 <p>${t(l, 'home.plansIntro.body')}</p>
-${planGrid(l)}
+${planGrid(l, plan ? { plan, interval: billingIntervalFor(plan, requestedInterval) } : null)}
 <section class="section cta-section" id="alta">
 <h2>${t(l, 'home.ctaDemo.title')}</h2>
 <p>${t(l, 'home.ctaDemo.body')}</p>
 <p id="plan-choice" class="pricing-note"${plan ? '' : ' hidden'}
- data-free="${escapeAttr(t(l, 'plans.chosenFree'))}"
- data-radar="${escapeAttr(t(l, 'plans.chosenRadar'))}"
- data-pro="${escapeAttr(t(l, 'plans.chosenPro'))}"
- data-team="${escapeAttr(t(l, 'plans.chosenTeam'))}">${plan ? t(l, CHOSEN_PLAN_KEY[plan]) : ''}</p>
-${signupForm(l, { id: 'plan-signup', messageId: 'plan-message', source: 'pricing', plan: plan || undefined })}
+ data-free="${escapeAttr(choiceText(l, 'free', 'monthly', false))}"
+ data-radar="${escapeAttr(choiceText(l, 'radar', billingIntervalFor('radar', requestedInterval), planIsCheckout(config, 'radar', billingIntervalFor('radar', requestedInterval))))}"
+ data-pro="${escapeAttr(choiceText(l, 'pro', billingIntervalFor('pro', requestedInterval), planIsCheckout(config, 'pro', billingIntervalFor('pro', requestedInterval))))}"
+ data-team="${escapeAttr(choiceText(l, 'team', 'monthly', planIsCheckout(config, 'team', 'monthly')))}">${plan ? choiceText(l, plan, billingIntervalFor(plan, requestedInterval), planIsCheckout(config, plan, billingIntervalFor(plan, requestedInterval))) : ''}</p>
+${signupForm(l, {
+  id: 'plan-signup',
+  messageId: 'plan-message',
+  source: 'pricing',
+  plan: plan || undefined,
+  interval: plan ? billingIntervalFor(plan, requestedInterval) : 'monthly',
+  checkout: plan ? planIsCheckout(config, plan, billingIntervalFor(plan, requestedInterval)) : false,
+})}
 <noscript><p>${t(l, 'home.ctaDemo.noscript', vars)}</p></noscript>
-${ownerTodos(l)}
+${plan && planIsCheckout(config, plan, billingIntervalFor(plan, requestedInterval)) ? `<noscript><p>${t(l, 'plans.checkoutNoscript')}</p></noscript>` : ''}
 </section>
 <h2>${t(l, 'developersPage.ladderTitle')}</h2>
 <p class="muted">${t(l, 'developersPage.intro')}</p>
@@ -714,7 +768,12 @@ ${config.creem.enabled ? `<h2>${t(l, 'pricing.monthlyTitle')}</h2>\n<p class="mu
 <li>${t(l, 'pricing.steps.3')}</li>
 </ol>
 ${signupScript()}`,
-    { config, path: href(l, '/pricing'), description: t(l, 'pricing.metaDescription') },
+    {
+      config,
+      path: href(l, '/pricing'),
+      description: t(l, 'pricing.metaDescription'),
+      switchSearch: plan ? `?plan=${plan}&interval=${billingIntervalFor(plan, requestedInterval)}#alta` : '',
+    },
   );
 }
 
@@ -1331,7 +1390,6 @@ function radarPage(config: AppConfig, locale: LocaleCode): string {
 <h2>${t(l, 'home.ctaDemo.title')}</h2>
 <p>${t(l, 'home.ctaDemo.body')}</p>
 ${signupForm(l, { id: 'radar-signup', messageId: 'radar-message', source: 'radar' })}
-${ownerTodos(l)}
 </section>
 ${radarScript()}`,
     { config, path: href(l, '/radar'), description: t(l, 'radarPage.metaDescription') },
@@ -1384,8 +1442,8 @@ export function registerWeb(app: FastifyInstance, config: AppConfig): void {
     app.get(`/${slug}`, async (_req, reply) => reply.type('text/html; charset=utf-8').send(trustPage(config, 'es', slug)));
     app.get(`/en/${slug}`, async (_req, reply) => reply.type('text/html; charset=utf-8').send(trustPage(config, 'en', slug)));
   }
-  app.get('/pricing', async (req, reply) => reply.type('text/html; charset=utf-8').send(pricingPage(config, 'es', chosenPlan(req))));
-  app.get('/en/pricing', async (req, reply) => reply.type('text/html; charset=utf-8').send(pricingPage(config, 'en', chosenPlan(req))));
+  app.get('/pricing', async (req, reply) => reply.type('text/html; charset=utf-8').send(pricingPage(config, 'es', chosenPlan(req), chosenInterval(req))));
+  app.get('/en/pricing', async (req, reply) => reply.type('text/html; charset=utf-8').send(pricingPage(config, 'en', chosenPlan(req), chosenInterval(req))));
   app.get('/radar', async (_req, reply) => reply.type('text/html; charset=utf-8').send(radarPage(config, 'es')));
   app.get('/en/radar', async (_req, reply) => reply.type('text/html; charset=utf-8').send(radarPage(config, 'en')));
   app.get('/developers', async (_req, reply) => reply.type('text/html; charset=utf-8').send(developersPage(config, 'es')));

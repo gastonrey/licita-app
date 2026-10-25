@@ -217,13 +217,22 @@ export interface Locale {
     pro: PlanCopy;
     team: PlanCopy;
     interestCta: string;
+    payCta: string;
+    intervalLabel: string;
+    monthlyRadar: string;
+    annualRadar: string;
+    monthlyPro: string;
+    annualPro: string;
     chosenFree: string;
     chosenRadar: string;
     chosenPro: string;
     chosenTeam: string;
-    todoSummary: string;
-    todoCreem: string;
-    todoDigest: string;
+    payRadarMonthly: string;
+    payRadarAnnual: string;
+    payProMonthly: string;
+    payProAnnual: string;
+    payTeamMonthly: string;
+    checkoutNoscript: string;
   };
   radarPage: {
     title: string;
