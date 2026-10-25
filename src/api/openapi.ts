@@ -1043,6 +1043,20 @@ function paths(): Record<string, unknown> {
         responses: stdResponses({ type: 'object' }, false),
       },
     },
+    '/v1/radar/digest': {
+      post: {
+        operationId: 'postCustomerRadarDigest',
+        summary: 'Send this week’s customer radar (operator only)',
+        description:
+          'Operator-only. Requires header x-operator-key. Sends the Spanish weekly radar to each demo_requests address that has not unsubscribed, using the same renewal rows as GET /v1/radar/preview (CPV 48 and 72, at most 5). A second call in the same UTC week does not send again. Does not read Creem plan ids.',
+        parameters: [{ name: 'x-operator-key', in: 'header', required: true, schema: { type: 'string' } }],
+        responses: {
+          '200': { description: 'Digest run counts', content: { 'application/json': { schema: envelopeOf({ type: 'object' }) } } },
+          '401': errResp('Missing/invalid operator key'),
+          '409': errResp('Resend, sender or operator key is not configured'),
+        },
+      },
+    },
     '/v1/demo': {
       get: {
         operationId: 'getDemo',

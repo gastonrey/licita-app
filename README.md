@@ -153,7 +153,7 @@ missing/invalid variable (`src/config.validate.ts`, called from `src/index.ts`).
 | `DIGEST_ENABLED` | `false` | Weekly Renewal Radar digest email. **Default off** — requires `RESEND_API_KEY` and (in production) `DIGEST_FROM_EMAIL` + `DIGEST_BCC` |
 | `DIGEST_CRON` | `0 9 * * 1` | Weekly digest schedule (`M H * * DOW`, UTC) — default Monday 09:00 UTC |
 | `DIGEST_FROM_EMAIL` | — | Digest sender address (a verified Resend sender domain). Required in production when `DIGEST_ENABLED=true` |
-| `DIGEST_BCC` | — | Comma-separated digest recipients, delivered as Bcc. The ONLY addresses a digest can send to — the rate-guard that keeps test/dev runs from emailing strangers. Required in production when `DIGEST_ENABLED=true` |
+| `DIGEST_BCC` | — | Operator-digest recipients, delivered as Bcc. This list is the only audience of the operator digest. The customer radar does not use it. Required in production when `DIGEST_ENABLED=true` |
 
 ## First ingestion
 
@@ -378,11 +378,25 @@ dashboard:
    subscribers (which were actually purchased) keep working regardless of the
    flag.
 6. **Weekly digest (optional).** Set `DIGEST_ENABLED=true` plus
-   `RESEND_API_KEY`, a verified `DIGEST_FROM_EMAIL` and `DIGEST_BCC` (the only
+   `RESEND_API_KEY`, a verified `DIGEST_FROM_EMAIL` and `DIGEST_BCC` (operator
    digest recipients, delivered as Bcc — set it to your own address first).
    Production requires the Resend sender domain to be verified. `DIGEST_CRON`
    (default `0 9 * * 1`, UTC) controls cadence and
    `SCHEDULED_GENERATION_EVENTS=false` kills the digest scheduler entirely.
+   The same timer sends the customer radar: up to 5 real CPV 48/72 renewals
+   to each `demo_requests` address that has not unsubscribed. The sender is
+   `DIGEST_FROM_EMAIL`, or `RESEND_FROM` when that is empty. Unsubscribe links
+   are signed with the existing `OPERATOR_KEY`. No new environment variables.
+   A manual run uses the same env and sends real mail when Resend is set:
+
+   ```bash
+   npm run radar:digest
+   node dist/src/obs/customer-radar-cli.js   # production image
+   ```
+
+   `POST /v1/radar/digest` with header `x-operator-key` does the same job.
+   A second run in the same UTC week does not send again. The command still
+   works when the timer is unarmed.
 7. **Observe.** `GET /v1/stats/readiness` (with `x-operator-key`) is a
    read-only grant document: every fiat switch in tri-state
    (`disabled`/`enabled-dry`/`enabled`), the base URL https status, and the

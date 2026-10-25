@@ -452,7 +452,7 @@ export const es: Locale = {
     todoCreem:
       'TODO(owner): faltan los identificadores de producto de Creem para Radar, Pro y Team (CREEM_PRODUCT_ID_RADAR, CREEM_PRODUCT_ID_PRO, CREEM_PRODUCT_ID_TEAM). Hasta que existan, el botón guarda el interés en demo_requests y no cobra. El checkout existente POST /v1/creem/checkout sigue ligado a un único CREEM_PRODUCT_ID y no debe usarse para estos precios.',
     todoDigest:
-      'TODO(owner): el alta gratuita guarda el email (canal signup, CPV y zona en la URL). El digest semanal actual solo llega al operador, no al cliente. El job que envía 5 renovaciones reales al email del alta no está construido.',
+      'El resumen semanal sale con DIGEST_CRON a los emails del alta que no se han dado de baja. Remitente: DIGEST_FROM_EMAIL o, si falta, RESEND_FROM. Hacen falta RESEND_API_KEY, DIGEST_ENABLED y SCHEDULED_GENERATION_EVENTS. La baja de un clic se guarda y esa dirección no vuelve a entrar.',
   },
   radarPage: {
     title: 'Radar de renovaciones',

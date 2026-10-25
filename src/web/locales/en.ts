@@ -450,7 +450,7 @@ export const en: Locale = {
     todoCreem:
       'TODO(owner): Creem product IDs are still missing for Radar, Pro and Team (CREEM_PRODUCT_ID_RADAR, CREEM_PRODUCT_ID_PRO, CREEM_PRODUCT_ID_TEAM). Until those exist, the button stores interest in demo_requests and does not charge a card. The existing POST /v1/creem/checkout stays bound to the single CREEM_PRODUCT_ID and must not be used for these prices.',
     todoDigest:
-      'TODO(owner): the free signup stores the email (channel signup, CPV and region on the request URL). The current weekly digest emails the operator only, not the customer. The job that sends 5 real renewals to the signup address is not built.',
+      'The weekly summary goes out on DIGEST_CRON to signup addresses that have not unsubscribed. Sender: DIGEST_FROM_EMAIL, or RESEND_FROM when that is empty. It needs RESEND_API_KEY, DIGEST_ENABLED and SCHEDULED_GENERATION_EVENTS. A one-click unsubscribe is stored and that address is left out afterwards.',
   },
   radarPage: {
     title: 'Renewal radar',

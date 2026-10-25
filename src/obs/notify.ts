@@ -150,20 +150,15 @@ export function notifyNewLead(_db: Db, log: NotifyLogger, lead: NotifyLead, cfg:
 
 function buildAckHtml(email: string, baseUrl: string): string {
   const safeEmail = escapeHtml(email);
-  const demoUrl = absoluteUrl(baseUrl, '/v1/demo');
-  const docsUrl = absoluteUrl(baseUrl, '/docs');
+  const radarUrl = absoluteUrl(baseUrl, '/radar');
   return `<!doctype html>
-<html><body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 560px; margin: 0 auto; padding: 24px; color: #1a1a1a;">
-<h1 style="font-size: 18px; margin: 0 0 16px;">Your Relicita signup is in</h1>
-<p>Hi ${safeEmail},</p>
-<p>Thanks for leaving your email for the free weekly radar (5 renewals for your CPV and region). No card was charged and no meeting was booked.</p>
-<p style="font-size: 14px; line-height: 1.6;">The automatic weekly email to subscribers is not switched on yet. We will write to you when the first one goes out. A guided review of the live index is available in the meantime:</p>
-<ul style="font-size: 14px; line-height: 1.6;">
-  <li>Free sample endpoint: <a href="${demoUrl}">${demoUrl}</a></li>
-  <li>Developer docs: <a href="${docsUrl}">${docsUrl}</a></li>
-</ul>
-<p style="font-size: 14px; line-height: 1.6;">To schedule your review, simply reply to this email.</p>
-<p style="font-size: 13px; color: #666;">— The Relicita team · Software and cyber public contracts, before they are re-tendered</p>
+<html lang="es"><body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 560px; margin: 0 auto; padding: 24px; color: #1a1a1a;">
+<h1 style="font-size: 18px; margin: 0 0 16px;">Tu alta en Relicita está hecha</h1>
+<p>Hola ${safeEmail},</p>
+<p>Gracias por pedir el radar semanal gratuito. No hemos cobrado ninguna tarjeta ni hemos reservado ninguna reunión.</p>
+<p>Cada semana te enviaremos hasta 5 renovaciones reales de contratos públicos de software e IT (CPV 48 y 72), con el comprador, el importe, la fuente (TED o PLACSP) y la fecha estimada. Si al darte de alta indicaste un CPV y una zona, el correo usa ese filtro.</p>
+<p>La muestra pública está en <a href="${escapeHtml(radarUrl)}">${escapeHtml(radarUrl)}</a>.</p>
+<p style="font-size: 13px; color: #666;">El equipo de Relicita</p>
 </body></html>`;
 }
 
@@ -185,7 +180,7 @@ export function notifyLeadAck(log: NotifyLogger, lead: NotifyLead, cfg: NotifyCo
   resendSend(log, 'lead auto-reply', lead.id, cfg.resendApiKey, {
     from: cfg.resendFrom,
     to: [lead.email],
-    subject: 'Relicita signup received — what happens next',
+    subject: 'Alta recibida en Relicita',
     html: buildAckHtml(lead.email, cfg.baseUrl ?? ''),
     reply_to: cfg.notifyEmail,
   });

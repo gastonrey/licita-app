@@ -111,6 +111,26 @@ describe('startDigestScheduler', () => {
     handle.stop();
   });
 
+  it('runs the customer radar on the same weekly tick', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+    const sendCustomer = vi.fn(async () => ({ sent: 0 }));
+    const delay = MONDAY_0900.getTime() - NOW.getTime();
+    const handle = startDigestScheduler(config, db as never, {
+      send,
+      sendCustomer,
+      now: () => NOW,
+      log: silentLogger(),
+    });
+    await vi.advanceTimersByTimeAsync(delay);
+    expect(sendCustomer).toHaveBeenCalledTimes(1);
+    const env = sendCustomer.mock.calls[0][0] as { from: string; operatorKey: string; resendApiKey: string };
+    expect(env.from).toBe('digest@licita.example');
+    expect(env.operatorKey).toBe(config.operatorKey);
+    expect(env.resendApiKey).toBe('re_test_digest_scheduler');
+    handle.stop();
+  });
+
   it('never arms when DIGEST_ENABLED is false', async () => {
     vi.useFakeTimers();
     const handle = startDigestScheduler(
