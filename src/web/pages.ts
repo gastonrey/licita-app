@@ -1,6 +1,6 @@
 // registerWeb(app, config) — discovery surfaces (SPEC §7): /, /docs, /pricing,
 // /llms.txt, /robots.txt, the MCP server card and the dev faucet. Plain
-// semantic HTML, no JS. Customer-facing brand is "Licita".
+// semantic HTML. Customer-facing brand is "Relicita". The MCP server id stays "licita".
 // /openapi.json is served by src/api/server.ts (W2); we only link to it.
 
 import type { FastifyInstance, FastifyRequest } from 'fastify';
@@ -10,6 +10,7 @@ import { registerDevFaucet } from '../pay/devProvider.js';
 import { HUMAN_CSS } from './site.css.js';
 import { t, href, otherLocale, languageName, type LocaleCode } from './i18n.js';
 import type { TrustPageSlug } from './locales/types.js';
+import { homeScript, radarScript, signupScript } from './preview-script.js';
 
 const CSS = `
 :root { color-scheme: light; }
@@ -28,7 +29,7 @@ function escapeXml(s: string): string {
 
 /** Fallback meta description for pages without a dedicated one. */
 const SITE_DESCRIPTION =
-  'Licita — evidence-backed public procurement intelligence: EU (TED) and Spain (PLACSP) tenders, buyers, suppliers and deterministic renewal signals, queryable over REST and MCP.';
+  'Relicita tells IT and cybersecurity SMEs which software and cyber public contracts will be re-tendered, who holds them today and when to move. Evidence from TED and PLACSP.';
 
 /**
  * SEO/social head extras for a human page (spec DR3/DR4 + R3): per-locale
@@ -69,8 +70,8 @@ function pageMeta(
   }
   lines.push(
     '<meta property="og:type" content="website">',
-    '<meta property="og:site_name" content="Licita">',
-    `<meta property="og:title" content="${escapeAttr(`${title} — Licita`)}">`,
+    '<meta property="og:site_name" content="Relicita">',
+    `<meta property="og:title" content="${escapeAttr(`${title} — Relicita`)}">`,
     `<meta property="og:url" content="${url}">`,
     `<meta name="description" content="${escapeAttr(description ?? SITE_DESCRIPTION)}">`,
   );
@@ -94,7 +95,7 @@ function page(
 {
   "@context": "https://schema.org",
   "@type": ["WebSite", "SoftwareApplication"],
-  "name": "Licita",
+  "name": "Relicita",
   "url": "${opts.config && opts.path !== undefined ? absoluteUrl(opts.config.baseUrl, opts.path) : opts.config?.baseUrl ?? ''}",
   "inLanguage": "${locale}",
   "description": "${opts.description ?? t(locale, 'jsonLd.description')}",
@@ -115,7 +116,7 @@ ${opts.noindex ? '<meta name="robots" content="noindex">' : ''}
 <link rel="stylesheet" href="/styles.css">
 ${meta}
 ${jsonLd}
-<title>${title} — Licita</title>
+<title>${title} — Relicita</title>
 <style>${CSS}</style>
 </head>
 <body>
@@ -145,9 +146,9 @@ function nav(locale: LocaleCode, path: string, withSwitch: boolean): string {
 <header class="site-header">
 <div class="header-bar">
 <a class="site-brand" href="${href(l, '/')}">${t(l, 'nav.brand')}</a>
-<nav class="site-nav" id="primary-nav" aria-label="${t(l, 'nav.navLabel')}"><a href="${href(l, '/')}">${t(l, 'nav.home')}</a><a href="${href(l, '/use-cases')}">${t(l, 'nav.useCases')}</a><a href="${href(l, '/data')}">${t(l, 'nav.coverageAndMethodology')}</a><a href="${href(l, '/pricing')}">${t(l, 'nav.pricing')}</a><a href="${href(l, '/docs')}">${t(l, 'nav.docs')}</a><a href="${href(l, '/mcp')}">${t(l, 'nav.mcp')}</a></nav>
+<nav class="site-nav" id="primary-nav" aria-label="${t(l, 'nav.navLabel')}"><a href="${href(l, '/')}">${t(l, 'nav.home')}</a><a href="${href(l, '/radar')}">${t(l, 'nav.radar')}</a><a href="${href(l, '/pricing')}">${t(l, 'nav.pricing')}</a><a href="${href(l, '/data')}">${t(l, 'nav.coverageAndMethodology')}</a><a href="${href(l, '/developers')}">${t(l, 'nav.developers')}</a></nav>
 <button class="burger" id="burger" type="button" aria-expanded="false" aria-controls="primary-nav" aria-label="${t(l, 'nav.toggleMenu')}">☰</button>
-<span class="header-cta"><a class="btn btn-sm" href="${href(l, '/#demo')}">${t(l, 'nav.requestDemo')}</a></span>${switcher}
+<span class="header-cta"><a class="btn btn-sm" href="${href(l, '/#alta')}">${t(l, 'nav.requestDemo')}</a></span>${switcher}
 </div>
 </header>`;
 }
@@ -245,14 +246,17 @@ function footer(locale: LocaleCode): string {
   return `<footer class="site-footer">
 <div class="footer-top">
   <div>
-    <div class="footer-brand">Licita</div>
+    <div class="footer-brand">${t(l, 'nav.brand')}</div>
     <p class="footer-desc">${t(l, 'footer.desc')}</p>
   </div>
   <div class="footer-col">
     <h4>${t(l, 'footer.product')}</h4>
     <ul>
+      <li><a href="${href(l, '/radar')}">${t(l, 'nav.radar')}</a></li>
       <li><a href="${href(l, '/use-cases')}">${t(l, 'footer.useCases')}</a></li>
+      <li><a href="${href(l, '/use-cases/tender-intelligence')}">${t(l, 'footer.tenderIntelligence')}</a></li>
       <li><a href="${href(l, '/pricing')}">${t(l, 'footer.pricing')}</a></li>
+      <li><a href="${href(l, '/developers')}">${t(l, 'nav.developers')}</a></li>
       <li><a href="${href(l, '/docs')}">${t(l, 'footer.docs')}</a></li>
       <li><a href="${href(l, '/mcp')}">${t(l, 'footer.mcp')}</a></li>
       <li><a href="${href(l, '/data')}">${t(l, 'footer.coverageAndMethodology')}</a></li>
@@ -279,47 +283,142 @@ function footer(locale: LocaleCode): string {
 <div class="footer-bottom">
   <span>${t(l, 'footer.copyright', { year })}</span>
   <span>${t(l, 'footer.provenance')}</span>
+  <span class="footer-machine"><a href="${href(l, '/llms.txt')}">llms.txt</a> · <a href="${href(l, '/openapi.json')}">OpenAPI</a> · <a href="${href(l, '/v1/pricing')}">/v1/pricing</a></span>
 </div>
 </footer>`;
 }
 
 
-// Frozen demo-sample + demo-request script: byte-identical on both locales
-// (S2.1 needle). Extracted by tests via the `<script>const sample=...` block.
-const HOME_SCRIPT = `<script>const sample=document.getElementById('demo-sample');const safe=(v)=>String(v??'Not reported').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));const lines=(xs)=>'<ul class="evidence-lines">'+(xs||[]).map(x=>'<li>'+safe(x)+'</li>').join('')+'</ul>';fetch('/v1/demo').then(r=>{if(!r.ok)throw new Error('sample unavailable');return r.json()}).then(({data,meta})=>{const t=data.tender,r=data.renewal;sample.dataset.state='ready';sample.innerHTML=(t?'<h3>'+safe(t.title)+'</h3><p><strong>Buyer:</strong> '+safe(t.buyer?.name)+' · <strong>Value:</strong> '+safe(t.estimated_value)+' '+safe(t.currency||'')+' · <strong>Published:</strong> '+safe(t.published_at)+'</p>'+lines(t.evidence):'<p>No current sample is available.</p>')+(r?'<p><strong>Renewal signal:</strong> '+safe(r.signal_type)+' · '+safe(r.confidence)+' confidence · '+safe(r.contract?.end_date)+'</p>'+lines(r.evidence):'<p>No current renewal sample is available.</p>')+'<p class="source-stamp">'+safe(t?.source||r?.source||'source')+' · '+safe(t?.source_ref||r?.source_ref)+' · generated '+safe(meta?.generated_at)+'</p>'+((t?.url||r?.url)?'<p><a class="upstream" href="'+safe(t?.url||r?.url)+'" target="_blank" rel="noreferrer">Open upstream source</a></p>':'')+'<p class="source-stamp">source_metadata: '+safe(JSON.stringify(data.source_metadata||[]))+'</p>'}).catch(()=>{sample.dataset.state='error';sample.innerHTML='<p>Sample unavailable. <a href="/docs">Read the methodology</a>.</p>'});document.getElementById('demo-request').addEventListener('submit',async(e)=>{e.preventDefault();const f=e.currentTarget,m=document.getElementById('demo-message'),b=f.querySelector('button');m.textContent='Requesting a demo…';b.disabled=true;try{const r=await fetch('/v1/demo/request?source=homepage',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({email:f.email.value})});if(!r.ok){const body=await r.json().catch(()=>({}));throw new Error(body.error?.hint||'Check your email and try again.')}m.textContent='Request received. We will follow up by email; no meeting was booked.';f.reset()}catch(err){m.textContent=err.message+' You can also email ${CONTACT_EMAIL}.'}finally{b.disabled=false}})</script>`;
+// Homepage sample script is byte-identical on both locales (labels live in data-*).
+function renewalShell(locale: LocaleCode, id: string): string {
+  const l = locale;
+  const d = (key: string) => escapeAttr(t(l, key));
+  return `<div id="${id}" class="table-slot" data-state="loading" aria-live="polite" aria-busy="true"
+    data-loading="${d('home.renewalTable.loading')}"
+    data-empty="${d('home.renewalTable.empty')}"
+    data-error="${d('home.renewalTable.error')}"
+    data-retry="${d('home.renewalTable.retry')}"
+    data-not-reported="${d('home.renewalTable.notReported')}"
+    data-count-mid="${d('home.renewalTable.countMid')}"
+    data-caption="${d('home.renewalTable.title')}"
+    data-h-contract="${d('home.renewalTable.headers.contract')}"
+    data-h-buyer="${d('home.renewalTable.headers.buyer')}"
+    data-h-holder="${d('home.renewalTable.headers.holder')}"
+    data-h-value="${d('home.renewalTable.headers.value')}"
+    data-h-window="${d('home.renewalTable.headers.window')}"
+    data-h-confidence="${d('home.renewalTable.headers.confidence')}"
+    data-h-source="${d('home.renewalTable.headers.source')}"
+    data-h-calculation="${d('home.renewalTable.headers.calculation')}"
+    data-sig-duration="${d('home.renewalTable.signals.duration')}"
+    data-sig-framework="${d('home.renewalTable.signals.framework')}"
+    data-sig-recurrence="${d('home.renewalTable.signals.recurrence')}"
+    data-conf-low="${d('home.renewalTable.confidence.low')}"
+    data-conf-medium="${d('home.renewalTable.confidence.medium')}"
+    data-conf-high="${d('home.renewalTable.confidence.high')}"
+  ><p>${t(l, 'home.renewalTable.loading')}</p></div>`;
+}
+
+function planGrid(locale: LocaleCode): string {
+  const l = locale;
+  const keys = ['free', 'radar', 'pro', 'team'] as const;
+  return `<div class="pricing-grid" id="planes">
+${keys
+  .map((key) => {
+    const featured = key === 'radar' ? ' featured' : '';
+    const target = key === 'free' ? href(l, '/#alta') : `${href(l, '/pricing')}?plan=${key}#alta`;
+    return `<article class="price-card${featured}">
+<h3 class="plan">${t(l, `plans.${key}.name`)}</h3>
+<div class="amount"><span class="n">${t(l, `plans.${key}.price`)}</span><span class="u">${t(l, `plans.${key}.period`)}</span></div>
+<p class="desc">${t(l, `plans.${key}.desc`)}</p>
+<a class="btn${key === 'free' || key === 'radar' ? '' : ' btn-secondary'}" href="${target}">${t(l, `plans.${key}.cta`)}</a>
+</article>`;
+  })
+  .join('\n')}
+</div>
+<p class="pricing-note">${t(l, 'plans.vat')}</p>`;
+}
+
+function ownerTodos(locale: LocaleCode): string {
+  return `<details class="product-note">
+<summary>${t(locale, 'plans.todoSummary')}</summary>
+<p>${t(locale, 'plans.todoCreem')}</p>
+<p>${t(locale, 'plans.todoDigest')}</p>
+</details>`;
+}
+
+function signupForm(
+  locale: LocaleCode,
+  opts: { id: string; messageId: string; source: 'homepage' | 'pricing' | 'radar'; plan?: string },
+): string {
+  const l = locale;
+  const prefix = opts.id;
+  const extra =
+    opts.source === 'homepage'
+      ? ''
+      : ` data-signup-source="${opts.source}"`;
+  const messageAttr = opts.source === 'homepage' ? '' : ' data-signup-message="1"';
+  return `<form id="${opts.id}" class="cta-form signup-form" method="post" action="/v1/demo/request"${extra}
+ data-pending="${escapeAttr(t(l, 'home.signupExtra.pending'))}"
+ data-success="${escapeAttr(t(l, 'home.ctaDemo.success'))}"
+ data-error="${escapeAttr(t(l, 'home.signupExtra.error'))}">
+<label for="${prefix}-email">${t(l, 'home.ctaDemo.emailLabel')}</label>
+<input id="${prefix}-email" name="email" type="email" inputmode="email" autocomplete="email" spellcheck="false" required placeholder="${escapeAttr(t(l, 'home.ctaDemo.emailPlaceholder'))}">
+<label for="${prefix}-cpv">${t(l, 'home.signupExtra.cpvLabel')}</label>
+<select id="${prefix}-cpv" name="cpv">
+<option value="">${t(l, 'home.signupExtra.cpvBoth')}</option>
+<option value="72">${t(l, 'home.signupExtra.cpvIt')}</option>
+<option value="48">${t(l, 'home.signupExtra.cpvSoftware')}</option>
+</select>
+<label for="${prefix}-region">${t(l, 'home.signupExtra.regionLabel')}</label>
+<input id="${prefix}-region" name="region" type="text" autocomplete="off" spellcheck="false" maxlength="5" placeholder="${escapeAttr(t(l, 'home.signupExtra.regionPlaceholder'))}">
+${opts.plan ? `<input type="hidden" name="plan" value="${escapeAttr(opts.plan)}">` : '<input type="hidden" name="plan" value="">'}
+<button class="btn" type="submit">${t(l, opts.plan ? 'plans.interestCta' : 'home.ctaDemo.submit')}</button>
+<p id="${opts.messageId}" class="cta-message" role="status" aria-live="polite"${messageAttr}></p>
+</form>`;
+}
 
 function homePage(config: AppConfig, locale: LocaleCode, demoStatus = false): string {
   const l = locale;
-  const mcpEndpoint = absoluteUrl(config.apiBaseUrl ?? config.baseUrl, '/mcp');
   const path = href(l, '/');
-  const vars = {
-    creemPrice: (config.creem.priceCents / 100).toFixed(2),
-    researchPrice: config.researchPriceUsd,
-    mcpEndpoint,
-    email: CONTACT_EMAIL,
-    year: String(new Date().getFullYear()),
-    paymentsMode: config.paymentsMode,
-  };
+  const vars = { email: CONTACT_EMAIL, year: String(new Date().getFullYear()) };
   return page(
     l,
     t(l, 'home.title'),
     `
-<header class="hero hero-grid">
-<div class="hero-copy">
+<header class="hero">
 <p class="hero-eyebrow">${t(l, 'home.heroEyebrow')}<span class="eyebrow-dot">·</span>${t(l, 'home.heroEyebrowTag')}</p>
 <h1>${t(l, 'home.heroTitle')}</h1>
 <p class="hero-subtitle">${t(l, 'home.heroSubtitle')}</p>
 <div class="hero-ctas">
-<a class="btn btn-lg" href="${href(l, '/#demo')}">${t(l, 'home.heroCtas.demo')}</a>
-<a class="btn btn-secondary btn-lg" href="/v1/demo">${t(l, 'home.heroCtas.sample')}</a>
+<a class="btn btn-lg" href="${href(l, '/#alta')}">${t(l, 'home.heroCtas.demo')}</a>
+<a class="btn btn-secondary btn-lg" href="${href(l, '/radar')}">${t(l, 'home.heroCtas.sample')}</a>
 </div>
 <p class="hero-caption">${t(l, 'home.heroCaption')}</p>
-</div>
-<aside class="evidence-card" aria-label="${t(l, 'home.evidenceCard.aria')}">
-<div class="evidence-card-head"><span class="title"><span class="live-dot" aria-hidden="true"></span>${t(l, 'home.evidenceCard.title')}</span><span class="stamp">${t(l, 'home.evidenceCard.stamp')}</span></div>
-<article id="demo-sample" class="evidence-body evidence-rail" data-state="loading" aria-live="polite"><p>${t(l, 'home.evidenceCard.loading')}</p><p class="source-stamp">${t(l, 'home.evidenceCard.sourceStamp')}</p></article>
-</aside>
 </header>
+
+<section class="section" id="renovaciones">
+<h2>${t(l, 'home.renewalTable.title')}</h2>
+<p>${t(l, 'home.renewalTable.intro')}</p>
+${renewalShell(l, 'renewal-table')}
+<p class="pricing-note">${t(l, 'home.renewalTable.sampleNote')} <a href="${href(l, '/radar')}">${t(l, 'home.renewalTable.openRadar')}</a></p>
+</section>
+
+<section class="section">
+<h2>${t(l, 'home.evidencePromise.title')}</h2>
+<p>${t(l, 'home.evidencePromise.body')}</p>
+<aside class="evidence-card" aria-label="${escapeAttr(t(l, 'home.evidenceCard.aria'))}">
+<div class="evidence-card-head"><span class="title"><span class="live-dot" aria-hidden="true"></span>${t(l, 'home.evidenceCard.title')}</span><span class="stamp">${t(l, 'home.evidenceCard.stamp')}</span></div>
+<article id="demo-sample" class="evidence-body evidence-rail" data-state="loading" aria-live="polite"
+ data-buyer="${escapeAttr(t(l, 'home.renewalTable.headers.buyer'))}"
+ data-value="${escapeAttr(t(l, 'home.renewalTable.headers.value'))}"
+ data-published="${escapeAttr(t(l, 'radarPage.oppHeaders.published'))}"
+ data-renewal="${escapeAttr(t(l, 'home.renewalTable.headers.calculation'))}"
+ data-upstream="${escapeAttr(t(l, 'footer.provenance'))}"
+ data-error="${escapeAttr(t(l, 'home.renewalTable.error'))}"
+ data-docs="${escapeAttr(t(l, 'home.coverage.title'))}"
+><p>${t(l, 'home.evidenceCard.loading')}</p><p class="source-stamp">${t(l, 'home.evidenceCard.sourceStamp')}</p></article>
+</aside>
+</section>
 
 <section class="section">
 <h2>${t(l, 'home.builtOn')}</h2>
@@ -327,112 +426,44 @@ function homePage(config: AppConfig, locale: LocaleCode, demoStatus = false): st
   <a class="chip" href="${href(l, '/data/eu')}"><span class="chip-kicker">${t(l, 'home.trustStrip.eu.kicker')}</span>${t(l, 'home.trustStrip.eu.label')}</a>
   <a class="chip" href="${href(l, '/data/spain')}"><span class="chip-kicker">${t(l, 'home.trustStrip.es.kicker')}</span>${t(l, 'home.trustStrip.es.label')}</a>
   <a class="chip" href="${href(l, '/data')}"><span class="chip-kicker">${t(l, 'home.trustStrip.dates.kicker')}</span>${t(l, 'home.trustStrip.dates.label')}</a>
-  <a class="chip" href="https://github.com/gastonrey/licita-app"><span class="chip-kicker">${t(l, 'home.trustStrip.openSource.kicker')}</span>${t(l, 'home.trustStrip.openSource.label')}</a>
   <a class="chip" href="${href(l, '/status')}"><span class="chip-kicker">${t(l, 'home.trustStrip.status.kicker')}</span>${t(l, 'home.trustStrip.status.label')}</a>
 </div>
 </section>
 
-<section class="section cta-section" id="demo">
-<h2>${t(l, 'home.ctaDemo.title')}</h2>
-<p>${t(l, 'home.ctaDemo.body')}</p>
-<form id="demo-request" class="cta-form" method="post" action="/v1/demo/request">
-<label for="demo-email">${t(l, 'home.ctaDemo.emailLabel')}</label>
-<input id="demo-email" name="email" type="email" inputmode="email" autocomplete="email" spellcheck="false" required placeholder="${t(l, 'home.ctaDemo.emailPlaceholder')}">
-<button class="btn" type="submit">${t(l, 'home.ctaDemo.submit')}</button>
-<p id="demo-message" class="cta-message" role="status" aria-live="polite">${demoStatus ? t(l, 'home.ctaDemo.success') : ''}</p>
-</form>
-<noscript><p>${t(l, 'home.ctaDemo.noscript', vars)}</p></noscript>
-</section>
-
 <section class="section">
-<h2>${t(l, 'home.usecases.title')}</h2>
-<div class="usecase-grid">
-  <a class="usecase-card" href="${href(l, '/use-cases/tender-intelligence')}"><h3>${t(l, 'home.usecases.cards.tender-intelligence.title')}</h3><p>${t(l, 'home.usecases.cards.tender-intelligence.desc')}</p></a>
-  <a class="usecase-card" href="${href(l, '/use-cases/company-research')}"><h3>${t(l, 'home.usecases.cards.company-research.title')}</h3><p>${t(l, 'home.usecases.cards.company-research.desc')}</p></a>
-  <a class="usecase-card" href="${href(l, '/use-cases/buyer-intelligence')}"><h3>${t(l, 'home.usecases.cards.buyer-intelligence.title')}</h3><p>${t(l, 'home.usecases.cards.buyer-intelligence.desc')}</p></a>
-  <a class="usecase-card" href="${href(l, '/use-cases/renewals-forecasting')}"><h3>${t(l, 'home.usecases.cards.renewals-forecasting.title')}</h3><p>${t(l, 'home.usecases.cards.renewals-forecasting.desc')}</p></a>
-</div>
-</section>
-
-<section class="section">
-<h2>${t(l, 'home.pricing.title')}</h2>
-<p class="muted">${config.creem.enabled ? t(l, 'home.pricing.introCreem') : t(l, 'home.pricing.intro')}</p>
-<div class="pricing-grid">
-  ${config.creem.enabled ? `
-  <div class="price-card featured">
-    <span class="plan">${t(l, 'home.pricing.cards.monthly.plan')}</span>
-    <div class="amount"><span class="n">${t(l, 'home.pricing.cards.monthly.amountN', vars)}</span><span class="u">${t(l, 'home.pricing.cards.monthly.amountU')}</span></div>
-    <p class="desc">${t(l, 'home.pricing.cards.monthly.desc')}</p>
-    <span class="tag">${t(l, 'home.pricing.cards.monthly.tag')}</span>
-  </div>` : ''}
-  <div class="price-card">
-    <span class="plan">${t(l, 'home.pricing.cards.research.plan')}</span>
-    <div class="amount"><span class="n">${t(l, 'home.pricing.cards.research.amountN', vars)}</span><span class="u">${t(l, 'home.pricing.cards.research.amountU')}</span></div>
-    <p class="desc">${t(l, 'home.pricing.cards.research.desc')}</p>
-    <span class="tag">${t(l, 'home.pricing.cards.research.tag')}</span>
-  </div>
-  <div class="price-card${config.creem.enabled ? '' : ' featured'}">
-    <span class="plan">${t(l, 'home.pricing.cards.core.plan')}</span>
-    <div class="amount"><span class="n">${t(l, 'home.pricing.cards.core.amountN')}</span><span class="u">${t(l, 'home.pricing.cards.core.amountU')}</span></div>
-    <p class="desc">${t(l, 'home.pricing.cards.core.desc')}</p>
-    <span class="tag">${t(l, 'home.pricing.cards.core.tag')}</span>
-  </div>
-  <div class="price-card">
-    <span class="plan">${t(l, 'home.pricing.cards.credits.plan')}</span>
-    <div class="amount"><span class="n">${t(l, 'home.pricing.cards.credits.amountN')}</span><span class="u">${t(l, 'home.pricing.cards.credits.amountU')}</span></div>
-    <p class="desc">${t(l, 'home.pricing.cards.credits.desc')}</p>
-    <span class="tag">${t(l, 'home.pricing.cards.credits.tag')}</span>
-  </div>
-</div>
-<p class="pricing-note">${t(l, 'home.pricing.note')}</p>
-</section>
-
-<section class="section grid-2">
-<div>
 <h2>${t(l, 'home.coverage.title')}</h2>
 <p class="muted">${t(l, 'home.coverage.body')}</p>
 <p class="muted">${t(l, 'home.coverage.dataLinks')}</p>
-</div>
-<div>
-<h2>${t(l, 'home.developers.title')}</h2>
-<p class="muted">${t(l, 'home.developers.body')}</p>
-</div>
+</section>
+
+<section class="section cta-section" id="alta">
+<h2>${t(l, 'home.ctaDemo.title')}</h2>
+<p>${t(l, 'home.ctaDemo.body')}</p>
+${signupForm(l, { id: 'demo-request', messageId: 'demo-message', source: 'homepage' })}
+<p id="demo-server-status" class="cta-message" role="status">${demoStatus ? t(l, 'home.ctaDemo.success') : ''}</p>
+<noscript><p>${t(l, 'home.ctaDemo.noscript', vars)}</p></noscript>
+${ownerTodos(l)}
+</section>
+
+<section class="section">
+<h2>${t(l, 'home.plansIntro.title')}</h2>
+<p>${t(l, 'home.plansIntro.body')}</p>
+${planGrid(l)}
+<p><a href="${href(l, '/pricing')}">${t(l, 'nav.pricing')}</a> · <a href="${href(l, '/developers')}">${t(l, 'nav.developers')}</a></p>
 </section>
 
 <section class="section">
 <h2>${t(l, 'home.faq.title')}</h2>
 <div class="faq-list">
   <details class="faq-item" open>
-    <summary>${t(l, 'home.faq.items.accountSubscription.question')}<span class="chev" aria-hidden="true">▾</span></summary>
-    <p class="answer">${config.creem.enabled ? t(l, 'home.faq.items.accountSubscription.answerCreem') : t(l, 'home.faq.items.accountSubscription.answer')}</p>
-  </details>
-  <details class="faq-item">
-    <summary>${t(l, 'home.faq.items.creditsAndKeys.question')}<span class="chev" aria-hidden="true">▾</span></summary>
-    <p class="answer">${t(l, 'home.faq.items.creditsAndKeys.answer')}</p>
-  </details>
-  <details class="faq-item">
-    <summary>${t(l, 'home.faq.items.usdcWallet.question')}<span class="chev" aria-hidden="true">▾</span></summary>
-    <p class="answer">${t(l, 'home.faq.items.usdcWallet.answer')}</p>
-  </details>
-  <details class="faq-item">
     <summary>${t(l, 'home.faq.items.demoRetention.question')}<span class="chev" aria-hidden="true">▾</span></summary>
     <p class="answer">${t(l, 'home.faq.items.demoRetention.answer')}</p>
   </details>
 </div>
 </section>
 
-<section class="section cta-section">
-<h2>${t(l, 'home.connect.title')}</h2>
-<p>${t(l, 'home.connect.body', vars)}</p>
-<p><a class="btn btn-secondary" href="${href(l, '/docs')}">${t(l, 'home.connect.docsLink')}</a> <a class="btn btn-secondary" href="/v1/demo">${t(l, 'home.connect.sampleLink')}</a></p>
-</section>
-
-${HOME_SCRIPT}`,
-    {
-      config,
-      path,
-      description: t(l, 'home.metaDescription'),
-    },
+${homeScript(CONTACT_EMAIL)}`,
+    { config, path, description: t(l, 'home.metaDescription') },
   );
 }
 
@@ -464,7 +495,7 @@ function docsPage(config: AppConfig): string {
     'en',
     'Docs',
     `
-<h1>Docs — Licita</h1>
+<h1>Docs — Relicita</h1>
 
 <h2>Discovery order (for agents)</h2>
 <ol>
@@ -498,7 +529,7 @@ exposes <code>meta.provenance</code> (deduped <code>{ source, source_ref }</code
 <h2>Demo — GET /v1/demo</h2>
 <p>Free, zero-cost sample of what the paid API returns: the single most recent tender and the single
 most recent renewal signal, each under an explicit <code>sample: true</code> marker, plus the list of
-currently priced endpoints. Values are real rows — never fabricated. Use it to validate Licita data
+currently priced endpoints. Values are real rows — never fabricated. Use it to validate Relicita data
 before paying.</p>
 
 <h2>Payment flow (x402 v2)</h2>
@@ -538,7 +569,7 @@ credits and debit from your balance.</p>
 <strong>one-time credits</strong>, not metered per-call billing — each priced call debits your credit
 balance, and running out simply returns <code>402</code> until you refill. Trial keys that upgrade
 preserve their remaining calls; credits are consumed first and the preserved 25 trial calls stay usable.
-Creem handles the payment itself; Licita never sees a card number.</p>`
+Creem handles the payment itself; Relicita never sees a card number.</p>`
     : `<p class="muted">Creem billing is <strong>not enabled</strong> on this deployment
 (<code>CREEM_ENABLED=false</code>), so no subscription is advertised here and
 <code>/v1/creem/*</code> answers <code>404</code>. The prepaid credit path above is fully available.</p>`
@@ -605,11 +636,26 @@ Read the card at <code>/.well-known/mcp/server-card.json</code> for the MCP surf
 and contract dates with confidence <code>low</code>/<code>medium</code>/<code>high</code> — not calibrated
 probabilities. Each signal exposes its full evidence in <code>basis</code>.</li>
 </ul>`,
-    { config, path: '/docs', description: 'How to call Licita: discovery order, x402 payment flow, credits, MCP tools, server card and response conventions.', switcher: false },
+    { config, path: '/docs', description: 'How to call Relicita: discovery order, x402 payment flow, credits, MCP tools, server card and response conventions.', switcher: false },
   );
 }
 
-function pricingPage(config: AppConfig, locale: LocaleCode): string {
+const CHOSEN_PLAN_KEY = {
+  free: 'plans.chosenFree',
+  radar: 'plans.chosenRadar',
+  pro: 'plans.chosenPro',
+  team: 'plans.chosenTeam',
+} as const;
+
+type ChosenPlan = keyof typeof CHOSEN_PLAN_KEY;
+
+function chosenPlan(req: FastifyRequest): '' | ChosenPlan {
+  const plan = (req.query as { plan?: string }).plan;
+  if (plan === 'free' || plan === 'radar' || plan === 'pro' || plan === 'team') return plan;
+  return '';
+}
+
+function pricingPage(config: AppConfig, locale: LocaleCode, plan: '' | ChosenPlan = ''): string {
   const l = locale;
   const vars = {
     creemPrice: (config.creem.priceCents / 100).toFixed(2),
@@ -630,6 +676,22 @@ function pricingPage(config: AppConfig, locale: LocaleCode): string {
     t(l, 'pricing.title'),
     `
 <h1>${t(l, 'pricing.title')}</h1>
+<p>${t(l, 'home.plansIntro.body')}</p>
+${planGrid(l)}
+<section class="section cta-section" id="alta">
+<h2>${t(l, 'home.ctaDemo.title')}</h2>
+<p>${t(l, 'home.ctaDemo.body')}</p>
+<p id="plan-choice" class="pricing-note"${plan ? '' : ' hidden'}
+ data-free="${escapeAttr(t(l, 'plans.chosenFree'))}"
+ data-radar="${escapeAttr(t(l, 'plans.chosenRadar'))}"
+ data-pro="${escapeAttr(t(l, 'plans.chosenPro'))}"
+ data-team="${escapeAttr(t(l, 'plans.chosenTeam'))}">${plan ? t(l, CHOSEN_PLAN_KEY[plan]) : ''}</p>
+${signupForm(l, { id: 'plan-signup', messageId: 'plan-message', source: 'pricing', plan: plan || undefined })}
+<noscript><p>${t(l, 'home.ctaDemo.noscript', vars)}</p></noscript>
+${ownerTodos(l)}
+</section>
+<h2>${t(l, 'developersPage.ladderTitle')}</h2>
+<p class="muted">${t(l, 'developersPage.intro')}</p>
 <p class="muted">${t(l, 'pricing.intro', vars)}</p>
 ${priceTable(config, l)}
 <p class="muted">${t(l, 'pricing.demoFreeNote')}</p>
@@ -650,7 +712,8 @@ ${config.creem.enabled ? `<h2>${t(l, 'pricing.monthlyTitle')}</h2>\n<p class="mu
 <li>${t(l, 'pricing.steps.1')}</li>
 <li>${t(l, 'pricing.steps.2')}</li>
 <li>${t(l, 'pricing.steps.3')}</li>
-</ol>`,
+</ol>
+${signupScript()}`,
     { config, path: href(l, '/pricing'), description: t(l, 'pricing.metaDescription') },
   );
 }
@@ -659,10 +722,10 @@ function llmsTxt(config: AppConfig): string {
   const lines = Object.entries(ENDPOINT_PRICES)
     .map(([endpoint, price]) => `- ${endpoint} — ${price === '0.00' ? 'free' : `$${price}/call`}`)
     .join('\n');
-  return `# Licita — public procurement intelligence for AI agents
+  return `# Relicita — public procurement intelligence for AI agents
 
 ## Overview
-Licita answers the questions an agent needs to act on EU public procurement: recent tenders,
+Relicita (machine id: licita) answers the questions an agent needs to act on EU public procurement: recent tenders,
 renewal/re-tender signals, company opportunities and active buyer activity. It sells decisions and
 intelligence, not raw data: every finding carries evidence, a confidence label (low|medium|high) and
 provenance (source + source_ref + upstream url). Data: TED (Tenders Electronic Daily) award notices
@@ -1104,6 +1167,8 @@ const SITEMAP_PATHS = [
   '/data/spain',
   '/data/eu',
   '/pricing',
+  '/radar',
+  '/developers',
   '/docs',
   ...TRUST_SLUGS.map((slug) => `/${slug}`),
 ];
@@ -1146,6 +1211,131 @@ export function renderWeb404(_config: AppConfig, locale: LocaleCode): string {
     switcher: false,
     noindex: true,
   });
+}
+
+function developersPage(config: AppConfig, locale: LocaleCode): string {
+  const l = locale;
+  const vars = {
+    creemPrice: (config.creem.priceCents / 100).toFixed(2),
+    researchPrice: config.researchPriceUsd,
+    mcpEndpoint: absoluteUrl(config.apiBaseUrl ?? config.baseUrl, '/mcp'),
+    email: CONTACT_EMAIL,
+    year: String(new Date().getFullYear()),
+    paymentsMode: config.paymentsMode,
+  };
+  return page(
+    l,
+    t(l, 'developersPage.title'),
+    `
+<h1>${t(l, 'developersPage.h1')}</h1>
+<p>${t(l, 'developersPage.intro')}</p>
+<p><a class="btn" href="/docs">${t(l, 'developersPage.docsCta')}</a> <a class="btn btn-secondary" href="/mcp">${t(l, 'developersPage.mcpCta')}</a></p>
+<p class="muted">${t(l, 'home.developers.body')}</p>
+<h2>${t(l, 'developersPage.ladderTitle')}</h2>
+<p><strong>${t(l, 'home.pricing.cards.research.plan')}</strong> — ${t(l, 'home.pricing.cards.research.desc')} <span class="tag">${t(l, 'home.pricing.cards.research.tag')}</span> ${t(l, 'home.pricing.cards.research.amountN', vars)}</p>
+${priceTable(config, l)}
+<h2>${t(l, 'home.faq.title')}</h2>
+<div class="faq-list">
+  <details class="faq-item" open>
+    <summary>${t(l, 'home.faq.items.accountSubscription.question')}<span class="chev" aria-hidden="true">▾</span></summary>
+    <p class="answer">${config.creem.enabled ? t(l, 'home.faq.items.accountSubscription.answerCreem') : t(l, 'home.faq.items.accountSubscription.answer')}</p>
+  </details>
+  <details class="faq-item">
+    <summary>${t(l, 'home.faq.items.creditsAndKeys.question')}<span class="chev" aria-hidden="true">▾</span></summary>
+    <p class="answer">${t(l, 'home.faq.items.creditsAndKeys.answer')}</p>
+  </details>
+  <details class="faq-item">
+    <summary>${t(l, 'home.faq.items.usdcWallet.question')}<span class="chev" aria-hidden="true">▾</span></summary>
+    <p class="answer">${t(l, 'home.faq.items.usdcWallet.answer')}</p>
+  </details>
+</div>
+<p>${t(l, 'home.connect.body', vars)}</p>`,
+    { config, path: href(l, '/developers'), description: t(l, 'developersPage.metaDescription') },
+  );
+}
+
+function radarPage(config: AppConfig, locale: LocaleCode): string {
+  const l = locale;
+  const d = (key: string) => escapeAttr(t(l, key));
+  return page(
+    l,
+    t(l, 'radarPage.title'),
+    `
+<header class="hero">
+<p class="hero-eyebrow">${t(l, 'nav.brand')}</p>
+<h1>${t(l, 'radarPage.h1')}</h1>
+<p class="hero-subtitle">${t(l, 'radarPage.intro')}</p>
+</header>
+<form id="radar-filters" class="radar-filters" method="get" action="${href(l, '/radar')}" aria-label="${escapeAttr(t(l, 'radarPage.filtersLabel'))}">
+<label>${t(l, 'radarPage.cpvLabel')}
+<select name="cpv">
+<option value="">${t(l, 'home.signupExtra.cpvBoth')}</option>
+<option value="72">${t(l, 'home.signupExtra.cpvIt')}</option>
+<option value="48">${t(l, 'home.signupExtra.cpvSoftware')}</option>
+</select></label>
+<label>${t(l, 'radarPage.windowLabel')}
+<select name="window_months">
+<option value="12">${t(l, 'radarPage.window12')}</option>
+<option value="6">${t(l, 'radarPage.window6')}</option>
+</select></label>
+<label>${t(l, 'radarPage.buyerLabel')}
+<input name="buyer" type="search" maxlength="80" placeholder="${escapeAttr(t(l, 'radarPage.buyerPlaceholder'))}"></label>
+<label>${t(l, 'radarPage.regionLabel')}
+<input name="region" type="text" maxlength="5" spellcheck="false" autocomplete="off" placeholder="${escapeAttr(t(l, 'radarPage.regionPlaceholder'))}"></label>
+<button class="btn" type="submit">${t(l, 'radarPage.apply')}</button>
+</form>
+<p id="radar-status" class="table-count" role="status" aria-live="polite"></p>
+<div id="radar-app"
+ data-loading="${d('home.renewalTable.loading')}"
+ data-empty="${d('home.renewalTable.empty')}"
+ data-empty-opps="${d('home.renewalTable.empty')}"
+ data-error="${d('home.renewalTable.error')}"
+ data-retry="${d('home.renewalTable.retry')}"
+ data-not-reported="${d('home.renewalTable.notReported')}"
+ data-count-mid="${d('home.renewalTable.countMid')}"
+ data-caption="${d('radarPage.renewalsTitle')}"
+ data-h-contract="${d('home.renewalTable.headers.contract')}"
+ data-h-buyer="${d('home.renewalTable.headers.buyer')}"
+ data-h-holder="${d('home.renewalTable.headers.holder')}"
+ data-h-value="${d('home.renewalTable.headers.value')}"
+ data-h-window="${d('home.renewalTable.headers.window')}"
+ data-h-confidence="${d('home.renewalTable.headers.confidence')}"
+ data-h-source="${d('home.renewalTable.headers.source')}"
+ data-h-calculation="${d('home.renewalTable.headers.calculation')}"
+ data-sig-duration="${d('home.renewalTable.signals.duration')}"
+ data-sig-framework="${d('home.renewalTable.signals.framework')}"
+ data-sig-recurrence="${d('home.renewalTable.signals.recurrence')}"
+ data-conf-low="${d('home.renewalTable.confidence.low')}"
+ data-conf-medium="${d('home.renewalTable.confidence.medium')}"
+ data-conf-high="${d('home.renewalTable.confidence.high')}"
+ data-o-title="${d('radarPage.oppHeaders.title')}"
+ data-o-buyer="${d('radarPage.oppHeaders.buyer')}"
+ data-o-cpv="${d('radarPage.oppHeaders.cpv')}"
+ data-o-value="${d('radarPage.oppHeaders.value')}"
+ data-o-published="${d('radarPage.oppHeaders.published')}"
+ data-o-deadline="${d('radarPage.oppHeaders.deadline')}"
+ data-o-region="${d('radarPage.oppHeaders.region')}"
+ data-o-source="${d('radarPage.oppHeaders.source')}">
+<section class="section" id="renovaciones">
+<h2>${t(l, 'radarPage.renewalsTitle')}</h2>
+<div id="radar-renewals" class="table-slot" aria-live="polite" aria-busy="true" data-state="loading"><p>${t(l, 'home.renewalTable.loading')}</p></div>
+</section>
+<section class="section" id="licitaciones">
+<h2>${t(l, 'radarPage.opportunitiesTitle')}</h2>
+<p>${t(l, 'radarPage.opportunitiesIntro')}</p>
+<div id="radar-opportunities" class="table-slot" aria-live="polite" data-state="loading"></div>
+</section>
+</div>
+<noscript><p>${t(l, 'radarPage.noscript')}</p></noscript>
+<section class="section cta-section" id="alta">
+<h2>${t(l, 'home.ctaDemo.title')}</h2>
+<p>${t(l, 'home.ctaDemo.body')}</p>
+${signupForm(l, { id: 'radar-signup', messageId: 'radar-message', source: 'radar' })}
+${ownerTodos(l)}
+</section>
+${radarScript()}`,
+    { config, path: href(l, '/radar'), description: t(l, 'radarPage.metaDescription') },
+  );
 }
 
 /**
@@ -1194,8 +1384,12 @@ export function registerWeb(app: FastifyInstance, config: AppConfig): void {
     app.get(`/${slug}`, async (_req, reply) => reply.type('text/html; charset=utf-8').send(trustPage(config, 'es', slug)));
     app.get(`/en/${slug}`, async (_req, reply) => reply.type('text/html; charset=utf-8').send(trustPage(config, 'en', slug)));
   }
-  app.get('/pricing', async (_req, reply) => reply.type('text/html; charset=utf-8').send(pricingPage(config, 'es')));
-  app.get('/en/pricing', async (_req, reply) => reply.type('text/html; charset=utf-8').send(pricingPage(config, 'en')));
+  app.get('/pricing', async (req, reply) => reply.type('text/html; charset=utf-8').send(pricingPage(config, 'es', chosenPlan(req))));
+  app.get('/en/pricing', async (req, reply) => reply.type('text/html; charset=utf-8').send(pricingPage(config, 'en', chosenPlan(req))));
+  app.get('/radar', async (_req, reply) => reply.type('text/html; charset=utf-8').send(radarPage(config, 'es')));
+  app.get('/en/radar', async (_req, reply) => reply.type('text/html; charset=utf-8').send(radarPage(config, 'en')));
+  app.get('/developers', async (_req, reply) => reply.type('text/html; charset=utf-8').send(developersPage(config, 'es')));
+  app.get('/en/developers', async (_req, reply) => reply.type('text/html; charset=utf-8').send(developersPage(config, 'en')));
   app.get('/en/', async (_req, reply) => reply.redirect('/en', 301));
   app.get('/es', async (req, reply) => reply.redirect(req.url.replace(/^\/es(?=\/|$)/, '') || '/', 301));
   app.get('/es/*', async (req, reply) => reply.redirect(req.url.replace(/^\/es(?=\/|$)/, '') || '/', 301));

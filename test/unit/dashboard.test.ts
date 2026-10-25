@@ -25,7 +25,7 @@ describe('GET /dashboard', () => {
     const app = buildApp();
     const res = await app.inject({ method: 'GET', url: '/dashboard' });
     const html = res.body;
-    expect(html).toContain('<title>Dashboard — Licita (operator)</title>');
+    expect(html).toContain('<title>Dashboard — Relicita (operator)</title>');
     expect(html).toContain('licita_operator_key');
     expect(html).toContain('x-operator-key');
     expect(html).toContain('/v1/stats/recent?limit=200');

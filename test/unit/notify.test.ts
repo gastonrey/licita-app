@@ -167,7 +167,7 @@ describe('notifyLeadAck (lead auto-reply)', () => {
 
     const body = JSON.parse(String(capturedInit?.body));
     expect(body.to).toEqual(['lead@example.com']);
-    expect(body.subject).toBe('Licita demo request received — what happens next');
+    expect(body.subject).toBe('Relicita signup received — what happens next');
     expect(body.reply_to).toBe('ops@licita.test');
     expect(body.html).toContain('guided review');
     expect(body.html).toContain('/v1/demo');
@@ -248,7 +248,7 @@ describe('notifySubscriberKey', () => {
     const body = JSON.parse(String(capturedInit?.body));
     expect(body.from).toBe('Licita <operator@licita.test>');
     expect(body.to).toEqual(['sub@example.com']);
-    expect(body.subject).toBe('Your Licita API key — welcome to the monthly plan');
+    expect(body.subject).toBe('Your Relicita API key — welcome to the monthly plan');
     expect(body.reply_to).toBe('ops@licita.test');
     // HTML contains the raw key
     expect(body.html).toContain('lct_abc123def456');
@@ -261,7 +261,7 @@ describe('notifySubscriberKey', () => {
     expect(body.html).toContain('balance cannot currently be recovered');
     expect(body.html).toContain('You will not see this key again');
     // Signature
-    expect(body.html).toContain('The Licita team');
+    expect(body.html).toContain('The Relicita team');
   });
 
   it('does not throw on non-2xx (logs warn)', async () => {

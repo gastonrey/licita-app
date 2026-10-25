@@ -17,34 +17,84 @@ export const es: Locale = {
   nav: {
     skipToContent: 'Saltar al contenido',
     navLabel: 'Principal',
-    brand: 'Licita',
+    brand: 'Relicita',
     home: 'Inicio',
     useCases: 'Casos de uso',
     coverageAndMethodology: 'Cobertura y metodología',
     pricing: 'Precios',
     docs: 'Documentación',
     mcp: 'MCP',
+    radar: 'Radar',
+    developers: 'Desarrolladores',
     toggleMenu: 'Alternar menú',
-    requestDemo: 'Solicitar demo',
+    requestDemo: 'Empieza gratis',
   },
   home: {
-    title: 'Inteligencia de contratación pública para la UE y España',
+    title: 'Contratos públicos de software y ciberseguridad, antes de que vuelvan a salir',
     metaDescription:
-      'Licitaciones, compradores, proveedores y señales deterministas de renovación con evidencia, de TED (UE) y PLACSP (España), para equipos profesionales. API REST + MCP.',
-    heroEyebrow: 'Inteligencia de Contratación Pública de la UE',
-    heroEyebrowTag: 'Evidencia Primero',
-    heroTitle: 'Descubre qué contratos públicos merecen tu próxima conversación.',
+      'Relicita indica a tu pyme de software o ciberseguridad qué contratos públicos se van a volver a licitar, quién los tiene hoy y cuándo moverte. Evidencia de TED y PLACSP. Empieza gratis, sin tarjeta.',
+    heroEyebrow: 'Pymes de software y ciberseguridad',
+    heroEyebrowTag: 'Evidencia, no una suposición',
+    heroTitle: 'Antes de que se publique la licitación, ya sabes cuál va a ser.',
     heroSubtitle:
-      'Licita convierte los anuncios de contratación indexados en oportunidades, compradores, proveedores y señales deterministas de renovación con evidencia, para equipos profesionales.',
-    heroCtas: { demo: 'Solicitar la demo del producto', sample: 'GET /v1/demo — muestra gratuita' },
+      'Relicita indica a tu pyme de software o ciberseguridad qué contratos públicos se van a volver a licitar, quién los tiene hoy y cuándo moverte, con la evidencia de cada señal.',
+    heroCtas: { demo: 'Empieza gratis', sample: 'Ver el radar' },
     heroCaption:
-      'Una muestra gratuita etiquetada del índice en vivo: licitación reciente y señal de renovación, con evidencia.',
+      'Radar semanal por email en unos dos minutos. Sin tarjeta. La tabla es una muestra real del índice, no un ejemplo inventado.',
     evidenceCard: {
-      aria: 'Muestra en vivo — GET /v1/demo',
-      title: 'Muestra en vivo — GET /v1/demo',
+      aria: 'Una fila etiquetada del índice en vivo',
+      title: 'Una fila etiquetada del índice en vivo',
       stamp: 'Muestra',
       loading: 'Cargando…',
       sourceStamp: 'GET /v1/demo · estado de la muestra',
+    },
+    renewalTable: {
+      title: 'Contratos que vencen en los próximos 12 meses',
+      intro:
+        'Quién los tiene hoy y por cuánto. Las filas salen del índice en vivo (CPV 48, software, y CPV 72, servicios de TI, incluida la ciberseguridad). Si la fuente no trae un dato, la celda dice No consta.',
+      loading: 'Cargando la muestra del índice…',
+      empty:
+        'El índice no tiene ahora mismo señales de renovación de software o servicios TI en esta ventana. No hemos inventado filas.',
+      error: 'No se ha podido cargar la muestra del índice.',
+      retry: 'Reintentar',
+      sampleNote: 'Muestra pública, hasta 8 filas. El radar de pago es el listado completo de tu CPV y tu zona.',
+      notReported: 'No consta',
+      openRadar: 'Abrir el radar con filtros',
+      countMid: 'de',
+      headers: {
+        contract: 'Contrato',
+        buyer: 'Órgano de contratación',
+        holder: 'Adjudicatario',
+        value: 'Importe',
+        window: 'Ventana',
+        confidence: 'Confianza',
+        source: 'Fuente',
+        calculation: 'Cálculo',
+      },
+      signals: {
+        duration: 'Fin de contrato',
+        framework: 'Fin de acuerdo marco',
+        recurrence: 'Patrón de adjudicaciones',
+      },
+      confidence: { low: 'Baja', medium: 'Media', high: 'Alta' },
+    },
+    evidencePromise: {
+      title: 'Cada alerta cita su fuente y su cálculo',
+      body: 'Cada fila nombra TED o PLACSP y la regla guardada con la señal (fecha de fin, tope del acuerdo marco o hueco entre adjudicaciones anteriores). No hay texto generado ni una puntuación que no podamos enseñar. Las fechas que no vienen en la fuente quedan en No consta. Si la fuente publica un enlace, puedes abrir el anuncio de origen.',
+    },
+    plansIntro: {
+      title: 'Empieza gratis. Sube de plan cuando el listado te sirva.',
+      body: 'Precios sin IVA. El acceso a la API de pago por llamada sigue disponible para quien integre, en su propia página.',
+    },
+    signupExtra: {
+      cpvLabel: 'CPV con el que vendes',
+      regionLabel: 'Zona (NUTS, opcional)',
+      cpvIt: '72 — servicios de TI, incluida la ciberseguridad',
+      cpvSoftware: '48 — paquetes de software',
+      cpvBoth: '48 y 72',
+      regionPlaceholder: 'ES511',
+      pending: 'Guardando el email…',
+      error: 'Revisa el email e inténtalo de nuevo.',
     },
     builtOn: 'Construido sobre fuentes primarias',
     trustStrip: {
@@ -55,13 +105,13 @@ export const es: Locale = {
       status: { kicker: 'Estado', label: 'Actualización en vivo' },
     },
     ctaDemo: {
-      title: 'Descubre tu próxima oportunidad en contexto.',
-      body: 'Una muestra gratuita etiquetada del índice actual, seguida de una revisión guiada de tu mercado. Los emails de demo se conservan mientras la solicitud es nueva; cuando un lead pasa a contactado, usado, pagado o perdido, se purga a los 180 días.',
+      title: 'Empieza gratis',
+      body: 'Un resumen semanal de 5 renovaciones de tu CPV y tu zona. Sin tarjeta. Los emails se conservan mientras la solicitud es nueva; cuando un lead pasa a contactado, usado, pagado o perdido, se purga a los 180 días.',
       emailLabel: 'Email de trabajo',
       emailPlaceholder: 'nombre@empresa.com',
-      submit: 'Solicitar la demo del producto',
-      success: 'Solicitud de demo recibida. Te escribiremos por email; no se ha reservado ninguna reunión.',
-      noscript: 'Envía un email a <a href="mailto:{email}">{email}</a> para solicitar una demo.',
+      submit: 'Empieza gratis',
+      success: 'Alta recibida. Te escribiremos por email; no se ha reservado ninguna reunión y no se ha cobrado ninguna tarjeta.',
+      noscript: 'Escribe a <a href="mailto:{email}">{email}</a> para empezar el radar gratuito.',
     },
     usecases: {
       title: 'Casos de uso',
@@ -95,7 +145,7 @@ export const es: Locale = {
           plan: 'Plan mensual',
           amountN: '€{creemPrice}',
           amountU: 'al mes',
-          desc: 'Un pago mensual desbloquea los endpoints de pago: las llamadas de suscriptor descuentan créditos de un solo uso y la cuenta sigue activa durante 30 días. Creem gestiona el pago; Licita nunca ve un número de tarjeta.',
+          desc: 'Un pago mensual desbloquea los endpoints de pago: las llamadas de suscriptor descuentan créditos de un solo uso y la cuenta sigue activa durante 30 días. Creem gestiona el pago; Relicita nunca ve un número de tarjeta.',
           tag: 'POST /v1/creem/checkout',
         },
         research: {
@@ -139,7 +189,7 @@ export const es: Locale = {
           question: '¿Necesito una cuenta o una suscripción?',
           answerCreem:
             'No necesitas cuenta para pagar por llamada — sin registro. ¿Prefieres un plan? Hay una suscripción mensual disponible con el checkout de Creem en <code>POST /v1/creem/checkout</code>: tu clave de API se envía por email justo después del checkout, marcada <code>kind=creem</code>, y permanece activa 30 días.',
-          answer: 'No. Licita es de pago por llamada — sin registro, sin asientos, sin suscripciones.',
+          answer: 'No. Relicita es de pago por llamada — sin registro, sin asientos, sin suscripciones.',
         },
         creditsAndKeys: {
           question: '¿Cómo funcionan los créditos o las claves de cliente?',
@@ -149,7 +199,7 @@ export const es: Locale = {
         usdcWallet: {
           question: '¿Necesito USDC o una cartera cripto para la suscripción mensual?',
           answer:
-            'No. La suscripción mensual se paga con tarjeta a través de Creem (Merchant of Record); Licita nunca ve tu número de tarjeta. El flujo x402/USDC es solo para el pago por llamada y los créditos prepagados — sin suscripción, sin cartera cripto.',
+            'No. La suscripción mensual se paga con tarjeta a través de Creem (Merchant of Record); Relicita nunca ve tu número de tarjeta. El flujo x402/USDC es solo para el pago por llamada y los créditos prepagados — sin suscripción, sin cartera cripto.',
         },
         demoRetention: {
           question: '¿Cuánto tiempo conserváis los emails de demo?',
@@ -168,7 +218,7 @@ export const es: Locale = {
   usecases: {
     title: 'Casos de uso',
     metaDescription:
-      'Misiones concretas de agente para Licita: endpoints exactos, herramientas MCP, costes y formas reales de respuesta.',
+      'Misiones concretas de agente para Relicita: endpoints exactos, herramientas MCP, costes y formas reales de respuesta.',
     intro:
       'Misiones concretas de agente, los endpoints exactos y las herramientas MCP que las resuelven, su coste y cómo es una respuesta real. Cada ejemplo es una muestra etiquetada: los agentes reciben las mismas formas tras pagar por llamada.',
     freeTitle: 'Primera vista gratuita',
@@ -222,7 +272,7 @@ export const es: Locale = {
     overview: {
       h1: 'Datos',
       intro:
-        'Qué indexa Licita, de dónde procede y cómo pueden validarlo los agentes antes de pagar. Los recuentos se actualizan en cada ingesta: son hechos operativos, no proyecciones.',
+        'Qué indexa Relicita, de dónde procede y cómo pueden validarlo los agentes antes de pagar. Los recuentos se actualizan en cada ingesta: son hechos operativos, no proyecciones.',
       bullets: [
         '<strong>Registros actuales y rangos indexados</strong> se devuelven desde los metadatos en vivo de la fuente; no se hace ninguna afirmación fija de cobertura.',
         '<strong>TED</strong> (Tenders Electronic Daily) — anuncios de adjudicación de la UE, en vivo por defecto: <a href="/data/eu">página de datos de la UE</a>.',
@@ -258,7 +308,7 @@ export const es: Locale = {
   pricing: {
     title: 'Precios',
     metaDescription:
-      'Precios por llamada en USD para cada endpoint de Licita, paquetes de créditos prepagados y cómo funciona el pago.',
+      'Precios por llamada en USD para cada endpoint de Relicita, paquetes de créditos prepagados y cómo funciona el pago.',
     intro:
       'Precios por llamada en USD. Versión legible por máquina: <a href="/v1/pricing">/v1/pricing</a>. Modo de pago: <code>{paymentsMode}</code>. <code>POST /v1/research</code> cuesta <code>${researchPrice}</code> por llamada (configurable).',
     priceTable: { endpointHeader: 'Endpoint', priceHeader: 'Precio (USD / llamada)', freeTag: 'gratis' },
@@ -288,17 +338,17 @@ export const es: Locale = {
   trust: {
     methodology: {
       title: 'Metodología',
-      body: '<p>Licita presenta filas de fuentes y heurísticas deterministas con su evidencia. La confianza es la fuerza de la evidencia, no una probabilidad. Los recuentos de cobertura, los rangos indexados y la actualización se muestran solo cuando el índice en vivo los proporciona; los valores desconocidos figuran como No consta.</p>',
+      body: '<p>Relicita presenta filas de fuentes y heurísticas deterministas con su evidencia. La confianza es la fuerza de la evidencia, no una probabilidad. Los recuentos de cobertura, los rangos indexados y la actualización se muestran solo cuando el índice en vivo los proporciona; los valores desconocidos figuran como No consta.</p>',
     },
     security: {
       title: 'Seguridad',
-      body: '<p>Las estadísticas de operador y los detalles de los leads requieren la clave de operador del lado del servidor. La captura pública de la demo está limitada en tasa y almacena solo un email normalizado, el canal, la URL de origen y las marcas de tiempo del ciclo de vida. Licita no declara una certificación ni un SLA en esta página.</p>',
+      body: '<p>Las estadísticas de operador y los detalles de los leads requieren la clave de operador del lado del servidor. La captura pública de la demo está limitada en tasa y almacena solo un email normalizado, el canal, la URL de origen y las marcas de tiempo del ciclo de vida. Relicita no declara una certificación ni un SLA en esta página.</p>',
     },
     privacy: {
       title: 'Política de privacidad',
       body: `
-<h2>Qué datos conserva Licita</h2>
-<p>Licita es un servicio de inteligencia de contratación pública nativo de agentes. Indexa datos públicos de TED y PLACSP y los expone vía REST y MCP. Los datos personales que tratamos se limitan a lo necesario para operar el servicio:</p>
+<h2>Qué datos conserva Relicita</h2>
+<p>Relicita es un servicio de inteligencia de contratación pública nativo de agentes. Indexa datos públicos de TED y PLACSP y los expone vía REST y MCP. Los datos personales que tratamos se limitan a lo necesario para operar el servicio:</p>
 <ul>
   <li><strong>Solicitudes de demo</strong> — cuando solicitas una demo, almacenamos solo el email que nos facilitas, además del canal, la URL de origen y las marcas de tiempo del ciclo de vida.</li>
   <li><strong>Emails de suscripción</strong> — cuando te suscribes con el checkout de Creem, almacenamos el email del checkout para crear tu clave de API y tu cuenta de facturación.</li>
@@ -316,7 +366,7 @@ export const es: Locale = {
       title: 'Términos del servicio',
       body: `
 <h2>Servicio</h2>
-<p>Licita ofrece inteligencia de contratación pública con evidencia: licitaciones de la UE (TED) y de España (PLACSP), compradores, proveedores y señales deterministas de renovación, consultables vía REST y MCP. Todos los valores proceden de fuentes públicas o de heurísticas deterministas sobre ellas; Licita nunca inventa datos.</p>
+<p>Relicita ofrece inteligencia de contratación pública con evidencia: licitaciones de la UE (TED) y de España (PLACSP), compradores, proveedores y señales deterministas de renovación, consultables vía REST y MCP. Todos los valores proceden de fuentes públicas o de heurísticas deterministas sobre ellas; Relicita nunca inventa datos.</p>
 <h2>Uso</h2>
 <p>Puedes usar el servicio para la evaluación profesional de oportunidades de contratación pública y para integrarlo en tus propias herramientas y agentes, con sujeción a estos términos y a los términos aplicables de las fuentes de origen (TED, PLACSP). No debes usar el servicio para infringir la ley, abusar o saturar la API, revender el índice en bruto como producto competidor ni eludir el pago.</p>
 <h2>Precios y pago</h2>
@@ -324,9 +374,9 @@ export const es: Locale = {
 <h2>Claves de API y créditos</h2>
 <p>Tu clave de API se emite una sola vez y se te envía por email tras el checkout; solo se almacena un hash. Guárdala bien: es el único identificador de tu saldo de créditos, y un saldo perdido no se puede recuperar actualmente. Los créditos prepagados no caducan nunca.</p>
 <h2>Calidad de los datos</h2>
-<p>Los valores indexados proceden de fuentes públicas con evidencia. Las señales de renovación y de oportunidad son heurísticas deterministas; la confianza refleja la fuerza de la evidencia, no una probabilidad. Licita no declara una certificación, un SLA de disponibilidad ni idoneidad para una decisión concreta. Verifica antes de basar una decisión material en los datos.</p>
+<p>Los valores indexados proceden de fuentes públicas con evidencia. Las señales de renovación y de oportunidad son heurísticas deterministas; la confianza refleja la fuerza de la evidencia, no una probabilidad. Relicita no declara una certificación, un SLA de disponibilidad ni idoneidad para una decisión concreta. Verifica antes de basar una decisión material en los datos.</p>
 <h2>Propiedad intelectual</h2>
-<p>La aplicación Licita es de código abierto bajo licencia MIT (<a href="https://github.com/gastonrey/licita-app">github.com/gastonrey/licita-app</a>). Los datos indexados siguen sujetos a los términos de sus fuentes de origen.</p>
+<p>La aplicación Relicita es de código abierto bajo licencia MIT (<a href="https://github.com/gastonrey/licita-app">github.com/gastonrey/licita-app</a>). Los datos indexados siguen sujetos a los términos de sus fuentes de origen.</p>
 <h2>Cambios y contacto</h2>
 <p>Podemos actualizar estos términos; el uso continuado tras publicar un cambio constituye aceptación. ¿Preguntas? Email a <a href="mailto:{email}">{email}</a>.</p>
 <p><em>Última actualización: septiembre de 2026.</em></p>`,
@@ -338,7 +388,7 @@ export const es: Locale = {
   },
   notFound: { title: 'No encontrado', heading: 'No encontrado' },
   footer: {
-    desc: 'Inteligencia de contratación pública europea con evidencia, para equipos profesionales y agentes de IA.',
+    desc: 'Relicita indica a las pymes de software y ciberseguridad qué contratos públicos se van a volver a licitar, con la evidencia de cada señal.',
     product: 'Producto',
     company: 'Empresa',
     contact: 'Contacto',
@@ -353,13 +403,99 @@ export const es: Locale = {
     terms: 'Términos',
     status: 'Estado',
     github: 'GitHub (MIT)',
+    tenderIntelligence: 'Inteligencia de licitaciones',
     provenance:
       'Evidencia: cada fila de datos expone <code>meta.provenance</code> como <code>[{ source, source_ref, url }]</code>.',
-    copyright: '© {year} Licita',
-    backToLicita: 'Volver a Licita',
+    copyright: '© {year} Relicita',
+    backToLicita: 'Volver a Relicita',
   },
   jsonLd: {
     description:
-      'Inteligencia de contratación pública con evidencia: licitaciones, compradores, proveedores y señales deterministas de renovación de la UE (TED) y de España (PLACSP), consultables vía REST y MCP.',
+      'Relicita indica a las pymes de software y ciberseguridad qué contratos públicos se van a volver a licitar, quién los tiene hoy y cuándo moverte. Evidencia de TED y PLACSP.',
+  },
+  plans: {
+    vat: 'Precios sin IVA.',
+    free: {
+      name: 'Gratis',
+      price: '0 €',
+      period: 'email semanal',
+      desc: 'Resumen semanal de 5 renovaciones de tu CPV y tu zona. Sin tarjeta.',
+      cta: 'Empieza gratis',
+    },
+    radar: {
+      name: 'Radar',
+      price: '39 €',
+      period: 'al mes',
+      desc: 'El listado de renovaciones de tu mercado, cada semana. 390 € al año si se factura anualmente.',
+      cta: 'Quiero Radar',
+    },
+    pro: {
+      name: 'Pro',
+      price: '99 €',
+      period: 'al mes',
+      desc: 'Radar más el contexto del órgano de contratación y del adjudicatario, para una lista corta de trabajo. 990 € al año si se factura anualmente.',
+      cta: 'Quiero Pro',
+    },
+    team: {
+      name: 'Team',
+      price: '199 €',
+      period: 'al mes',
+      desc: 'Cinco usuarios en Pro, más acceso de lectura a la API para vuestras herramientas.',
+      cta: 'Quiero Team',
+    },
+    interestCta: 'Guardar mi interés',
+    chosenFree: 'Has elegido el plan Gratis. El alta no pide tarjeta.',
+    chosenRadar: 'Has elegido Radar (39 €/mes, 390 €/año). El alta no pide tarjeta. El cobro de este plan todavía no está activado.',
+    chosenPro: 'Has elegido Pro (99 €/mes, 990 €/año). El alta no pide tarjeta. El cobro de este plan todavía no está activado.',
+    chosenTeam: 'Has elegido Team (199 €/mes, 5 usuarios y API de lectura). El alta no pide tarjeta. El cobro de este plan todavía no está activado.',
+    todoSummary: 'El cobro de estos planes todavía no está conectado',
+    todoCreem:
+      'TODO(owner): faltan los identificadores de producto de Creem para Radar, Pro y Team (CREEM_PRODUCT_ID_RADAR, CREEM_PRODUCT_ID_PRO, CREEM_PRODUCT_ID_TEAM). Hasta que existan, el botón guarda el interés en demo_requests y no cobra. El checkout existente POST /v1/creem/checkout sigue ligado a un único CREEM_PRODUCT_ID y no debe usarse para estos precios.',
+    todoDigest:
+      'TODO(owner): el alta gratuita guarda el email (canal signup, CPV y zona en la URL). El digest semanal actual solo llega al operador, no al cliente. El job que envía 5 renovaciones reales al email del alta no está construido.',
+  },
+  radarPage: {
+    title: 'Radar de renovaciones',
+    metaDescription:
+      'Contratos públicos de software y ciberseguridad que se van a volver a licitar: quién los tiene, por cuánto y la fuente de cada señal.',
+    h1: 'Qué contratos vuelven y quién los tiene',
+    intro:
+      'Filtra la muestra pública por CPV, órgano de contratación y zona. Los importes y las fechas quedan vacíos cuando el anuncio no los trae. La confianza es la fuerza de la evidencia, no una probabilidad.',
+    filtersLabel: 'Filtrar la muestra',
+    cpvLabel: 'CPV',
+    windowLabel: 'Ventana',
+    window6: 'Próximos 6 meses',
+    window12: 'Próximos 12 meses',
+    buyerLabel: 'Órgano de contratación',
+    buyerPlaceholder: 'Nombre del organismo',
+    regionLabel: 'Zona',
+    regionPlaceholder: 'ES511',
+    apply: 'Actualizar',
+    renewalsTitle: 'Renovaciones',
+    opportunitiesTitle: 'Licitaciones ya publicadas',
+    opportunitiesIntro:
+      'Anuncios recientes del mismo corte de CPV. Es lo que ya está en el mercado, al lado de los contratos que todavía no se han vuelto a licitar.',
+    oppHeaders: {
+      title: 'Licitación',
+      buyer: 'Órgano de contratación',
+      cpv: 'CPV',
+      value: 'Importe estimado',
+      published: 'Publicación',
+      deadline: 'Plazo',
+      region: 'Zona',
+      source: 'Fuente',
+    },
+    noscript: 'Esta tabla se carga del índice en vivo. Sin JavaScript, abre GET /v1/radar/preview.',
+  },
+  developersPage: {
+    title: 'Desarrolladores',
+    metaDescription:
+      'Acceso de pago por llamada al índice de Relicita por REST y MCP. USDC vía x402, o créditos prepagados. Los planes para personas están en Precios.',
+    h1: 'API y MCP para integraciones',
+    intro:
+      'Si quieres que una persona lea el radar, empieza en Precios. Esta página es la interfaz para máquinas: llamadas REST de pago y herramientas MCP. No hace falta nada de aquí para recibir el email semanal.',
+    docsCta: 'Leer la documentación',
+    mcpCta: 'Servidor MCP',
+    ladderTitle: 'Pago por llamada',
   },
 };

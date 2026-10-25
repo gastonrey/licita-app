@@ -52,6 +52,8 @@ export interface Locale {
     pricing: string;
     docs: string;
     mcp: string;
+    radar: string;
+    developers: string;
     toggleMenu: string;
     requestDemo: string;
   };
@@ -65,6 +67,42 @@ export interface Locale {
     heroCtas: { demo: string; sample: string };
     heroCaption: string;
     evidenceCard: { aria: string; title: string; stamp: string; loading: string; sourceStamp: string };
+    renewalTable: {
+      title: string;
+      intro: string;
+      loading: string;
+      empty: string;
+      error: string;
+      retry: string;
+      sampleNote: string;
+      notReported: string;
+      openRadar: string;
+      countMid: string;
+      headers: {
+        contract: string;
+        buyer: string;
+        holder: string;
+        value: string;
+        window: string;
+        confidence: string;
+        source: string;
+        calculation: string;
+      };
+      signals: { duration: string; framework: string; recurrence: string };
+      confidence: { low: string; medium: string; high: string };
+    };
+    evidencePromise: { title: string; body: string };
+    plansIntro: { title: string; body: string };
+    signupExtra: {
+      cpvLabel: string;
+      regionLabel: string;
+      cpvIt: string;
+      cpvSoftware: string;
+      cpvBoth: string;
+      regionPlaceholder: string;
+      pending: string;
+      error: string;
+    };
     builtOn: string;
     trustStrip: {
       eu: { kicker: string; label: string };
@@ -166,9 +204,72 @@ export interface Locale {
     terms: string;
     status: string;
     github: string;
+    tenderIntelligence: string;
     provenance: string;
     copyright: string;
     backToLicita: string;
   };
   jsonLd: { description: string };
+  plans: {
+    vat: string;
+    free: PlanCopy;
+    radar: PlanCopy;
+    pro: PlanCopy;
+    team: PlanCopy;
+    interestCta: string;
+    chosenFree: string;
+    chosenRadar: string;
+    chosenPro: string;
+    chosenTeam: string;
+    todoSummary: string;
+    todoCreem: string;
+    todoDigest: string;
+  };
+  radarPage: {
+    title: string;
+    metaDescription: string;
+    h1: string;
+    intro: string;
+    filtersLabel: string;
+    cpvLabel: string;
+    windowLabel: string;
+    window6: string;
+    window12: string;
+    buyerLabel: string;
+    buyerPlaceholder: string;
+    regionLabel: string;
+    regionPlaceholder: string;
+    apply: string;
+    renewalsTitle: string;
+    opportunitiesTitle: string;
+    opportunitiesIntro: string;
+    oppHeaders: {
+      title: string;
+      buyer: string;
+      cpv: string;
+      value: string;
+      published: string;
+      deadline: string;
+      region: string;
+      source: string;
+    };
+    noscript: string;
+  };
+  developersPage: {
+    title: string;
+    metaDescription: string;
+    h1: string;
+    intro: string;
+    docsCta: string;
+    mcpCta: string;
+    ladderTitle: string;
+  };
+}
+
+export interface PlanCopy {
+  name: string;
+  price: string;
+  period: string;
+  desc: string;
+  cta: string;
 }

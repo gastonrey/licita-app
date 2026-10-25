@@ -1026,6 +1026,23 @@ function paths(): Record<string, unknown> {
         responses: stdResponses(researchData, true),
       },
     },
+    '/v1/radar/preview': {
+      get: {
+        operationId: 'getRadarPreview',
+        summary: 'Free capped sample of IT renewal signals and recent tenders',
+        description:
+          'Free public sample (price 0.00) of the live index, limited to CPV 48 and 72 and at most 8 renewal rows plus 8 recent tenders. ' +
+          'window_months is 6 or 12. Nulls are explicit. calculation quotes stored basis fields and is not a generated narrative. ' +
+          'The paid renewal feed remains GET /v1/renewals.',
+        parameters: [
+          qParam('cpv', 'Optional CPV prefix under 48 or 72', { type: 'string', pattern: '^(48|72)\\d{0,6}$' }),
+          qParam('buyer', 'Optional buyer name fragment', { type: 'string', maxLength: 80 }),
+          qParam('region', 'Optional NUTS prefix (2–5 characters)', { type: 'string', pattern: '^[A-Za-z0-9]{2,5}$' }),
+          qParam('window_months', 'Renewal window: 6 or 12 (default 12)', { type: 'integer', enum: [6, 12], default: 12 }),
+        ],
+        responses: stdResponses({ type: 'object' }, false),
+      },
+    },
     '/v1/demo': {
       get: {
         operationId: 'getDemo',
@@ -1273,7 +1290,7 @@ export function buildOpenApi(): Record<string, unknown> {
   return {
     openapi: '3.1.0',
     info: {
-      title: 'Licita',
+      title: 'Relicita',
       version: '0.1.0',
       description:
         'Agent-native procurement intelligence API for the Spanish public sector (TED data, IT/software/cyber CPV vertical). ' +

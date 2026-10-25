@@ -38,13 +38,14 @@ const CONTRACT_NEEDLES = [
   'spellcheck="false"',
   'aria-live="polite"',
   'site-footer',
-  'x-client-key',
   'source_metadata',
   'evidence-lines',
   '<link rel="stylesheet" href="/styles.css">',
-  'POST /v1/research',
   'TED',
   'PLACSP',
+  'id="renewal-table"',
+  'id="alta"',
+  '/v1/radar/preview?window_months=12',
 ];
 
 describe('human homepage (Spanish at /, English at /en)', () => {
@@ -53,28 +54,28 @@ describe('human homepage (Spanish at /, English at /en)', () => {
       {
         url: '/',
         lang: 'es',
-        hero: 'Descubre qué contratos públicos merecen tu próxima conversación.',
+        hero: 'Antes de que se publique la licitación, ya sabes cuál va a ser.',
         builtOn: 'Construido sobre fuentes primarias',
         lastIngestion: 'última ingesta con éxito',
         notReported: 'No consta',
         days: '180 días',
         evidenceRef: 'enlace al origen',
         footer: ['Metodología', 'Seguridad', 'Términos', 'Estado'],
-        research: 'Informe de investigación',
+        research: 'Empieza gratis',
         switchTo: 'en',
         switchLabel: 'English',
       },
       {
         url: '/en',
         lang: 'en',
-        hero: 'Know which public contracts deserve your next conversation',
+        hero: 'Before the tender is published, you already know which one it will be.',
         builtOn: 'Built on primary sources',
         lastIngestion: 'last successful ingestion',
         notReported: 'Not reported',
         days: '180 days',
         evidenceRef: 'upstream',
         footer: ['Methodology', 'Security', 'Terms', 'Status'],
-        research: 'Research brief',
+        research: 'Start free',
         switchTo: 'es',
         switchLabel: 'Español',
       },
@@ -104,19 +105,19 @@ describe('human homepage (Spanish at /, English at /en)', () => {
       }
       // No cross-locale hero leak.
       if (l.lang === 'es') {
-        expect(res.body).not.toContain('Know which public contracts deserve your next conversation');
+        expect(res.body).not.toContain('Before the tender is published, you already know which one it will be.');
       } else {
-        expect(res.body).not.toContain('Descubre qué contratos públicos merecen tu próxima conversación.');
+        expect(res.body).not.toContain('Antes de que se publique la licitación, ya sabes cuál va a ser.');
       }
     }
   });
 
   it('renders a truthful no-JS success state from the redirect query on both locales', async () => {
     const es = await page('/?demo=success');
-    expect(es.body).toContain('Solicitud de demo recibida');
+    expect(es.body).toContain('Alta recibida');
     expect(es.body).toContain('no se ha reservado ninguna reunión');
     const en = await page('/en?demo=success');
-    expect(en.body).toContain('Demo request received');
+    expect(en.body).toContain('Signup received');
     expect(en.body).toContain('no meeting was booked');
   });
 
@@ -134,36 +135,39 @@ describe('human homepage (Spanish at /, English at /en)', () => {
     expect(enPrivacy.body).toContain('contacted, used, paid or lost');
   });
 
-  it('homepage advertises the creem monthly plan with a config-derived price when enabled, on both locales (B2.6)', async () => {
+  it('homepage leads with the SME plans and keeps pay-per-call off the hero, on both locales', async () => {
     const es = await page('/', CREEM_ON);
-    expect(es.body).toContain('Plan mensual');
-    expect(es.body).toContain('€49.50'); // derived from CREEM_PRICE_CENTS=4950
-    expect(es.body).toContain('POST /v1/creem/checkout');
-    expect(es.body).toContain('kind=creem');
-    expect(es.body).toContain('30 días');
-    expect(es.body).not.toContain('Monthly plan');
-    expect(es.body).not.toContain('sin suscripciones, sin registro'); // creem intro replaces the no-subscription line
+    expect(es.body).toContain('39 €');
+    expect(es.body).toContain('99 €');
+    expect(es.body).toContain('199 €');
+    expect(es.body).toContain('TODO(owner):');
+    expect(es.body).toContain('CREEM_PRODUCT_ID_RADAR');
+    expect(es.body).not.toContain('x-client-key');
+    expect(es.body).not.toContain('USDC');
 
     const en = await page('/en', CREEM_ON);
-    expect(en.body).toContain('Monthly plan');
-    expect(en.body).toContain('€49.50');
-    expect(en.body).toContain('POST /v1/creem/checkout');
-    expect(en.body).toContain('kind=creem');
-    expect(en.body).toContain('30 days');
-    expect(en.body).toContain('pay-per-call');
-    expect(en.body).not.toContain('no subscriptions, no signup');
+    expect(en.body).toContain('€39');
+    expect(en.body).toContain('€99');
+    expect(en.body).toContain('€199');
+    expect(en.body).toContain('CREEM_PRODUCT_ID_PRO');
+    expect(en.body).not.toContain('x-client-key');
+    expect(en.body).not.toContain('pay-per-call');
   });
 
-  it('homepage keeps the no-subscription framing on both locales when creem is disabled', async () => {
-    const es = await page('/');
-    expect(es.body).toContain('sin suscripciones, sin registro');
+  it('moves pay-per-call and the research brief onto /developers', async () => {
+    const es = await page('/developers');
+    expect(es.statusCode).toBe(200);
+    expect(es.body).toContain('POST /v1/research');
+    expect(es.body).toContain('x-client-key');
     expect(es.body).toContain('Informe de investigación');
-    expect(es.body).not.toContain('Plan mensual');
-
-    const en = await page('/en');
-    expect(en.body).toContain('no subscriptions, no signup');
+    const en = await page('/en/developers');
     expect(en.body).toContain('Research brief');
-    expect(en.body).not.toContain('Monthly plan');
+    expect(en.body).toContain('x-client-key');
+    const radar = await page('/radar');
+    expect(radar.statusCode).toBe(200);
+    expect(radar.body).toContain('id="radar-filters"');
+    expect(radar.body).toContain('id="radar-renewals"');
+    expect(radar.body).toContain('window_months');
   });
 
   it('serves the demo sample script byte-identical on both locales', async () => {

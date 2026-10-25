@@ -154,20 +154,16 @@ function buildAckHtml(email: string, baseUrl: string): string {
   const docsUrl = absoluteUrl(baseUrl, '/docs');
   return `<!doctype html>
 <html><body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 560px; margin: 0 auto; padding: 24px; color: #1a1a1a;">
-<h1 style="font-size: 18px; margin: 0 0 16px;">Your Licita demo request is in</h1>
+<h1 style="font-size: 18px; margin: 0 0 16px;">Your Relicita signup is in</h1>
 <p>Hi ${safeEmail},</p>
-<p>Thanks for requesting a Licita demo. Here is what happens next:</p>
-<ul style="font-size: 14px; line-height: 1.6;">
-  <li>A guided review of your market — the tenders, buyers and renewal signals relevant to you.</li>
-  <li>An evidence-backed sample from the live index, so you see the actual output before any meeting.</li>
-</ul>
-<p style="font-size: 14px; line-height: 1.6;">In the meantime you can get instant value without signup:</p>
+<p>Thanks for leaving your email for the free weekly radar (5 renewals for your CPV and region). No card was charged and no meeting was booked.</p>
+<p style="font-size: 14px; line-height: 1.6;">The automatic weekly email to subscribers is not switched on yet. We will write to you when the first one goes out. A guided review of the live index is available in the meantime:</p>
 <ul style="font-size: 14px; line-height: 1.6;">
   <li>Free sample endpoint: <a href="${demoUrl}">${demoUrl}</a></li>
   <li>Developer docs: <a href="${docsUrl}">${docsUrl}</a></li>
 </ul>
 <p style="font-size: 14px; line-height: 1.6;">To schedule your review, simply reply to this email.</p>
-<p style="font-size: 13px; color: #666;">— The Licita team · Public procurement intelligence for professionals</p>
+<p style="font-size: 13px; color: #666;">— The Relicita team · Software and cyber public contracts, before they are re-tendered</p>
 </body></html>`;
 }
 
@@ -189,7 +185,7 @@ export function notifyLeadAck(log: NotifyLogger, lead: NotifyLead, cfg: NotifyCo
   resendSend(log, 'lead auto-reply', lead.id, cfg.resendApiKey, {
     from: cfg.resendFrom,
     to: [lead.email],
-    subject: 'Licita demo request received — what happens next',
+    subject: 'Relicita signup received — what happens next',
     html: buildAckHtml(lead.email, cfg.baseUrl ?? ''),
     reply_to: cfg.notifyEmail,
   });
@@ -234,7 +230,7 @@ function buildSubscriberKeyHtml(clientKey: string, baseUrl: string): string {
   const billingUrl = absoluteUrl(baseUrl, '/v1/billing');
   return `<!doctype html>
 <html><body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 560px; margin: 0 auto; padding: 24px; color: #1a1a1a;">
-<h1 style="font-size: 18px; margin: 0 0 16px;">Your Licita API key — welcome to the monthly plan</h1>
+<h1 style="font-size: 18px; margin: 0 0 16px;">Your Relicita API key — welcome to the monthly plan</h1>
 <p>Hi,</p>
 <p>Your monthly subscription is active. Below is your API key — <strong>this is the only time you will see it</strong>.</p>
 
@@ -258,7 +254,7 @@ function buildSubscriberKeyHtml(clientKey: string, baseUrl: string): string {
 
 <p style="font-size: 13px; color: #b44; margin: 16px 0;"><strong>Keep this key safe</strong> — it is the only identifier of your balance. If lost, the balance cannot currently be recovered. You will not see this key again.</p>
 
-<p style="font-size: 13px; color: #666;">— The Licita team · Public procurement intelligence for professionals</p>
+<p style="font-size: 13px; color: #666;">— The Relicita team · Software and cyber public contracts, before they are re-tendered</p>
 </body></html>`;
 }
 
@@ -280,7 +276,7 @@ export function notifySubscriberKey(
   sendEmail(log, cfg.resendApiKey, {
     from: cfg.resendFrom,
     to: [email],
-    subject: 'Your Licita API key — welcome to the monthly plan',
+    subject: 'Your Relicita API key — welcome to the monthly plan',
     html: buildSubscriberKeyHtml(clientKey, cfg.baseUrl ?? ''),
     reply_to: cfg.notifyEmail,
   }, 'subscriber key');

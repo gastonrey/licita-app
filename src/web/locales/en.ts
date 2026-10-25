@@ -14,34 +14,84 @@ export const en: Locale = {
   nav: {
     skipToContent: 'Skip to content',
     navLabel: 'Primary',
-    brand: 'Licita',
+    brand: 'Relicita',
     home: 'Home',
     useCases: 'Use cases',
     coverageAndMethodology: 'Coverage & methodology',
     pricing: 'Pricing',
     docs: 'Docs',
     mcp: 'MCP',
+    radar: 'Radar',
+    developers: 'Developers',
     toggleMenu: 'Toggle menu',
-    requestDemo: 'Request demo',
+    requestDemo: 'Start free',
   },
   home: {
-    title: 'Public procurement intelligence for EU & Spain',
+    title: 'Software and cyber public contracts, before they are re-tendered',
     metaDescription:
-      'Evidence-backed tenders, buyers, suppliers and deterministic renewal signals from TED (EU) and PLACSP (Spain) for professional teams. REST API + MCP.',
-    heroEyebrow: 'EU Public Procurement Intelligence',
-    heroEyebrowTag: 'Evidence First',
-    heroTitle: 'Know which public contracts deserve your next conversation.',
+      'Relicita tells IT and cybersecurity SMEs which software and cyber public contracts will be re-tendered, who holds them today and when to move. Evidence from TED and PLACSP. Start free, no card.',
+    heroEyebrow: 'IT and cybersecurity SMEs',
+    heroEyebrowTag: 'Evidence, not a guess',
+    heroTitle: 'Before the tender is published, you already know which one it will be.',
     heroSubtitle:
-      'Licita turns indexed procurement notices into evidence-backed opportunities, buyers, suppliers and deterministic renewal signals for professional teams.',
-    heroCtas: { demo: 'Request the product demo', sample: 'GET /v1/demo — free sample' },
+      'Relicita tells your IT SME which software and cyber public contracts will be re-tendered, who holds them today and when to move, with the evidence behind each signal.',
+    heroCtas: { demo: 'Start free', sample: 'See the radar' },
     heroCaption:
-      'A free labeled sample from the live index—recent tender and renewal signal, with evidence.',
+      'Weekly email radar in about two minutes. No card. The table is a real sample of the index, not an illustration.',
     evidenceCard: {
-      aria: 'Live sample — GET /v1/demo',
-      title: 'Live sample — GET /v1/demo',
+      aria: 'One labeled row from the live index',
+      title: 'One labeled row from the live index',
       stamp: 'Sample',
       loading: 'Loading…',
       sourceStamp: 'GET /v1/demo · sample status',
+    },
+    renewalTable: {
+      title: 'Contracts expiring in the next 12 months',
+      intro:
+        'Who holds them today, and for how much. These rows come from the live index (CPV 48 software and CPV 72 IT services, including cybersecurity). If a value was not in the source, the cell says Not reported.',
+      loading: 'Loading the index sample…',
+      empty:
+        'The index has no software or IT renewal signals in this window right now. No rows were invented.',
+      error: 'The index sample could not be loaded.',
+      retry: 'Retry',
+      sampleNote: 'Public sample, up to 8 rows. The paid radar is the full list for your CPV and region.',
+      notReported: 'Not reported',
+      openRadar: 'Open the radar with filters',
+      countMid: 'of',
+      headers: {
+        contract: 'Contract',
+        buyer: 'Buyer',
+        holder: 'Held by',
+        value: 'Amount',
+        window: 'Window',
+        confidence: 'Confidence',
+        source: 'Source',
+        calculation: 'Calculation',
+      },
+      signals: {
+        duration: 'Contract end',
+        framework: 'Framework end',
+        recurrence: 'Award pattern',
+      },
+      confidence: { low: 'Low', medium: 'Medium', high: 'High' },
+    },
+    evidencePromise: {
+      title: 'Every alert cites its source and its calculation',
+      body: 'Each row names TED or PLACSP and the rule stored with the signal (end date, framework cap, or the gap between past awards). There is no generated text and no score we cannot show. Unknown dates stay Not reported. Where the source publishes a link, you can open the upstream notice.',
+    },
+    plansIntro: {
+      title: 'Start free. Move up when the list is useful.',
+      body: 'Prices exclude VAT. Pay-per-call API access stays available for developers, on its own page.',
+    },
+    signupExtra: {
+      cpvLabel: 'CPV you sell',
+      regionLabel: 'Region (NUTS, optional)',
+      cpvIt: '72 — IT services, including cybersecurity',
+      cpvSoftware: '48 — software packages',
+      cpvBoth: '48 and 72',
+      regionPlaceholder: 'ES511',
+      pending: 'Saving your email…',
+      error: 'Check the email and try again.',
     },
     builtOn: 'Built on primary sources',
     trustStrip: {
@@ -52,13 +102,13 @@ export const en: Locale = {
       status: { kicker: 'Status', label: 'Live freshness' },
     },
     ctaDemo: {
-      title: 'See your next opportunity in context.',
-      body: 'A free labeled sample from the current index, followed by a guided review of your market. Demo emails are kept while the request is new; once a lead advances to contacted, used, paid or lost it is purged after 180 days.',
+      title: 'Start free',
+      body: 'A weekly summary of 5 renewals for your CPV and region. No card. Emails are kept while the request is new; once a lead advances to contacted, used, paid or lost it is purged after 180 days.',
       emailLabel: 'Work email',
       emailPlaceholder: 'name@company.com',
-      submit: 'Request the product demo',
-      success: 'Demo request received. We will follow up by email; no meeting was booked.',
-      noscript: 'Email <a href="mailto:{email}">{email}</a> to request a demo.',
+      submit: 'Start free',
+      success: 'Signup received. We will follow up by email; no meeting was booked and no card was charged.',
+      noscript: 'Email <a href="mailto:{email}">{email}</a> to start the free radar.',
     },
     usecases: {
       title: 'Use cases',
@@ -92,7 +142,7 @@ export const en: Locale = {
           plan: 'Monthly plan',
           amountN: '€{creemPrice}',
           amountU: 'per month',
-          desc: 'One monthly payment unlocks the paid endpoints: subscriber calls debit one-time credits, and the account stays active for 30 days. Creem handles payment; Licita never sees a card number.',
+          desc: 'One monthly payment unlocks the paid endpoints: subscriber calls debit one-time credits, and the account stays active for 30 days. Creem handles payment; Relicita never sees a card number.',
           tag: 'POST /v1/creem/checkout',
         },
         research: {
@@ -136,7 +186,7 @@ export const en: Locale = {
           question: 'Do I need an account or subscription?',
           answerCreem:
             'No account needed for pay-per-call — no signup. Prefer a plan? A monthly subscription is available via Creem checkout at <code>POST /v1/creem/checkout</code> — your API key is emailed right after checkout, marked <code>kind=creem</code>, and stays active for 30 days.',
-          answer: 'No. Licita is pay-per-call — no signup, no seats, no subscriptions.',
+          answer: 'No. Relicita is pay-per-call — no signup, no seats, no subscriptions.',
         },
         creditsAndKeys: {
           question: 'How do credits or client keys work?',
@@ -146,7 +196,7 @@ export const en: Locale = {
         usdcWallet: {
           question: 'Do I need USDC or a crypto wallet for the monthly subscription?',
           answer:
-            'No. The monthly subscription is paid by card through Creem (Merchant of Record); Licita never sees your card number. The x402/USDC flow is only for pay-per-call and prepaid credits — no subscription, no crypto wallet needed.',
+            'No. The monthly subscription is paid by card through Creem (Merchant of Record); Relicita never sees your card number. The x402/USDC flow is only for pay-per-call and prepaid credits — no subscription, no crypto wallet needed.',
         },
         demoRetention: {
           question: 'How long do you keep demo emails?',
@@ -165,7 +215,7 @@ export const en: Locale = {
   usecases: {
     title: 'Use cases',
     metaDescription:
-      'Concrete agent missions for Licita: exact endpoints, MCP tools, costs and real response shapes.',
+      'Concrete agent missions for Relicita: exact endpoints, MCP tools, costs and real response shapes.',
     intro:
       'Concrete agent missions, the exact endpoints and MCP tools that solve them, their cost, and what a real response looks like. Every example is a labeled sample — agents get the same shapes after paying per call.',
     freeTitle: 'Free first look',
@@ -220,7 +270,7 @@ export const en: Locale = {
     overview: {
       h1: 'Data',
       intro:
-        'What Licita indexes, where it comes from, and how agents can validate it before paying. Counts are updated on ingestion — they are operational facts, not projections.',
+        'What Relicita indexes, where it comes from, and how agents can validate it before paying. Counts are updated on ingestion — they are operational facts, not projections.',
       bullets: [
         '<strong>Current records and indexed ranges</strong> are returned from live source metadata; no fixed coverage claim is made.',
         '<strong>TED</strong> (Tenders Electronic Daily) — EU award notices, live by default: <a href="/en/data/eu">EU data page</a>.',
@@ -256,7 +306,7 @@ export const en: Locale = {
   pricing: {
     title: 'Pricing',
     metaDescription:
-      'Per-call USD prices for every Licita endpoint, prepaid credit bundles, and how payment works.',
+      'Per-call USD prices for every Relicita endpoint, prepaid credit bundles, and how payment works.',
     intro:
       'Per-call prices in USD. Machine-readable version: <a href="/v1/pricing">/v1/pricing</a>. Payments mode: <code>{paymentsMode}</code>. <code>POST /v1/research</code> costs <code>${researchPrice}</code> per call (config-driven).',
     priceTable: { endpointHeader: 'Endpoint', priceHeader: 'Price (USD / call)', freeTag: 'free' },
@@ -286,17 +336,17 @@ export const en: Locale = {
   trust: {
     methodology: {
       title: 'Methodology',
-      body: '<p>Licita presents source rows and deterministic heuristics with their evidence. Confidence is evidence strength, not a probability. Coverage counts, indexed ranges and freshness are shown only when supplied by the live index; unknown values are Not reported.</p>',
+      body: '<p>Relicita presents source rows and deterministic heuristics with their evidence. Confidence is evidence strength, not a probability. Coverage counts, indexed ranges and freshness are shown only when supplied by the live index; unknown values are Not reported.</p>',
     },
     security: {
       title: 'Security',
-      body: '<p>Operator statistics and lead details require the server-side operator key. Public demo capture is rate limited and stores only a normalized email, channel, source URL and lifecycle timestamps. Licita does not claim a certification or SLA on this page.</p>',
+      body: '<p>Operator statistics and lead details require the server-side operator key. Public demo capture is rate limited and stores only a normalized email, channel, source URL and lifecycle timestamps. Relicita does not claim a certification or SLA on this page.</p>',
     },
     privacy: {
       title: 'Privacy Policy',
       body: `
-<h2>What data Licita holds</h2>
-<p>Licita is an agent-native public procurement intelligence service. It indexes public data from TED and PLACSP and exposes it through REST and MCP. The personal data we process is limited to what is needed to operate the service:</p>
+<h2>What data Relicita holds</h2>
+<p>Relicita is an agent-native public procurement intelligence service. It indexes public data from TED and PLACSP and exposes it through REST and MCP. The personal data we process is limited to what is needed to operate the service:</p>
 <ul>
   <li><strong>Demo requests</strong> — when you request a demo, we store only the email address you provide, plus the channel, the source URL and lifecycle timestamps.</li>
   <li><strong>Subscription emails</strong> — when you subscribe via Creem checkout, we store the checkout email to set up your API key and billing account.</li>
@@ -314,7 +364,7 @@ export const en: Locale = {
       title: 'Terms of Service',
       body: `
 <h2>Service</h2>
-<p>Licita provides evidence-backed public procurement intelligence: EU (TED) and Spain (PLACSP) tenders, buyers, suppliers and deterministic renewal signals, queryable over REST and MCP. All values come from public sources or deterministic heuristics over them; Licita never fabricates data.</p>
+<p>Relicita provides evidence-backed public procurement intelligence: EU (TED) and Spain (PLACSP) tenders, buyers, suppliers and deterministic renewal signals, queryable over REST and MCP. All values come from public sources or deterministic heuristics over them; Relicita never fabricates data.</p>
 <h2>Use</h2>
 <p>You may use the service for professional evaluation of public procurement opportunities and for integration into your own tools and agents, subject to these terms and to the applicable terms of the upstream sources (TED, PLACSP). You must not use the service to violate law, to abuse or overload the API, to resell the raw index as a competing product, or to circumvent payment.</p>
 <h2>Pricing and payment</h2>
@@ -322,9 +372,9 @@ export const en: Locale = {
 <h2>API keys and credits</h2>
 <p>Your API key is issued once and sent to you by email after checkout; only a hash is stored server-side. Keep the key safe — it is the only identifier of your credit balance, and a lost balance cannot currently be recovered. Prepaid credits never expire.</p>
 <h2>Data quality</h2>
-<p>Indexed values come from public sources with provenance. Renewal and opportunity signals are deterministic heuristics; confidence reflects evidence strength, not a probability. Licita does not claim a certification, an uptime SLA, or fitness for a particular decision. Verify before relying on the data for a material decision.</p>
+<p>Indexed values come from public sources with provenance. Renewal and opportunity signals are deterministic heuristics; confidence reflects evidence strength, not a probability. Relicita does not claim a certification, an uptime SLA, or fitness for a particular decision. Verify before relying on the data for a material decision.</p>
 <h2>Intellectual property</h2>
-<p>The Licita application is open source under the MIT license (<a href="https://github.com/gastonrey/licita-app">github.com/gastonrey/licita-app</a>). The indexed data remains subject to the terms of its upstream sources.</p>
+<p>The Relicita application is open source under the MIT license (<a href="https://github.com/gastonrey/licita-app">github.com/gastonrey/licita-app</a>). The indexed data remains subject to the terms of its upstream sources.</p>
 <h2>Changes and contact</h2>
 <p>We may update these terms; continued use after a change is posted constitutes acceptance. Questions? Email <a href="mailto:{email}">{email}</a>.</p>
 <p><em>Last updated: September 2026.</em></p>`,
@@ -336,7 +386,7 @@ export const en: Locale = {
   },
   notFound: { title: 'Not found', heading: 'Not found' },
   footer: {
-    desc: 'Evidence-backed EU public procurement intelligence for professional teams and AI agents.',
+    desc: 'Relicita tells IT and cybersecurity SMEs which software and cyber public contracts will be re-tendered, with the evidence behind each signal.',
     product: 'Product',
     company: 'Company',
     contact: 'Contact',
@@ -351,13 +401,99 @@ export const en: Locale = {
     terms: 'Terms',
     status: 'Status',
     github: 'GitHub (MIT)',
+    tenderIntelligence: 'Tender intelligence',
     provenance:
       'Provenance: every data row exposes <code>meta.provenance</code> as <code>[{ source, source_ref, url }]</code>.',
-    copyright: '© {year} Licita',
-    backToLicita: 'Back to Licita',
+    copyright: '© {year} Relicita',
+    backToLicita: 'Back to Relicita',
   },
   jsonLd: {
     description:
-      'Evidence-backed public procurement intelligence: EU (TED) and Spain (PLACSP) tenders, buyers, suppliers and deterministic renewal signals, queryable over REST and MCP.',
+      'Relicita tells IT and cybersecurity SMEs which software and cyber public contracts will be re-tendered, who holds them today and when to move. Evidence from TED and PLACSP.',
+  },
+  plans: {
+    vat: 'Prices exclude VAT.',
+    free: {
+      name: 'Free',
+      price: '€0',
+      period: 'weekly email',
+      desc: 'A weekly summary of 5 renewals for your CPV and region. No card.',
+      cta: 'Start free',
+    },
+    radar: {
+      name: 'Radar',
+      price: '€39',
+      period: 'per month',
+      desc: 'The renewal list for your market, every week. €390 per year when billed annually.',
+      cta: 'I want Radar',
+    },
+    pro: {
+      name: 'Pro',
+      price: '€99',
+      period: 'per month',
+      desc: 'Radar plus buyer and incumbent context for a working shortlist. €990 per year when billed annually.',
+      cta: 'I want Pro',
+    },
+    team: {
+      name: 'Team',
+      price: '€199',
+      period: 'per month',
+      desc: 'Five users on Pro, plus read access to the API for your own tools.',
+      cta: 'I want Team',
+    },
+    interestCta: 'Save my interest',
+    chosenFree: 'You chose the Free plan. Signup does not ask for a card.',
+    chosenRadar: 'You chose Radar (€39/month, €390/year). Signup does not ask for a card. Billing for this plan is not switched on yet.',
+    chosenPro: 'You chose Pro (€99/month, €990/year). Signup does not ask for a card. Billing for this plan is not switched on yet.',
+    chosenTeam: 'You chose Team (€199/month, 5 users and a read API). Signup does not ask for a card. Billing for this plan is not switched on yet.',
+    todoSummary: 'Billing for these plans is not connected yet',
+    todoCreem:
+      'TODO(owner): Creem product IDs are still missing for Radar, Pro and Team (CREEM_PRODUCT_ID_RADAR, CREEM_PRODUCT_ID_PRO, CREEM_PRODUCT_ID_TEAM). Until those exist, the button stores interest in demo_requests and does not charge a card. The existing POST /v1/creem/checkout stays bound to the single CREEM_PRODUCT_ID and must not be used for these prices.',
+    todoDigest:
+      'TODO(owner): the free signup stores the email (channel signup, CPV and region on the request URL). The current weekly digest emails the operator only, not the customer. The job that sends 5 real renewals to the signup address is not built.',
+  },
+  radarPage: {
+    title: 'Renewal radar',
+    metaDescription:
+      'Software and cybersecurity public contracts due to be re-tendered: who holds them, for how much, and the source of each signal.',
+    h1: 'Which contracts come back, and who holds them',
+    intro:
+      'Filter the public sample by CPV, buyer and region. Amounts and dates stay empty when the notice did not report them. Confidence is the strength of the evidence, not a probability.',
+    filtersLabel: 'Filter the sample',
+    cpvLabel: 'CPV',
+    windowLabel: 'Window',
+    window6: 'Next 6 months',
+    window12: 'Next 12 months',
+    buyerLabel: 'Buyer',
+    buyerPlaceholder: 'Name of the contracting authority',
+    regionLabel: 'Region',
+    regionPlaceholder: 'ES511',
+    apply: 'Update',
+    renewalsTitle: 'Renewals',
+    opportunitiesTitle: 'Tenders already published',
+    opportunitiesIntro:
+      'Recent notices in the same CPV slice. This is what is already on the market, next to the contracts that have not been re-tendered yet.',
+    oppHeaders: {
+      title: 'Tender',
+      buyer: 'Buyer',
+      cpv: 'CPV',
+      value: 'Estimated amount',
+      published: 'Published',
+      deadline: 'Deadline',
+      region: 'Region',
+      source: 'Source',
+    },
+    noscript: 'This table is loaded from the live index. Without JavaScript, open GET /v1/radar/preview.',
+  },
+  developersPage: {
+    title: 'Developers',
+    metaDescription:
+      'Pay-per-call access to the Relicita index over REST and MCP. USDC via x402, or prepaid credits. Human plans live on the pricing page.',
+    h1: 'API and MCP for integrations',
+    intro:
+      'Teams that want a person to read the radar should start on the pricing page. This page is the machine interface: priced REST calls and MCP tools. Nothing here is required to receive the weekly email.',
+    docsCta: 'Read the docs',
+    mcpCta: 'MCP server',
+    ladderTitle: 'Pay per call',
   },
 };
