@@ -29,10 +29,10 @@ async function seed(db: Awaited<ReturnType<typeof makeTestDb>>): Promise<void> {
       (1, 1, 'c1', 'Soft SL', 'soft sl')`,
   );
   await db.query(
-    `INSERT INTO tenders (id, source_id, source_ref, title, cpv_main, publication_date, buyer_id, estimated_value, currency, nuts) VALUES
-      (1, 1, '111-2026', 'Servicios de ciberseguridad', '72000000', $1, 1, 180000, 'EUR', 'ES511'),
-      (2, 1, '222-2026', 'Obra civil', '45000000', $1, 2, 900000, 'EUR', 'ES300'),
-      (3, 2, '333-2026', 'Licencias de software', '48000000', $1, 2, NULL, NULL, 'ES300')`,
+    `INSERT INTO tenders (id, source_id, source_ref, title, cpv_main, publication_date, buyer_id, estimated_value, currency, nuts, url) VALUES
+      (1, 1, '111-2026', 'Servicios de ciberseguridad', '72000000', $1, 1, 180000, 'EUR', 'ES511', NULL),
+      (2, 1, '222-2026', 'Obra civil', '45000000', $1, 2, 900000, 'EUR', 'ES300', NULL),
+      (3, 2, '333-2026', 'Licencias de software', '48000000', $1, 2, NULL, NULL, 'ES300', 'https://contrataciondelestado.es/wps/poc?uri=deeplink:detalle_licitacion&idEvl=abc')`,
     [isoInDays(-10)],
   );
   await db.query(
@@ -96,6 +96,7 @@ describe('radarPreviewData', () => {
     });
     expect(renewals.rows[0].calculation).toContain('rule=explicit_end_date');
     expect(String(renewals.rows[0].calculation)).not.toMatch(/probability|invented/i);
+    expect(renewals.rows[0].url).toBe('https://ted.europa.eu/udl?uri=TED:NOTICE:111-2026:TEXT:EN:HTML');
     expect(renewals.rows.map((row) => row.cpv)).not.toContain('45000000');
 
     const titles = opportunities.rows.map((row) => row.title);
@@ -103,8 +104,15 @@ describe('radarPreviewData', () => {
     expect(titles).toContain('Licencias de software');
     expect(titles).not.toContain('Obra civil');
     const software = opportunities.rows.find((row) => row.title === 'Licencias de software');
-    expect(software).toMatchObject({ estimated_value: null, currency: null, source: 'placsp' });
+    expect(software).toMatchObject({
+      estimated_value: null,
+      currency: null,
+      source: 'placsp',
+      source_ref: '333-2026',
+      url: 'https://contrataciondelestado.es/wps/poc?uri=deeplink:detalle_licitacion&idEvl=abc',
+    });
     expect(opportunities.total).toBe(2);
+    expect(JSON.stringify(data)).not.toMatch(/\/null/);
     await db.end();
   });
 
@@ -120,6 +128,25 @@ describe('radarPreviewData', () => {
     expect((none.renewals as { total: number; rows: unknown[] }).total).toBe(0);
     expect((none.renewals as { rows: unknown[] }).rows).toEqual([]);
     expect((none.opportunities as { rows: unknown[] }).rows).toEqual([]);
+    await db.end();
+  });
+
+  it('does not turn a missing or literal null notice url into /null', async () => {
+    const db = await makeTestDb();
+    await seed(db);
+    await db.query(`UPDATE tenders SET url = 'null' WHERE source_id = 1`);
+    await db.query(`UPDATE tenders SET url = NULL WHERE source_id = 2`);
+    const data = await radarPreviewData(db, baseQuery);
+    const renewals = data.renewals as { rows: Array<{ url: string | null }> };
+    const opportunities = data.opportunities as { rows: Array<{ source: string; url: string | null }> };
+    expect(renewals.rows[0].url).toBe('https://ted.europa.eu/udl?uri=TED:NOTICE:111-2026:TEXT:EN:HTML');
+    const placsp = opportunities.rows.find((row) => row.source === 'placsp');
+    expect(placsp?.url).toBeNull();
+    const ted = opportunities.rows.find((row) => row.source === 'ted');
+    expect(ted?.url).toBe('https://ted.europa.eu/udl?uri=TED:NOTICE:111-2026:TEXT:EN:HTML');
+    const encoded = JSON.stringify(data);
+    expect(encoded).not.toMatch(/\/null/);
+    expect(encoded).not.toContain('"url":"null"');
     await db.end();
   });
 });

@@ -9,9 +9,17 @@ function relicitaEsc(v){
   });
 }
 function relicitaUrl(u){
+  if (typeof u !== 'string') return '';
+  var s = u.trim();
+  if (!s || s === 'null' || s === 'undefined') return '';
   try {
-    var x = new URL(u, location.origin);
-    if (x.protocol === 'http:' || x.protocol === 'https:') return x.href;
+    var x = new URL(s);
+    if (x.protocol !== 'http:' && x.protocol !== 'https:') return '';
+    var path = x.pathname;
+    while (path.length > 1 && path.charAt(path.length - 1) === '/') path = path.slice(0, -1);
+    if (!path) path = '/';
+    if (path === '/null' || path.slice(-5) === '/null') return '';
+    return s;
   } catch (e) {}
   return '';
 }
@@ -59,7 +67,7 @@ function relicitaCell(label, html){
 }
 function relicitaSource(row){
   var name = row.source ? String(row.source).toUpperCase() : '';
-  var href = relicitaUrl(row.url);
+  var href = relicitaUrl(row.url) || relicitaUrl(row.source_ref);
   var ref = row.source_ref ? relicitaEsc(row.source_ref) : '';
   var badge = name ? '<span class="source-badge">' + relicitaEsc(name) + '</span>' : '';
   var link = href && ref ? ' <a href="' + relicitaEsc(href) + '" rel="noreferrer">' + ref + '</a>' : (ref ? ' ' + ref : '');
@@ -154,8 +162,8 @@ function bootDemoSample(sample){
     var ref = (t && t.source_ref) || (r && r.source_ref) || '';
     var when = meta && meta.generated_at ? ' · ' + relicitaEsc(meta.generated_at) : '';
     html += '<p class="source-stamp">' + field(source) + ' · ' + field(ref) + when + '</p>';
-    var href = (t && t.url) || (r && r.url);
-    if (href && /^https?:/i.test(String(href))) {
+    var href = relicitaUrl(t && t.url) || relicitaUrl(r && r.url);
+    if (href) {
       html += '<p><a class="upstream" href="' + relicitaEsc(href) + '" target="_blank" rel="noreferrer">' + relicitaEsc(lab('upstream', 'Open upstream source')) + '</a></p>';
     }
     var metaRows = Array.isArray(data.source_metadata) ? data.source_metadata : [];

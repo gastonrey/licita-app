@@ -137,6 +137,45 @@ describe('customer radar helpers', () => {
     expect(html).toContain('https://eutendersai.com/radar/baja?token=abc');
     expect(html).toContain('date de baja');
     expect(html).not.toContain('no está activado');
+    expect(html).not.toContain('/null');
+    expect(html).not.toContain('href="null"');
+  });
+
+  it('links only an absolute notice url and omits the link when the url is null', () => {
+    const html = renderCustomerRadarEmail({
+      rows: [
+        {
+          title: 'Mantenimiento ciber',
+          buyer: 'Ayuntamiento de Test',
+          value: 120000,
+          currency: 'EUR',
+          source: 'ted',
+          windowStart: '2026-11-24',
+          confidence: 'low',
+          url: 'https://ted.europa.eu/udl?uri=TED:NOTICE:111-2026:TEXT:EN:HTML',
+        },
+        {
+          title: 'Licencias',
+          buyer: 'Ministerio',
+          value: null,
+          currency: null,
+          source: 'placsp',
+          windowStart: '2026-11-24',
+          confidence: 'low',
+          url: null,
+        },
+      ],
+      total: 2,
+      filter: {},
+      radarUrl: 'https://eutendersai.com/radar',
+      unsubscribeUrl: 'https://eutendersai.com/radar/baja?token=abc',
+    });
+    expect(html).toContain('Abrir la fuente');
+    expect(html.match(/Abrir la fuente/g)).toHaveLength(1);
+    expect(html).toContain('https://ted.europa.eu/udl?uri=TED:NOTICE:111-2026:TEXT:EN:HTML');
+    expect(html).not.toContain('/null');
+    expect(html).not.toContain('href="null"');
+    expect(html).not.toContain('TED:NOTICE:333-2026');
   });
 });
 
@@ -179,6 +218,9 @@ describe('sendCustomerRadarDigest', () => {
     expect(all?.html).toContain('Licencias de software');
     expect(all?.html).toContain('Fuente: TED');
     expect(all?.html).toContain('Fuente: PLACSP');
+    expect(all?.html).toContain('https://ted.europa.eu/udl?uri=TED:NOTICE:111-2026:TEXT:EN:HTML');
+    expect(all?.html).not.toContain('TED:NOTICE:333-2026');
+    expect(all?.html).not.toContain('/null');
     expect(all?.html).toContain('No consta');
     expect(all?.html.match(/<li /g)?.length).toBe(2);
 

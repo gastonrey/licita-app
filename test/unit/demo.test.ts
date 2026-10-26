@@ -84,6 +84,43 @@ describe('demoData', () => {
     expect((data.priced_endpoints as unknown[]).length).toBeGreaterThan(0);
   });
 
+  it('keeps a stored PLACSP link and returns null when the notice url is missing or the string null', async () => {
+    const stored = 'https://contrataciondelestado.es/wps/poc?uri=deeplink:detalle_licitacion&idEvl=abc';
+    const placsp = {
+      query: async (text: string) => {
+        const t = text.replace(/\s+/g, ' ');
+        if (t.includes('FROM forecast_signals fs')) {
+          return {
+            rows: [{ ...RENEWAL_SAMPLE, source_code: 'placsp', tender_source_ref: 'placsp:S-02027-2026', tender_url: stored }],
+          };
+        }
+        if (t.includes('FROM sources s')) return { rows: [] };
+        return { rows: [{ ...TENDER_SAMPLE, source_code: 'placsp', source_ref: 'placsp:S-02027-2026', url: null }] };
+      },
+    } as unknown as Db;
+    const linked = await demoData(placsp, {});
+    expect((linked.tender as { url: string | null }).url).toBeNull();
+    expect((linked.renewal as { url: string | null }).url).toBe(stored);
+
+    const missing = {
+      query: async (text: string) => {
+        const t = text.replace(/\s+/g, ' ');
+        if (t.includes('FROM forecast_signals fs')) {
+          return { rows: [{ ...RENEWAL_SAMPLE, source_code: 'ted', tender_url: 'null' }] };
+        }
+        if (t.includes('FROM sources s')) return { rows: [] };
+        return { rows: [{ ...TENDER_SAMPLE, url: 'null' }] };
+      },
+    } as unknown as Db;
+    const data = await demoData(missing, {});
+    const tender = data.tender as { url: string | null };
+    const renewal = data.renewal as { url: string | null };
+    expect(tender.url).toBe('https://ted.europa.eu/udl?uri=TED:NOTICE:111-2026:TEXT:EN:HTML');
+    expect(renewal.url).toBe('https://ted.europa.eu/udl?uri=TED:NOTICE:222-2026:TEXT:EN:HTML');
+    expect(JSON.stringify(data)).not.toMatch(/\/null/);
+    expect(JSON.stringify(data)).not.toContain('"url":"null"');
+  });
+
   it('returns nulls when the database is empty', async () => {
     const empty = { query: async () => ({ rows: [] }) } as unknown as Db;
     const data = await demoData(empty, { 'POST /v1/research': '0.50' });

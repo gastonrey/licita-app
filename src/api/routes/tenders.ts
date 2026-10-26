@@ -8,7 +8,7 @@ import {
   notFound,
   num,
   provenanceFor,
-  tedUrl,
+  publicNoticeUrl,
   validate,
   type RouteCtx,
 } from './common.js';
@@ -59,11 +59,12 @@ export function tenderHandler(ctx: RouteCtx) {
 
     const aRes = await ctx.db.query(TENDER_AWARDS_SQL, [id]);
 
-    const provenance = provenanceFor(
-      t.source_code as string,
+    const noticeUrl = publicNoticeUrl(
+      (t.source_code as string) ?? null,
       (t.source_ref as string) ?? null,
-      tedUrl(t.source_ref as string | null, t.url as string | null),
+      (t.url as string) ?? null,
     );
+    const provenance = provenanceFor(t.source_code as string, (t.source_ref as string) ?? null, noticeUrl);
 
     const data = {
       id: Number(t.id),
@@ -79,7 +80,7 @@ export function tenderHandler(ctx: RouteCtx) {
       estimated_value: num(t.estimated_value),
       currency: (t.currency as string) ?? null,
       nuts: (t.nuts as string) ?? null,
-      url: tedUrl(t.source_ref as string | null, t.url as string | null) ?? null,
+      url: noticeUrl,
       buyer:
         t.b_id != null
           ? {

@@ -7,7 +7,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 import { ENDPOINT_PRICES, type Provenance } from '../../domain/types.js';
 import type { Db } from '../../db/client.js';
 import { priceOverrides } from '../../pay/prices.js';
-import { dateStr, envelope, notFound, num, tedUrl, type RouteCtx, HttpError, validate } from './common.js';
+import { dateStr, envelope, notFound, num, publicNoticeUrl, type RouteCtx, HttpError, validate } from './common.js';
 import { openWindowSql, renewalHorizonIso, SIGNAL_ORDER_SQL } from './renewals.js';
 import { z } from 'zod';
 import { notifyLeadAck, notifyNewLead } from '../../obs/notify.js';
@@ -140,7 +140,7 @@ export function demoRequestStatusHandler(ctx: RouteCtx) {
 
 export const DEMO_TENDER_SQL = `
 SELECT t.id, t.source_ref, t.title, t.cpv_main, t.estimated_value, t.currency,
-       t.publication_date, s.code AS source_code,
+       t.publication_date, t.url, s.code AS source_code,
        b.id AS buyer_id, b.name AS buyer_name, b.country AS buyer_country
 FROM tenders t
 JOIN sources s ON s.id = t.source_id
@@ -155,7 +155,7 @@ export function demoRenewalSql(now = new Date()): string {
 SELECT fs.id, fs.signal_type, fs.cpv, fs.window_start, fs.window_end, fs.confidence, fs.basis,
        c.name AS incumbent_name,
        ct.title AS contract_title, ct.end_date AS contract_end,
-       s.code AS source_code, t.source_ref AS tender_source_ref
+       s.code AS source_code, t.source_ref AS tender_source_ref, t.url AS tender_url
 FROM forecast_signals fs
 LEFT JOIN companies c ON c.id = fs.incumbent_company_id
 LEFT JOIN contracts ct ON ct.id = fs.contract_id
@@ -219,7 +219,11 @@ export async function demoData(
           source: String(tender.source_code),
           source_ref: (tender.source_ref as string) ?? null,
           evidence: [`Tender title: ${String(tender.title ?? 'Not reported')}`, `Publication reference: ${String(tender.source_ref ?? 'Not reported')}`],
-          url: tender.source_code === 'ted' ? tedUrl((tender.source_ref as string) ?? null) : undefined,
+          url: publicNoticeUrl(
+            (tender.source_code as string) ?? null,
+            (tender.source_ref as string) ?? null,
+            (tender.url as string) ?? null,
+          ),
         }
       : null,
     renewal: renewal
@@ -237,7 +241,11 @@ export async function demoData(
           source: String(renewal.source_code ?? 'signal'),
           source_ref: (renewal.tender_source_ref as string) ?? null,
           evidence: [`Signal type: ${String(renewal.signal_type ?? 'Not reported')}`, `Confidence basis: ${String(renewal.confidence ?? 'Not reported')}`],
-          url: renewal.source_code === 'ted' ? tedUrl((renewal.tender_source_ref as string) ?? null) : undefined,
+          url: publicNoticeUrl(
+            (renewal.source_code as string) ?? null,
+            (renewal.tender_source_ref as string) ?? null,
+            (renewal.tender_url as string) ?? null,
+          ),
         }
       : null,
     source_metadata: sources.rows.map((row) => ({

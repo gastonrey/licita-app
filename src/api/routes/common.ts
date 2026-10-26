@@ -148,11 +148,61 @@ export function dateStr(v: unknown): string | null {
   return s.length >= 10 ? s.slice(0, 10) : s;
 }
 
-/** Canonical TED notice URL from a publication number (e.g. "123456-2026"). */
+/** TED publication numbers look like "123456-2026". Anything else is not a notice id. */
+const TED_PUBLICATION_RE = /^\d{1,9}-\d{4}$/;
+
+/**
+ * Absolute http(s) URL, or undefined when the value cannot be used as a link.
+ * Relative paths and the literals "null" / "undefined" are rejected: the URL
+ * parser would otherwise resolve them against a base and produce a "/null" path.
+ * The original string is returned unchanged so upstream query encoding is kept.
+ */
+export function absoluteHttpUrl(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  if (!trimmed || /^(null|undefined)$/i.test(trimmed)) return undefined;
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    return undefined;
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return undefined;
+  const path = parsed.pathname.replace(/\/+$/, '') || '/';
+  if (path === '/null' || path.endsWith('/null')) return undefined;
+  return trimmed;
+}
+
+/**
+ * Canonical TED notice URL from a publication number (e.g. "123456-2026").
+ * A stored value is used only when it is an absolute http(s) URL. A missing
+ * or garbage stored value falls back to the publication number; non-TED refs
+ * (PLACSP folder ids, the string "null") do not invent a TED link.
+ */
 export function tedUrl(sourceRef: string | null | undefined, stored?: string | null): string | undefined {
-  if (stored) return stored;
-  if (!sourceRef) return undefined;
-  return `https://ted.europa.eu/udl?uri=TED:NOTICE:${encodeURIComponent(sourceRef)}:TEXT:EN:HTML`;
+  const storedUrl = absoluteHttpUrl(stored);
+  if (storedUrl) return storedUrl;
+  const ref = sourceRef?.trim();
+  if (!ref || !TED_PUBLICATION_RE.test(ref)) return undefined;
+  return `https://ted.europa.eu/udl?uri=TED:NOTICE:${encodeURIComponent(ref)}:TEXT:EN:HTML`;
+}
+
+/**
+ * Public notice URL for a TED or PLACSP row.
+ * TED publication numbers become the canonical notice URL when no absolute
+ * URL is stored. PLACSP detail links use an opaque idEvl token that cannot
+ * be rebuilt from the folder id, so only a stored absolute URL is returned.
+ * The result is null when nothing safe can be linked — never a relative path.
+ */
+export function publicNoticeUrl(
+  source: string | null | undefined,
+  sourceRef: string | null | undefined,
+  stored?: string | null,
+): string | null {
+  const storedUrl = absoluteHttpUrl(stored);
+  if (storedUrl) return storedUrl;
+  if (source === 'placsp') return null;
+  return tedUrl(sourceRef) ?? null;
 }
 
 export function provenanceFor(sourceCode: string, sourceRef: string | null, url?: string | null): Provenance[] {

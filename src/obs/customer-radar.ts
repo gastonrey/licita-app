@@ -17,7 +17,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 import { absoluteUrl } from '../config.js';
 import type { Db } from '../db/client.js';
 import { radarPreviewData, type RadarPreviewQuery } from '../api/routes/radar.js';
-import { envelope, HttpError, type RouteCtx } from '../api/routes/common.js';
+import { absoluteHttpUrl, envelope, HttpError, type RouteCtx } from '../api/routes/common.js';
 import type { NotifyLogger } from './notify.js';
 
 export const CUSTOMER_RADAR_LIMIT = 5;
@@ -30,6 +30,8 @@ export interface RadarMailRow {
   source: string | null;
   windowStart: string | null;
   confidence: string | null;
+  /** Absolute upstream notice URL, already checked. Null when it cannot be linked. */
+  url?: string | null;
 }
 
 export interface RadarMailMessage {
@@ -183,11 +185,15 @@ export function renderCustomerRadarEmail(input: {
   const items = input.rows
     .map((row) => {
       const title = escapeHtml(row.title ?? 'Contrato sin título');
+      const notice = absoluteHttpUrl(row.url);
+      const noticeLink = notice
+        ? `<br><a href="${escapeHtml(notice)}">Abrir la fuente</a>`
+        : '';
       return `<li style="margin: 0 0 14px;">
 <strong>${title}</strong><br>
 Comprador: ${escapeHtml(row.buyer ?? 'No consta')}<br>
 Importe: ${escapeHtml(formatMoney(row.value, row.currency))}<br>
-Fuente: ${escapeHtml(sourceLabel(row.source))}<br>
+Fuente: ${escapeHtml(sourceLabel(row.source))}${noticeLink}<br>
 Confianza: ${escapeHtml(confidenceLabel(row.confidence))}<br>
 Fecha estimada de renovación: ${escapeHtml(formatDay(row.windowStart))}
 </li>`;
@@ -237,6 +243,7 @@ function mapRow(row: Record<string, unknown>): RadarMailRow {
     source: (row.source as string | null) ?? null,
     windowStart: (row.window_start as string | null) ?? null,
     confidence: (row.confidence as string | null) ?? null,
+    url: absoluteHttpUrl(row.url) ?? null,
   };
 }
 

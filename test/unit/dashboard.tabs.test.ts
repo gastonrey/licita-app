@@ -1,3 +1,4 @@
+import vm from 'node:vm';
 import { describe, expect, it } from 'vitest';
 import Fastify from 'fastify';
 import { registerDashboard } from '../../src/web/dashboard.js';
@@ -64,6 +65,25 @@ describe('dashboard tabs', () => {
     for (const field of ['Source URL', 'Created', 'Converted', 'Status: new']) expect(res.body).toContain(field);
     expect(res.body).toContain("fetch('/v1/stats/demo?limit=200'");
     expect(res.body).toContain('id="leads"');
+    const start = res.body.indexOf('function leadSourceCell');
+    const end = res.body.indexOf('function renderLeads');
+    expect(start).toBeGreaterThan(0);
+    expect(end).toBeGreaterThan(start);
+    const sandbox: Record<string, unknown> = {
+      URL,
+      esc(value: unknown) {
+        return String(value ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] ?? c);
+      },
+    };
+    vm.createContext(sandbox);
+    vm.runInContext(`${res.body.slice(start, end)}\nthis.leadSourceCell = leadSourceCell;`, sandbox);
+    const cell = sandbox.leadSourceCell as (value: unknown) => string;
+    expect(cell(null)).toBe('—');
+    expect(cell('null')).toBe('—');
+    expect(cell('https://eutendersai.com/dashboard/null')).toBe('—');
+    expect(cell('/v1/demo/request?source=radar')).toBe('/v1/demo/request?source=radar');
+    expect(cell('/v1/demo/request?source=radar')).not.toContain('href=');
+    expect(cell('https://example.com/about')).toContain('href="https://example.com/about"');
     await app.close();
   });
 

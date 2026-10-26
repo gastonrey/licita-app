@@ -80,7 +80,33 @@ describe('notifyNewLead', () => {
     expect(body.html).toContain('lead@example.com');
     expect(body.html).toContain('homepage');
     expect(body.html).toContain('https://example.com/about');
+    expect(body.html).toContain('href="https://example.com/about"');
     expect(body.html).toContain('42');
+  });
+
+  it('does not turn a null or relative lead source into an href', async () => {
+    const bodies: string[] = [];
+    globalThis.fetch = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      bodies.push(JSON.parse(String(init?.body)).html as string);
+      return new Response('{"id":"abc"}', { status: 200 });
+    }) as unknown as typeof globalThis.fetch;
+
+    notifyNewLead(TEST_Db, log, { ...baseLead, source_url: null }, cfg());
+    notifyNewLead(TEST_Db, log, { ...baseLead, id: 43, source_url: 'null' }, cfg());
+    notifyNewLead(TEST_Db, log, { ...baseLead, id: 44, source_url: 'https://eutendersai.com/null' }, cfg());
+    notifyNewLead(TEST_Db, log, { ...baseLead, id: 45, source_url: '/v1/demo/request?source=radar' }, cfg());
+    await new Promise((r) => setTimeout(r, 20));
+
+    expect(bodies).toHaveLength(4);
+    for (const html of bodies) {
+      expect(html).not.toContain('href="null"');
+      expect(html).not.toContain('/null');
+    }
+    expect(bodies[0]).not.toContain('Source URL');
+    expect(bodies[1]).not.toContain('Source URL');
+    expect(bodies[2]).not.toContain('Source URL');
+    expect(bodies[3]).toContain('/v1/demo/request?source=radar');
+    expect(bodies[3]).not.toContain('href="/v1/demo/request?source=radar"');
   });
 
   it('does not throw on non-2xx (logs warn)', async () => {
