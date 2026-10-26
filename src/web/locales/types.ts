@@ -66,7 +66,18 @@ export interface Locale {
     heroSubtitle: string;
     heroCtas: { demo: string; sample: string };
     heroCaption: string;
-    evidenceCard: { aria: string; title: string; stamp: string; loading: string; sourceStamp: string };
+    evidenceCard: {
+      aria: string;
+      title: string;
+      stamp: string;
+      loading: string;
+      empty: string;
+      error: string;
+      retry: string;
+      notReported: string;
+      sourceStamp: string;
+      upstream: string;
+    };
     renewalTable: {
       title: string;
       intro: string;

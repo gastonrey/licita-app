@@ -109,11 +109,8 @@ function page(
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="theme-color" content="#F6F3EA">
+<meta name="theme-color" content="#0F172A">
 ${opts.noindex ? '<meta name="robots" content="noindex">' : ''}
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=Source+Serif+4:wght@400;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/styles.css">
 ${meta}
 ${jsonLd}
@@ -447,19 +444,23 @@ ${renewalShell(l, 'renewal-table')}
 <p class="pricing-note">${t(l, 'home.renewalTable.sampleNote')} <a href="${href(l, '/radar')}">${t(l, 'home.renewalTable.openRadar')}</a></p>
 </section>
 
-<section class="section">
+<section class="section section-compact">
 <h2>${t(l, 'home.evidencePromise.title')}</h2>
 <p>${t(l, 'home.evidencePromise.body')}</p>
 <aside class="evidence-card" aria-label="${escapeAttr(t(l, 'home.evidenceCard.aria'))}">
 <div class="evidence-card-head"><span class="title"><span class="live-dot" aria-hidden="true"></span>${t(l, 'home.evidenceCard.title')}</span><span class="stamp">${t(l, 'home.evidenceCard.stamp')}</span></div>
-<article id="demo-sample" class="evidence-body evidence-rail" data-state="loading" aria-live="polite"
+<article id="demo-sample" class="evidence-body evidence-rail" data-state="loading" aria-live="polite" aria-busy="true"
  data-buyer="${escapeAttr(t(l, 'home.renewalTable.headers.buyer'))}"
  data-value="${escapeAttr(t(l, 'home.renewalTable.headers.value'))}"
  data-published="${escapeAttr(t(l, 'radarPage.oppHeaders.published'))}"
  data-renewal="${escapeAttr(t(l, 'home.renewalTable.headers.calculation'))}"
- data-upstream="${escapeAttr(t(l, 'footer.provenance'))}"
- data-error="${escapeAttr(t(l, 'home.renewalTable.error'))}"
- data-docs="${escapeAttr(t(l, 'home.coverage.title'))}"
+ data-upstream="${escapeAttr(t(l, 'home.evidenceCard.upstream'))}"
+ data-loading="${escapeAttr(t(l, 'home.evidenceCard.loading'))}"
+ data-empty="${escapeAttr(t(l, 'home.evidenceCard.empty'))}"
+ data-error="${escapeAttr(t(l, 'home.evidenceCard.error'))}"
+ data-retry="${escapeAttr(t(l, 'home.evidenceCard.retry'))}"
+ data-not-reported="${escapeAttr(t(l, 'home.evidenceCard.notReported'))}"
+ data-source-stamp="${escapeAttr(t(l, 'home.evidenceCard.sourceStamp'))}"
 ><p>${t(l, 'home.evidenceCard.loading')}</p><p class="source-stamp">${t(l, 'home.evidenceCard.sourceStamp')}</p></article>
 </aside>
 </section>

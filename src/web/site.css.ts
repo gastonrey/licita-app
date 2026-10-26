@@ -1,32 +1,27 @@
 export const HUMAN_CSS = `
 /* ========================================================================
-   LICITA DESIGN SYSTEM — Webdesign layouts Library (v2.1)
-   Warm editorial: terracotta accent, serif display, warm paper surface.
-   Editorial SaaS layout-first. Contrast hardened per WCAG AA audit:
-   - ink-mid #3C4554 (8.7:1 on paper), muted #46535C (7.2:1 on paper)
-   - signal-text #9A3A24 for all small signal text (kicker/plan/chips)
-   - code-card accent #e8a37b on ink bands
-   Public surfaces must keep stable: /styles.css, all pages, /llms.txt.
+   RELICITA — enterprise public surface.
+   Neutral slate, one blue accent, system sans. No external font CDN.
    ======================================================================== */
 
 /* === PRIMITIVES === */
 :root {
   /* Color */
-  --color-ink: #16232B;
-  --color-ink-light: #2a3242;
-  --color-ink-mid: #3C4554;
-  --color-paper: #F6F3EA;
+  --color-ink: #0F172A;
+  --color-ink-light: #1E293B;
+  --color-ink-mid: #334155;
+  --color-paper: #F4F6F8;
   --color-surface: #FFFFFF;
-  --color-rule: #C9C3B5;
-  --color-grid-line: #e3e6eb;
-  --color-signal: #B9472E;
-  --color-signal-text: #9A3A24;
-  --color-signal-hover: #8f321f;
-  --color-verified: #356B52;
-  --color-green-600: #1a7f37;
-  --color-amber-600: #9a6700;
-  --color-red-600: #cf222e;
-  --color-muted: #46535C;
+  --color-rule: #E2E8F0;
+  --color-grid-line: #EEF2F6;
+  --color-signal: #1B4F8A;
+  --color-signal-text: #1B4F8A;
+  --color-signal-hover: #163E6E;
+  --color-verified: #0F766E;
+  --color-green-600: #0F766E;
+  --color-amber-600: #92400E;
+  --color-red-600: #B42318;
+  --color-muted: #475569;
   /* Spacing (4px base) */
   --space-1: 0.25rem;
   --space-2: 0.5rem;
@@ -39,32 +34,32 @@ export const HUMAN_CSS = `
   --space-10: 2.5rem;
   --space-12: 3rem;
   --space-16: 4rem;
-  /* Typography */
-  --font-body: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
-  --font-heading: 'Source Serif 4', Georgia, serif;
-  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
-  --text-xs: 0.72rem;
-  --text-sm: 0.85rem;
+  /* Typography — system stack, no CDN */
+  --font-body: "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+  --font-heading: "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
   --text-base: 1rem;
-  --text-lg: 1.15rem;
-  --text-xl: 1.35rem;
-  --text-2xl: 1.75rem;
-  --text-3xl: clamp(2.25rem, 5.5vw, 3.75rem);
+  --text-lg: 1.125rem;
+  --text-xl: 1.375rem;
+  --text-2xl: 1.5rem;
+  --text-3xl: clamp(2rem, 4.2vw, 2.75rem);
   /* Radius */
   --radius-sm: 0.25rem;
   --radius-default: 0.5rem;
   --radius-lg: 0.75rem;
   /* Depth */
-  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.05);
-  --shadow-md: 0 4px 12px rgb(0 0 0 / 0.08);
-  --shadow-lg: 0 8px 24px rgb(0 0 0 / 0.12);
+  --shadow-sm: 0 1px 2px rgb(15 23 42 / 0.05);
+  --shadow-md: 0 8px 24px rgb(15 23 42 / 0.06);
+  --shadow-lg: 0 16px 40px rgb(15 23 42 / 0.08);
   /* Transitions */
   --transition-fast: 120ms ease;
   --transition-base: 200ms ease;
-  /* Layout (template conventions) */
+  /* Layout */
   --content-width: 72rem;
-  --section-pad-y: clamp(3rem, 6vw, 5rem);
-  --header-h: 4rem;
+  --section-pad-y: clamp(1.5rem, 3vw, 2.5rem);
+  --header-h: 3.75rem;
 }
 
 /* === SEMANTIC === */
@@ -116,16 +111,18 @@ img { max-width: 100%; height: auto; display: block; }
    ======================================================================== */
 h1, h2, h3, h4, h5, h6 {
   font-family: var(--font-heading);
+  font-weight: 650;
   color: var(--color-foreground);
   text-wrap: balance;
-  line-height: 1.15;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
 }
-h1 { font-size: var(--text-3xl); letter-spacing: -0.025em; margin: 0 0 var(--space-4); }
+h1 { font-size: var(--text-3xl); letter-spacing: -0.03em; margin: 0 0 var(--space-4); }
 h2 {
   font-size: var(--text-2xl);
-  margin: var(--space-8) 0 var(--space-3);
-  padding-bottom: var(--space-2);
-  border-bottom: 1px solid var(--color-border);
+  margin: var(--space-6) 0 var(--space-3);
+  padding-bottom: 0;
+  border-bottom: 0;
   color: var(--color-foreground);
 }
 /* U8: soften the h2 divider on content-dense pages (docs, pricing, use-cases, data, trust). */
@@ -195,6 +192,7 @@ main { max-width: var(--content-width); margin: 0 auto; padding: 0 var(--space-6
 .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-4); }
 .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--space-4); }
 .section { padding: var(--section-pad-y) 0; }
+.section-compact { padding-top: var(--space-6); padding-bottom: var(--space-4); }
 .section h2 { margin-top: 0; }
 .section-head { margin-bottom: var(--space-4); }
 .section-head h2 { border: 0; margin: 0 0 var(--space-2); padding: 0; }
@@ -207,9 +205,11 @@ main { max-width: var(--content-width); margin: 0 auto; padding: 0 var(--space-6
    NAVIGATION — Header Charlie (static, single header; mockups v2.1)
    ======================================================================== */
 .site-header {
-  background: var(--color-paper);
+  background: #fff;
   border-bottom: 1px solid var(--color-border);
-  position: static;
+  position: sticky;
+  top: 0;
+  z-index: 40;
 }
 .header-bar {
   max-width: var(--content-width);
@@ -403,7 +403,11 @@ input[type="text"], input[type="email"], input[type="password"], input[type="sea
 input:focus, select:focus, textarea:focus {
   outline: none;
   border-color: var(--color-brand);
-  box-shadow: 0 0 0 3px rgba(185, 71, 46, 0.15);
+  box-shadow: 0 0 0 3px rgb(27 79 138 / 0.18);
+}
+.btn:focus-visible, a:focus-visible, button:focus-visible, summary:focus-visible, input:focus-visible, select:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 2px;
 }
 label {
   display: block;
@@ -470,7 +474,7 @@ td.num, th.num { font-variant-numeric: tabular-nums; text-align: right; font-fam
 .hero {
   padding: var(--section-pad-y) 0 calc(var(--section-pad-y) * 0.6);
   background:
-    radial-gradient(1200px 480px at 85% -10%, rgba(185,71,46,0.07), transparent 60%),
+    radial-gradient(1200px 480px at 85% -10%, rgba(27,79,138,0.08), transparent 60%),
     var(--color-paper);
 }
 .hero-grid {
@@ -566,7 +570,11 @@ td.num, th.num { font-variant-numeric: tabular-nums; text-align: right; font-fam
   border-radius: 0;
   background: none;
   padding: 0;
+  min-height: 0;
 }
+#demo-sample .empty-note { margin: 0; padding: 0; background: transparent; border: 0; border-radius: 0; }
+#demo-sample[data-state="empty"] .source-stamp,
+#demo-sample[data-state="error"] .empty-note { margin-top: var(--space-2); }
 .evidence-rail h3 {
   font-family: var(--font-heading);
   font-size: var(--text-lg);
@@ -599,21 +607,24 @@ td.num, th.num { font-variant-numeric: tabular-nums; text-align: right; font-fam
 /* ========================================================================
    HOMEPAGE — TRUST STRIP (source chips)
    ======================================================================== */
-.trust-strip { border-top: 1px solid var(--color-border); border-bottom: 1px solid var(--color-border); padding: var(--space-4) 0; }
+.trust-strip { display: flex; flex-wrap: wrap; gap: var(--space-3); padding: 0; border: 0; }
 .trust-chips { display: flex; flex-wrap: wrap; gap: var(--space-3); }
 .chip {
   display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-2) var(--space-4);
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.1rem;
+  padding: 0.55rem 0.8rem;
   border: 1px solid var(--color-border);
-  border-radius: 999px;
+  border-radius: 8px;
   background: var(--color-surface);
-  color: var(--color-foreground-mid);
+  color: var(--color-foreground);
   font-size: var(--text-sm);
+  line-height: 1.3;
   text-decoration: none;
   transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
 }
+.chip .chip-kicker { font-size: 0.68rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--color-brand); font-weight: 650; }
 .chip:hover { border-color: var(--color-signal); box-shadow: var(--shadow-sm); color: var(--color-ink); }
 .chip strong { color: var(--color-ink); font-weight: 600; }
 .chip .dot {
@@ -1004,7 +1015,18 @@ td.num, th.num { font-variant-numeric: tabular-nums; text-align: right; font-fam
 .data-table.stack td:last-child { border-bottom: 0; }
 .data-table.stack td::before { content: attr(data-label); font-weight: 600; color: var(--color-muted-foreground); }
 .data-table th, .data-table td { text-align: left; vertical-align: top; padding: var(--space-3); border-bottom: 1px solid var(--color-grid-line); }
-.data-table th { font-size: var(--text-xs); letter-spacing: 0.04em; text-transform: uppercase; color: var(--color-muted-foreground); }
+.data-table th { font-size: var(--text-xs); letter-spacing: 0.04em; text-transform: uppercase; color: var(--color-muted-foreground); background: #F8FAFC; }
+.data-table td.num, .data-table th.num { text-align: right; font-variant-numeric: tabular-nums; }
+@media (min-width: 800px) {
+  .data-table.stack { display: table; width: 100%; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-default); overflow: hidden; }
+  .data-table.stack thead { position: static; display: table-header-group; width: auto; height: auto; overflow: visible; clip: auto; }
+  .data-table.stack tbody { display: table-row-group; }
+  .data-table.stack tr { display: table-row; border: 0; border-radius: 0; background: transparent; }
+  .data-table.stack td { display: table-cell; grid-template-columns: none; border-bottom: 1px solid var(--color-grid-line); }
+  .data-table.stack td::before { content: none; }
+  .data-table.stack tbody tr:nth-child(even) { background: #F8FAFC; }
+  .data-table.stack tbody tr:hover { background: #EEF3F8; }
+}
 .data-table .row-title { display: block; font-weight: 600; }
 .data-table .row-meta { display: block; color: var(--color-muted-foreground); font-family: var(--font-mono); font-size: var(--text-xs); margin-top: 0.15rem; }
 .source-badge {

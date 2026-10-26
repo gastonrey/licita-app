@@ -43,7 +43,12 @@ export const en: Locale = {
       title: 'One labeled row from the live index',
       stamp: 'Sample',
       loading: 'Loading…',
+      empty: 'The index has no sample row right now. No data was invented.',
+      error: 'The sample row could not be loaded.',
+      retry: 'Retry',
+      notReported: 'Not reported',
       sourceStamp: 'GET /v1/demo · sample status',
+      upstream: 'Open the source',
     },
     renewalTable: {
       title: 'Contracts expiring in the next 12 months',
