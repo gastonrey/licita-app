@@ -1,8 +1,10 @@
 // registerDashboard(app) — operator traffic dashboard at GET /dashboard.
-// Plain semantic HTML + vanilla JS, no external deps: the page authenticates
-// with the OPERATOR_KEY (stored in sessionStorage) and polls /v1/stats and
-// /v1/stats/recent. It is deliberately NOT linked from the public NAV or
-// /llms.txt — the operator types the URL; the data it shows is operator-only.
+// GET /stats and GET /operator are same-origin aliases (one 302). The page
+// authenticates with the OPERATOR_KEY (stored in sessionStorage) and polls
+// /v1/stats and /v1/stats/recent. It is deliberately NOT linked from the public
+// NAV or /llms.txt — the operator types the URL; the data it shows is operator-only.
+// The document never assigns location: a client redirect back to /stats would
+// cycle with the alias, and a missing or rejected key stays on this form.
 //
 // Redesign (2026-10): dark operator theme following the approved Penpot
 // "Dashboard UI Starter Kit" mockup — top bar with range presets, 4-col KPI
@@ -832,7 +834,7 @@ section[hidden] { display: none; }
 <div class="main-content">
 
   <div id="login">
-    <form id="login-form">
+    <form id="login-form" method="post">
       <h1>Operator console</h1>
       <p class="muted">This screen is for the person running Relicita: traffic, payments and data quality. It does not list contracts.</p>
       <p>To see software and cyber contracts that will be re-tendered, open the <a href="/radar">renewal radar</a>. No operator key is required there.</p>
@@ -1081,7 +1083,7 @@ const validTabs = ['overview', 'payments', 'growth', 'leads', 'economics', 'gaps
 const detailMap = { overview: ['endpoints', 'recent'], growth: ['funnel', 'mcp-discovery'], economics: ['who-accessed'] };
 const detailTitle = { endpoints: 'Traffic by endpoint', recent: 'Recent activity', funnel: 'Growth funnel', 'mcp-discovery': 'MCP discovery', 'who-accessed': 'Who accessed' };
 const tabLabel = { overview: 'Overview', payments: 'Payments', growth: 'Growth', leads: 'Leads', economics: 'Endpoint Economics', gaps: 'Data Quality' };
-function syncUrl(tab) { const params = new URLSearchParams(location.search); params.set('view', tab === 'gaps' ? 'data-quality' : tab); if ($('from').value) params.set('from', $('from').value); else params.delete('from'); if ($('to').value) params.set('to', $('to').value); else params.delete('to'); if (state.page !== '1') params.set('page', state.page); else params.delete('page'); if (state.selected_day) params.set('day', state.selected_day); else params.delete('day'); if (state.detail && (detailMap[tab] || []).includes(state.detail)) params.set('detail', state.detail); else params.delete('detail'); [['recent_endpoint', state.recent_endpoint], ['recent_source', state.recent_source], ['recent_paid', state.recent_paid], ['recent_status', state.recent_status]].forEach(([key, value]) => value ? params.set(key, value) : params.delete(key)); history.pushState({}, '', location.pathname + '?' + params.toString()); renderFilters(); }
+function syncUrl(tab) { const params = new URLSearchParams(location.search); params.set('view', tab === 'gaps' ? 'data-quality' : tab); if ($('from').value) params.set('from', $('from').value); else params.delete('from'); if ($('to').value) params.set('to', $('to').value); else params.delete('to'); if (state.page !== '1') params.set('page', state.page); else params.delete('page'); if (state.selected_day) params.set('day', state.selected_day); else params.delete('day'); if (state.detail && (detailMap[tab] || []).includes(state.detail)) params.set('detail', state.detail); else params.delete('detail'); [['recent_endpoint', state.recent_endpoint], ['recent_source', state.recent_source], ['recent_paid', state.recent_paid], ['recent_status', state.recent_status]].forEach(([key, value]) => value ? params.set(key, value) : params.delete(key)); const aliased = location.pathname === '/stats' || location.pathname === '/stats/' || location.pathname === '/operator' || location.pathname === '/operator/'; const next = (aliased ? '/dashboard' : location.pathname) + '?' + params.toString(); if (location.pathname + location.search !== next) history.pushState({}, '', next); renderFilters(); }
 function restoreUrl() { const params = new URLSearchParams(location.search); const view = params.get('view'); state.tab = view === 'data-quality' ? 'gaps' : validTabs.includes(view) ? view : 'overview'; const page = Number(params.get('page')); state.page = Number.isInteger(page) && page > 0 ? String(page) : '1'; state.recent_endpoint = params.get('recent_endpoint') || ''; state.recent_source = params.get('recent_source') || ''; state.recent_paid = params.get('recent_paid') || ''; state.recent_status = params.get('recent_status') || ''; state.selected_day = params.get('day') || ''; state.detail = (detailMap[state.tab] || []).includes(params.get('detail')) ? params.get('detail') : ''; $('from').value = params.get('from') || ''; $('to').value = params.get('to') || ''; $('recent-endpoint').value = state.recent_endpoint; $('recent-source').value = state.recent_source; $('recent-paid').value = state.recent_paid; $('recent-status').value = state.recent_status; }
 
 // Escape every dynamic value before it touches innerHTML — user_agent / q /
@@ -1581,7 +1583,7 @@ function renderDetail() {
   const d = state.detail;
   if (state.tab === 'overview' && d === 'endpoints') {
     state.endpoint_limit = 1000;
-    detailView.innerHTML = '<h2>All endpoints by visits</h2>' + renderEndpointBars(lastStats.requests_by_endpoint || []);
+    detailView.innerHTML = '<h2>All endpoints by visits</h2>' + renderEndpointBars((lastStats && lastStats.requests_by_endpoint) || []);
   } else if (state.tab === 'overview' && d === 'recent') {
     const renderRows = (rows) => rows.length === 0
       ? '<p class="muted">No requests logged yet.</p>'
@@ -1670,13 +1672,15 @@ async function load() {
      renderLeads(d.data);
      const readiness = await q.json();
      renderReadiness(readiness.data);
-     selectTab(state.tab || 'overview');
+     try { selectTab(state.tab || 'overview', false); } catch (err) { /* a detail render must not send the operator back to the form */ }
     $('login').hidden = true;
     $('dash').hidden = false;
     setKeyState(true);
      setLastUpdated(''); $('load-state').textContent = 'Data loaded';
+     updateTimer();
   } catch (err) {
-     setLastUpdated(err.message || String(err)); $('load-state').innerHTML = 'Data unavailable. <button type="button" id="inline-retry">Retry</button> Last successful data may be stale.'; $('inline-retry').addEventListener('click', load);
+     if (LS.getItem(KEY)) { $('login').hidden = true; $('dash').hidden = false; setKeyState(true); }
+     setLastUpdated(err.message || String(err)); $('load-state').innerHTML = 'Data unavailable. <button type="button" id="inline-retry">Retry</button> Last successful data may be stale.'; const retry = $('inline-retry'); if (retry) retry.addEventListener('click', load);
   }
 }
 
@@ -1752,7 +1756,11 @@ function setKeyState(active) {
   document.querySelectorAll('.sidebar-nav [data-tab-button], .mobile-tabs [data-tab-button]').forEach((button) => { button.disabled = !active; });
 }
 function showLogin(msg) {
-  LS.removeItem(KEY);
+  // Only a rejected key is deleted. The empty-message path is the signed-out
+  // form; deleting there too let the 15s refresh wipe the error (and the key)
+  // and send the operator through the form again.
+  if (msg) LS.removeItem(KEY);
+  if (state.timer) { clearInterval(state.timer); state.timer = null; }
   $('login').hidden = false;
   $('dash').hidden = true;
   $('login-msg').textContent = msg;
@@ -1765,7 +1773,9 @@ function invalidKey() {
 
 function updateTimer() {
   if (state.timer) { clearInterval(state.timer); state.timer = null; }
-  if ($('auto-refresh').checked) state.timer = setInterval(load, 15000);
+  // Poll only while the console is open. Arming this on the form re-enters
+  // load(), which cleared the invalid-key error and refocused the field.
+  if ($('auto-refresh').checked && LS.getItem(KEY) && $('dash') && !$('dash').hidden) state.timer = setInterval(load, 15000);
 }
 
 function setRangePreset(days) {
@@ -1903,18 +1913,53 @@ byEndpoint.addEventListener('click', (event) => {
   load();
 });
 
+try {
+  restoreUrl();
+  renderFilters();
+  selectTab(state.tab, false);
+} catch (err) { /* a bad ?view= / ?detail= must not skip the session check */ }
 updateTimer();
-restoreUrl();
-renderFilters();
-selectTab(state.tab, false);
 if (LS.getItem(KEY)) { load(); } else { showLogin(''); }
 </script>
 </body>
 </html>
 `;
 
+const CONSOLE_QUERY_KEYS = ['from', 'to', 'day', 'page', 'detail', 'recent_endpoint', 'recent_source', 'recent_paid', 'recent_status'] as const;
+
+function consoleQueryValue(value: string | null): string {
+  if (!value) return '';
+  // Control characters would split a Location header. The operator key is
+  // never copied: it lives in sessionStorage, which a same-origin redirect keeps.
+  return value.replace(/[\u0000-\u001F\u007F]/g, '').slice(0, 200);
+}
+
+/** One same-origin hop to the dashboard document. `defaultView` fills a missing view. */
+function consoleRedirectTarget(rawUrl: string, defaultView: 'overview' | null): string {
+  const query = rawUrl.includes('?') ? rawUrl.slice(rawUrl.indexOf('?') + 1) : '';
+  const incoming = new URLSearchParams(query);
+  const params = new URLSearchParams();
+  const view = consoleQueryValue(incoming.get('view'));
+  const tab = consoleQueryValue(incoming.get('tab'));
+  if (view) params.set('view', view);
+  else if (tab) params.set('tab', tab);
+  else if (defaultView) params.set('view', defaultView);
+  for (const key of CONSOLE_QUERY_KEYS) {
+    const value = consoleQueryValue(incoming.get(key));
+    if (value) params.set(key, value);
+  }
+  const qs = params.toString();
+  return qs ? `/dashboard?${qs}` : '/dashboard';
+}
+
 /** Register the operator traffic dashboard at GET /dashboard. Not in the public NAV. */
 export function registerDashboard(app: FastifyInstance, _config: AppConfig): void {
+  // 302, not 301: a cached permanent redirect is how a bad target becomes a loop.
+  // The document itself never redirects, so this hop cannot cycle.
+  app.get('/stats', async (req, reply) => reply.redirect(consoleRedirectTarget(req.url, 'overview'), 302));
+  app.get('/stats/', async (req, reply) => reply.redirect(consoleRedirectTarget(req.url, 'overview'), 302));
+  app.get('/operator', async (req, reply) => reply.redirect(consoleRedirectTarget(req.url, null), 302));
+  app.get('/operator/', async (req, reply) => reply.redirect(consoleRedirectTarget(req.url, null), 302));
   app.get('/dashboard', async (_req, reply) => reply.type('text/html; charset=utf-8').send(PAGE));
   const demoPage = PAGE.replace('<title>Dashboard — Relicita (operator)</title>', '<title>Demo pipeline — Relicita (operator)</title>');
   app.get('/dashboard/demo', async (_req, reply) => reply.type('text/html; charset=utf-8').send(demoPage));
