@@ -84,6 +84,9 @@ services:
       # CREEM_API_KEY + CREEM_WEBHOOK_SECRET + CREEM_PRODUCT_ID, enforced at
       # boot by src/config.validate.ts.
       CREEM_ENABLED: ${CREEM_ENABLED:-false}
+      # Live origin. Set https://test-api.creem.io to try a test-mode checkout.
+      # Empty in .env keeps the live origin (same as src/config.ts).
+      CREEM_API_BASE_URL: "${CREEM_API_BASE_URL:-https://api.creem.io}"
       CREEM_API_KEY: ${CREEM_API_KEY:-}
       CREEM_WEBHOOK_SECRET: ${CREEM_WEBHOOK_SECRET:-}
       CREEM_PRODUCT_ID: ${CREEM_PRODUCT_ID:-}

@@ -52,6 +52,7 @@ const FORWARDED: Record<string, string> = {
   // stays off because DIGEST_ENABLED defaults to false. Quoted so YAML does
   // not coerce the flag before it reaches the process.
   SCHEDULED_GENERATION_EVENTS: '"${SCHEDULED_GENERATION_EVENTS:-true}"',
+  CREEM_API_BASE_URL: '"${CREEM_API_BASE_URL:-https://api.creem.io}"',
   CREEM_PRODUCT_ID_RADAR_MONTHLY: '${CREEM_PRODUCT_ID_RADAR_MONTHLY:-}',
   CREEM_PRODUCT_ID_RADAR_ANNUAL: '${CREEM_PRODUCT_ID_RADAR_ANNUAL:-}',
   CREEM_PRODUCT_ID_PRO_MONTHLY: '${CREEM_PRODUCT_ID_PRO_MONTHLY:-}',

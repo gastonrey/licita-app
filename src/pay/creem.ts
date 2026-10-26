@@ -7,7 +7,7 @@
 // the validated config.
 
 import { createHmac, timingSafeEqual } from 'node:crypto';
-import type { AppConfig, CreemPlanProducts } from '../config.js';
+import { normalizeCreemApiBaseUrl, type AppConfig, type CreemPlanProducts } from '../config.js';
 
 export type CreemPlan = 'radar' | 'pro' | 'team';
 export type CreemInterval = 'monthly' | 'annual';
@@ -70,6 +70,13 @@ export function checkoutProductId(event: Record<string, unknown>): string | null
   );
 }
 
+/** Absolute Creem REST URL. Every outbound Creem call goes through this. */
+export function creemApiUrl(creem: AppConfig['creem'], path: string): string {
+  const base = normalizeCreemApiBaseUrl(creem.apiBaseUrl);
+  const suffix = path.startsWith('/') ? path : `/${path}`;
+  return `${base}${suffix}`;
+}
+
 export interface CheckoutSessionInput {
   email: string;
   successUrl: string;
@@ -106,7 +113,7 @@ export async function createCheckoutSession(
   if (!productId) {
     throw new Error('Creem product id is missing — cannot create checkout session.');
   }
-  const res = await fetch('https://api.creem.io/v1/checkouts', {
+  const res = await fetch(creemApiUrl(creem, '/v1/checkouts'), {
     method: 'POST',
     headers: {
       'x-api-key': creem.apiKey,

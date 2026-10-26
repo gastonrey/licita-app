@@ -99,6 +99,7 @@ Optional with prod defaults (override in `.env` to change):
 | `DIGEST_FROM_EMAIL` | *(empty)* | required in production when `DIGEST_ENABLED=true` |
 | `DIGEST_BCC` | *(empty)* | operator-digest recipients; required in production when the digest is on |
 | `SCHEDULED_GENERATION_EVENTS` | `true` | master gate. The weekly mail also needs `DIGEST_ENABLED=true` |
+| `CREEM_API_BASE_URL` | `https://api.creem.io` | `https://test-api.creem.io` for a test-mode checkout. https only; those two hosts |
 | `CREEM_PRODUCT_ID_RADAR_MONTHLY` | *(empty)* | empty records interest instead of checkout. Same for `_RADAR_ANNUAL`, `_PRO_MONTHLY`, `_PRO_ANNUAL`, `_TEAM_MONTHLY` |
 | `RESEARCH_PRICE_USD` | `0.50` | `POST /v1/research` price |
 | `TRIAL_ENABLED` | `false` | trial `lct_` keys stay inert |

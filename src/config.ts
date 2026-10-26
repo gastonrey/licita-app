@@ -73,6 +73,9 @@ export interface AppConfig {
     /** SME plan products. Empty string = that button keeps recording interest.
      *  Never defaulted to a live or test Creem id. */
     plans?: CreemPlanProducts;
+    /** Creem REST origin (env CREEM_API_BASE_URL). Empty uses the live origin.
+     *  No trailing slash. Host must be api.creem.io or test-api.creem.io. */
+    apiBaseUrl?: string;
   };
   /** Master gate for ALL periodic scheduled jobs (ingest + digest).
    *  env SCHEDULED_GENERATION_EVENTS, default true — off disables every
@@ -114,6 +117,45 @@ export interface CreemPlanProducts {
 
 function env(name: string, fallback = ''): string {
   return process.env[name] ?? fallback;
+}
+
+/** Live Creem REST origin. Checkout appends /v1/… to this value. */
+export const CREEM_API_BASE_DEFAULT = 'https://api.creem.io';
+
+const CREEM_API_HOSTS = new Set(['api.creem.io', 'test-api.creem.io']);
+
+/** Empty or whitespace uses the live origin. Trailing slashes are removed. */
+export function normalizeCreemApiBaseUrl(raw: string | undefined): string {
+  const trimmed = (raw ?? '').trim().replace(/\/+$/, '');
+  return trimmed || CREEM_API_BASE_DEFAULT;
+}
+
+/**
+ * Null when the value is empty (live default) or an https origin on
+ * api.creem.io / test-api.creem.io. Otherwise a boot violation.
+ */
+export function creemApiBaseViolation(raw: string | undefined): string | null {
+  if (!(raw ?? '').trim()) return null;
+  const value = normalizeCreemApiBaseUrl(raw);
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return 'CREEM_API_BASE_URL must be https and its host must be api.creem.io or test-api.creem.io.';
+  }
+  const originOnly =
+    url.protocol === 'https:' &&
+    CREEM_API_HOSTS.has(url.hostname) &&
+    url.username === '' &&
+    url.password === '' &&
+    url.port === '' &&
+    url.pathname === '/' &&
+    url.search === '' &&
+    url.hash === '';
+  if (!originOnly) {
+    return 'CREEM_API_BASE_URL must be https and its host must be api.creem.io or test-api.creem.io.';
+  }
+  return null;
 }
 
 /** TRUST_PROXY: 'true' → true, 'false'/empty → false, integer string → hop count. */
@@ -204,6 +246,7 @@ export function loadConfig(): AppConfig {
         proAnnual: env('CREEM_PRODUCT_ID_PRO_ANNUAL'),
         teamMonthly: env('CREEM_PRODUCT_ID_TEAM_MONTHLY'),
       },
+      apiBaseUrl: normalizeCreemApiBaseUrl(env('CREEM_API_BASE_URL')),
     },
     scheduledGenerationEvents: env('SCHEDULED_GENERATION_EVENTS', 'true') === 'true',
     digestEnabled: env('DIGEST_ENABLED', 'false') === 'true',

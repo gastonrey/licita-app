@@ -3,7 +3,7 @@
 // construct partial configs freely). Throws a single Error listing EVERY
 // violation so operators fix all missing/invalid vars in one boot cycle.
 
-import type { AppConfig } from './config.js';
+import { creemApiBaseViolation, type AppConfig } from './config.js';
 
 /** Known placeholder secrets that must never reach production. */
 const PLACEHOLDER_SECRETS = new Set(['change-me', 'change-me-in-prod']);
@@ -149,6 +149,11 @@ export function validateConfig(config: AppConfig): void {
       }
     }
   }
+
+  // The API origin is checked even when Creem is off, so a bad test URL
+  // fails at boot instead of on the first checkout.
+  const apiBaseViolation = creemApiBaseViolation(config.creem.apiBaseUrl);
+  if (apiBaseViolation) violations.push(apiBaseViolation);
 
   // Weekly digest (fiat-revenue-rails C1.2): DIGEST_ENABLED=true in
   // production requires DIGEST_FROM_EMAIL and DIGEST_BCC — fail closed so a

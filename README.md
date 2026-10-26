@@ -155,6 +155,7 @@ missing/invalid variable (`src/config.validate.ts`, called from `src/index.ts`).
 | `DIGEST_FROM_EMAIL` | — | Digest sender address (a verified Resend sender domain). Required in production when `DIGEST_ENABLED=true` |
 | `DIGEST_BCC` | — | Operator-digest recipients, delivered as Bcc. This list is the only audience of the operator digest. The customer radar does not use it. Required in production when `DIGEST_ENABLED=true` |
 | `CREEM_ENABLED` | `false` | Creem checkout and webhook. Off → `/v1/creem/*` is 404 and plan buttons record interest |
+| `CREEM_API_BASE_URL` | `https://api.creem.io` | Creem REST origin, no trailing slash. `https://test-api.creem.io` for a test-mode checkout. Host must be `api.creem.io` or `test-api.creem.io` over https |
 | `CREEM_API_KEY` | — | Creem API key. Required when `CREEM_ENABLED=true`. Use the test key to try a payment |
 | `CREEM_WEBHOOK_SECRET` | — | Signs `POST /v1/creem/webhook`. Required when `CREEM_ENABLED=true` |
 | `CREEM_PRODUCT_ID` | — | Legacy single product. Checkout without `plan` still charges this id. Required when `CREEM_ENABLED=true` |
@@ -169,7 +170,7 @@ The same webhook (`POST /v1/creem/webhook`, production `https://api.eutendersai.
 
 Product ids are not code defaults. Creative Machine, test mode: Radar monthly `prod_DQLeAZkGLgSWSBe79doNr`, Radar annual `prod_39q3c29aWwXvkE4pqU4YUT`, Pro monthly `prod_4Iyrui9hjVwSeftMImc9Yg`, Pro annual `prod_3vkS91sGzp4aueHBuRCNEH`, Team monthly `prod_5z4JBpuINvsVJNU0avrcy0`. Live mode: Radar monthly `prod_6u3gvUJkvWAoGxaTErNAkX`, Radar annual `prod_7gx0yupTdQCxidUSmSdhWx`, Pro monthly `prod_4G9C8ej8VdeZgrWbY3jWYR`, Pro annual `prod_2tukZ9IRVOgeYsZ59Ar59W`, Team monthly `prod_PvJQIwYRo0wbntVsrBQVi`. Put the test ids in the server env only while `CREEM_API_KEY` is a test key.
 
-To try a test payment: set `CREEM_ENABLED=true`, the test API key, the test webhook secret, `CREEM_PRODUCT_ID`, and the five test ids. Open `/pricing?plan=radar&interval=monthly`, enter an email, and continue to payment. Creem's test checkout completes the charge and calls the webhook. The address becomes `kind=creem` and, when Resend is set, receives the `lct_` key. A second click in the same browser session is a new checkout. Unset one plan id and that button goes back to "Guardar mi interés" with no error. Do not mix test product ids with a live API key.
+To try a test payment: set `CREEM_ENABLED=true`, `CREEM_API_BASE_URL=https://test-api.creem.io`, the test API key, the test webhook secret, `CREEM_PRODUCT_ID`, and the five test ids. Open `/pricing?plan=radar&interval=monthly`, enter an email, and continue to payment. Creem's test checkout completes the charge and calls the webhook. The address becomes `kind=creem` and, when Resend is set, receives the `lct_` key. A second click in the same browser session is a new checkout. Unset one plan id and that button goes back to "Guardar mi interés" with no error. Do not mix test product ids with a live API key.
 
 ## First ingestion
 
