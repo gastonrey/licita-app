@@ -36,7 +36,12 @@ function operatorKeyMatches(presented: string, expected: string): boolean {
   return timingSafeEqual(a, b);
 }
 
-/** Requires header x-operator-key === config.operatorKey, else 401 error envelope. */
+/**
+ * Requires header x-operator-key === config.operatorKey, else 401 error envelope.
+ * This stays a JSON 401 with no Location header. The dashboard fetch follows
+ * redirects, and a bounce to /stats or /dashboard would cycle with the HTML
+ * alias. Browser entry is GET /stats → /dashboard, not this middleware.
+ */
 export function statsAuth(operatorKey: string): preHandlerHookHandler {
   return async (req) => {
     const key = req.headers['x-operator-key'];

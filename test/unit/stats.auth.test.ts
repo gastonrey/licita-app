@@ -26,6 +26,23 @@ describe('statsAuth', () => {
     await app.close();
   });
 
+  it('stays a JSON 401 for browsers and does not redirect them at the dashboard', async () => {
+    // A Location header here would be followed by the console's fetch() and
+    // by a human navigation to /v1/stats. Either one cycles with the HTML
+    // /stats alias. The operator key is a header, not a redirect.
+    const app = buildApp();
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/stats',
+      headers: { accept: 'text/html,application/xhtml+xml' },
+    });
+    expect(res.statusCode).toBe(401);
+    expect(res.headers.location).toBeUndefined();
+    expect(res.headers['content-type']).toMatch(/application\/json/);
+    expect(res.json().error.message).toMatch(/x-operator-key/);
+    await app.close();
+  });
+
   it('protects the demo admin feed without the header', async () => {
     const app = buildApp();
     const res = await app.inject({ method: 'GET', url: '/v1/stats/demo' });
