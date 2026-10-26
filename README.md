@@ -365,7 +365,7 @@ dashboard:
 1. **Baseline (mandatory).** `BASE_URL=https://<public-origin>` (https — boot
    fails in production without it; it also builds every absolute URL and email
    link). Run migrations: the container runs `src/db/migrate.ts` on boot, so
-   `docker compose up --build -d` applies `migrations/001..010` in order,
+   `docker compose up --build -d` applies `migrations/001..013` in order,
    idempotently. `009_trial_api_keys.sql` and `010_webhook_events.sql` are the
    two fiat-critical tables; the operator dashboard "Fiat revenue readiness"
    card lists any still-pending migration explicitly.

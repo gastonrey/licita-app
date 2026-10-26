@@ -347,4 +347,33 @@ describe('recomputeSignals on pg-mem', () => {
       n: 3,
     });
   });
+
+  it('excludes a contract marked dup_of from expiry signals and from recurrence evidence', async () => {
+    const db = await makeTestDb();
+    await seed(db);
+    // Contract 1 is the only duration_expiry row and one of three division-72 awards.
+    await db.query('UPDATE contracts SET dup_of = 2 WHERE id = 1');
+    const res = await recomputeSignals(db);
+    expect(res.byType.duration_expiry).toBe(0);
+    expect(res.byType.framework_expiry).toBe(1);
+    expect(res.byType.recurrence).toBe(1);
+    expect(res.total).toBe(2);
+
+    const rows = (
+      await db.query(
+        'SELECT signal_type, confidence, contract_id, basis FROM forecast_signals ORDER BY signal_type',
+      )
+    ).rows as Array<{
+      signal_type: string;
+      confidence: string;
+      contract_id: number | null;
+      basis: Record<string, unknown>;
+    }>;
+    const byType = Object.fromEntries(rows.map((r) => [r.signal_type, r]));
+    expect(byType.framework_expiry.contract_id).toBe(2);
+    expect(byType.recurrence.confidence).toBe('medium');
+    expect(byType.recurrence.basis.evidence_count).toBe(2);
+    // Award t1 belongs to the marked contract; the two contract-less awards remain.
+    expect(byType.recurrence.basis.award_refs).toEqual(['t3', 't4']);
+  });
 });

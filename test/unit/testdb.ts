@@ -55,7 +55,10 @@ CREATE TABLE contracts (
   company_id bigint, cpv text, title text, value numeric, currency text,
   start_date date, end_date date, duration_months numeric,
   framework boolean DEFAULT false, renewal_window_start date,
-  renewal_window_end date, status text DEFAULT 'active'
+  renewal_window_end date, status text DEFAULT 'active',
+  -- mirrors migrations/013_contract_dedupe.sql (function itself is plpgsql;
+  -- exercised on real Postgres in contract-dedupe.test.ts)
+  dup_of bigint REFERENCES contracts(id)
 );
 CREATE TABLE contract_events (
   id bigserial PRIMARY KEY, contract_id bigint NOT NULL, event_type text NOT NULL,

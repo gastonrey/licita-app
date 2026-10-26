@@ -15,8 +15,10 @@ ${TEST_SCHEMA_SQL}
 
 /**
  * Set up pg-mem with the current app schema (TEST_SCHEMA_SQL includes all
- * columns through 009). Pre-seed 001/005 as already applied (pg-mem
- * incompatibility: unaccent extension + plpgsql DO block).
+ * columns through 009). Pre-seed 001/005/013 as already applied (pg-mem
+ * incompatibility: unaccent extension, plpgsql DO block, and the plpgsql
+ * refresh_contract_dups function). 013 is executed on real Postgres in
+ * contract-dedupe.test.ts.
  */
 async function makeMigratedDb() {
   const mem = newDb({ noAstCoverageCheck: true });
@@ -52,7 +54,8 @@ async function makeMigratedDb() {
       ('006_credits.sql'),
       ('007_demo_requests.sql'),
       ('008_demo_funnel.sql'),
-      ('009_trial_api_keys.sql')`,
+      ('009_trial_api_keys.sql'),
+      ('013_contract_dedupe.sql')`,
   );
   return db as unknown as Parameters<typeof runMigrations>[0];
 }

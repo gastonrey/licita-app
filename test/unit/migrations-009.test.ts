@@ -5,6 +5,8 @@
 //   pg-mem cannot parse them (001: unaccent extension + generated tsvector
 //   column; 005: plpgsql DO block) — same documented limitation as
 //   test/unit/testdb.ts.
+// - 013_contract_dedupe.sql is pre-seeded too: its refresh function is plpgsql
+//   (pg-mem has no plpgsql). Real Postgres covers it in contract-dedupe.test.ts.
 // - 002, 003, 004, 006, 007, 008 run verbatim on top of the 001-mirror base.
 // - 009 (the file under test) must apply cleanly and be replay-safe.
 //
@@ -46,8 +48,10 @@ async function makeMigratedDb() {
   await db.query(
     'CREATE TABLE schema_migrations(name text PRIMARY KEY, applied_at timestamptz DEFAULT now())',
   );
-  // 001 and 005 are pg-mem-incompatible; everything else runs verbatim.
-  await db.query("INSERT INTO schema_migrations(name) VALUES ('001_core.sql'), ('005_sequence_grants.sql')");
+  // 001, 005, and 013 are pg-mem-incompatible (plpgsql / unaccent); everything else runs verbatim.
+  await db.query(
+    "INSERT INTO schema_migrations(name) VALUES ('001_core.sql'), ('005_sequence_grants.sql'), ('013_contract_dedupe.sql')",
+  );
   return db as unknown as Parameters<typeof runMigrations>[0];
 }
 

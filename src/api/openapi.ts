@@ -606,7 +606,7 @@ function paths(): Record<string, unknown> {
         summary: 'Search awards, tenders and contracts',
         description: desc(
           'GET /v1/search',
-          'Full-text + structured search. q uses Postgres FTS (spanish) over tender title/description.',
+          'Full-text + structured search. q uses Postgres FTS (spanish) over tender title/description. Contract results omit a row already represented by another contract.',
         ),
         parameters: [
           qParam('q', 'Full-text query (plainto_tsquery, spanish)', { type: 'string', maxLength: 200 }),

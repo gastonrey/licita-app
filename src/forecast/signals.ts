@@ -303,7 +303,8 @@ export async function recomputeSignals(db: Db): Promise<RecomputeResult> {
                 t.source_ref AS tender_source_ref
          FROM contracts c
          JOIN awards a ON a.id = c.award_id
-         JOIN tenders t ON t.id = a.tender_id`,
+         JOIN tenders t ON t.id = a.tender_id
+         WHERE c.dup_of IS NULL`,
       )
     ).rows as Array<Record<string, unknown>>
   ).map((r) => ({
@@ -333,6 +334,7 @@ export async function recomputeSignals(db: Db): Promise<RecomputeResult> {
          JOIN tenders t ON t.id = a.tender_id
          LEFT JOIN contracts c ON c.award_id = a.id
          WHERE a.award_date IS NOT NULL AND t.buyer_id IS NOT NULL AND t.cpv_main IS NOT NULL
+           AND (c.id IS NULL OR c.dup_of IS NULL)
          ORDER BY t.buyer_id, t.cpv_main, a.award_date`,
       )
     ).rows as Array<Record<string, unknown>>

@@ -1,6 +1,6 @@
 // Ingest CLI (SPEC §8): `npm run ingest -- --once [--source ted|placsp|all]`
 // Runs one full harvest per selected source (window = INGEST_MONTHS) +
-// recomputeSignals and prints a JSON summary:
+// refresh_contract_dups(), recomputeSignals, and prints a JSON summary:
 // {notices_seen, upserted, companies, buyers, errors}.
 // Default source is TED (current behavior); PLACSP additionally requires
 // PLACSP_ENABLED=true. The daily scheduler adds PLACSP only when
@@ -92,6 +92,14 @@ export async function runIngestOnce(
     if (source === 'ted') await runTedIngest(config, db, summary, opts);
     else await runPlacspIngest(config, db, summary, opts);
   }
+
+  // Mark republications and TED/PLACSP crosses before signals are rebuilt.
+  // recomputeSignals deletes every signal, so duplicates must be flagged first.
+  const dedupe = await db.query('SELECT * FROM refresh_contract_dups()');
+  const dedupeRow = (dedupe.rows[0] ?? {}) as { groups?: number | string; marked?: number | string };
+  const groups = Number(dedupeRow.groups ?? 0);
+  const marked = Number(dedupeRow.marked ?? 0);
+  log({ level: 'info', msg: 'contract dedupe', groups, marked });
 
   const signals = await recomputeSignals(db);
   summary.signals = signals.total;

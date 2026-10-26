@@ -80,6 +80,8 @@ export function buildSearchQuery(q: SearchQuery): { text: string; values: unknow
   const cfg = TYPE_CONFIG[q.type];
   const p = new Params();
   const where: string[] = [];
+  // Duplicates stay stored (the award notice is real) but are not a second contract.
+  if (q.type === 'contract') where.push('ct.dup_of IS NULL');
 
   if (q.q) where.push(`t.fts @@ plainto_tsquery('spanish', ${p.push(q.q)})`);
   if (q.cpv) where.push(`${cfg.cpvCol} LIKE ${p.push(`${q.cpv}%`)}`);
