@@ -58,7 +58,7 @@ describe('human homepage (Spanish at /, English at /en)', () => {
         builtOn: 'Construido sobre fuentes primarias',
         lastIngestion: 'última ingesta con éxito',
         notReported: 'No consta',
-        days: '180 días',
+        days: '12 meses',
         evidenceRef: 'enlace al origen',
         footer: ['Metodología', 'Seguridad', 'Términos', 'Estado'],
         research: 'Empieza gratis',
@@ -72,7 +72,7 @@ describe('human homepage (Spanish at /, English at /en)', () => {
         builtOn: 'Built on primary sources',
         lastIngestion: 'last successful ingestion',
         notReported: 'Not reported',
-        days: '180 days',
+        days: '12 months',
         evidenceRef: 'upstream',
         footer: ['Methodology', 'Security', 'Terms', 'Status'],
         research: 'Start free',
@@ -124,15 +124,17 @@ describe('human homepage (Spanish at /, English at /en)', () => {
   it('states the real demo-retention rule on the privacy page in both locales', async () => {
     const esPrivacy = await page('/privacy');
     expect(esPrivacy.statusCode).toBe(200);
-    expect(esPrivacy.body).toContain('180 días');
-    expect(esPrivacy.body).not.toContain('for 30 days');
-    expect(esPrivacy.body).toContain('contactado, usado, pagado o perdido');
+    expect(esPrivacy.body).toContain('12 meses');
+    expect(esPrivacy.body).toContain('hola@eutendersai.com');
+    expect(esPrivacy.body).not.toContain('nunca se eliminan automáticamente');
+    expect(esPrivacy.body).toContain('www.aepd.es');
 
     const enPrivacy = await page('/en/privacy');
     expect(enPrivacy.statusCode).toBe(200);
-    expect(enPrivacy.body).toContain('180 days');
-    expect(enPrivacy.body).not.toContain('for 30 days');
-    expect(enPrivacy.body).toContain('contacted, used, paid or lost');
+    expect(enPrivacy.body).toContain('12 months');
+    expect(enPrivacy.body).toContain('hola@eutendersai.com');
+    expect(enPrivacy.body).not.toContain('never auto-deleted');
+    expect(enPrivacy.body).toContain('www.aepd.es');
   });
 
   it('homepage leads with the SME plans and keeps pay-per-call off the hero, on both locales', async () => {

@@ -22,7 +22,7 @@ export type UseCaseSlug =
   | 'buyer-intelligence'
   | 'renewals-forecasting';
 
-export type TrustPageSlug = 'methodology' | 'security' | 'privacy' | 'terms' | 'status';
+export type TrustPageSlug = 'methodology' | 'security' | 'privacy' | 'terms' | 'legal' | 'status';
 
 export interface UseCaseDetailDict {
   title: string;
@@ -213,6 +213,7 @@ export interface Locale {
     security: string;
     privacy: string;
     terms: string;
+    legal: string;
     status: string;
     github: string;
     tenderIntelligence: string;

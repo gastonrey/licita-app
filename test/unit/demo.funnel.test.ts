@@ -1,6 +1,6 @@
-// Lead funnel fix (TDD): migration 008 semantics, 180-day terminal-status
-// purge, idempotent duplicate capture, operator list/PATCH routes, and the
-// lead auto-reply resilience. Written before the implementation.
+// Lead funnel: migration 008 semantics, 12-month purge of non-customer
+// signups, idempotent duplicate capture, operator list/PATCH routes, and the
+// lead auto-reply resilience.
 
 import { describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
@@ -13,6 +13,7 @@ import { makeTestConfig } from './testconfig.js';
 
 const MIG007 = readFileSync(new URL('../../migrations/007_demo_requests.sql', import.meta.url), 'utf8');
 const MIG008 = readFileSync(new URL('../../migrations/008_demo_funnel.sql', import.meta.url), 'utf8');
+const MIG012 = readFileSync(new URL('../../migrations/012_radar_digest.sql', import.meta.url), 'utf8');
 
 /** Fresh pg-mem pool with the demo_requests table as it looks after 008. */
 async function makeFunnelDb(): Promise<Db> {
@@ -59,12 +60,13 @@ describe('demo funnel migration 008', () => {
 });
 
 describe('demo request capture under the new retention rule', () => {
-  it('never auto-deletes old "new" leads and purges only terminal statuses older than 180 days', async () => {
+  it('deletes non-customer signups after 12 months and keeps rows marked paid', async () => {
     const db = await makeFunnelDb();
     await db.query("INSERT INTO demo_requests (email, status, created_at) VALUES ('oldnew@b.com', 'new', now() - interval '400 days')");
-    await db.query("INSERT INTO demo_requests (email, status, created_at) VALUES ('oldcontacted@b.com', 'contacted', now() - interval '200 days')");
-    await db.query("INSERT INTO demo_requests (email, status, created_at) VALUES ('oldpaid@b.com', 'paid', now() - interval '181 days')");
-    await db.query("INSERT INTO demo_requests (email, status, created_at) VALUES ('oldlost@b.com', 'lost', now() - interval '200 days')");
+    await db.query("INSERT INTO demo_requests (email, status, created_at) VALUES ('recentnew@b.com', 'new', now() - interval '200 days')");
+    await db.query("INSERT INTO demo_requests (email, status, created_at) VALUES ('oldcontacted@b.com', 'contacted', now() - interval '400 days')");
+    await db.query("INSERT INTO demo_requests (email, status, created_at) VALUES ('oldpaid@b.com', 'paid', now() - interval '400 days')");
+    await db.query("INSERT INTO demo_requests (email, status, created_at) VALUES ('oldlost@b.com', 'lost', now() - interval '400 days')");
     await db.query("INSERT INTO demo_requests (email, status, created_at) VALUES ('freshcontact@b.com', 'contacted', now() - interval '10 days')");
     await db.query("INSERT INTO demo_requests (email, status, created_at) VALUES ('oldused@b.com', 'used', now() - interval '100 days')");
 
@@ -74,7 +76,23 @@ describe('demo request capture under the new retention rule', () => {
     await app.close();
 
     const emails = (await db.query('SELECT email FROM demo_requests ORDER BY email')).rows.map((r: { email: string }) => r.email);
-    expect(emails).toEqual(['freshcontact@b.com', 'oldnew@b.com', 'oldused@b.com', 'trigger@b.com']);
+    expect(emails).toEqual(['freshcontact@b.com', 'oldpaid@b.com', 'oldused@b.com', 'recentnew@b.com', 'trigger@b.com']);
+    await db.end();
+  });
+
+  it('drops weekly-send rows once the signup itself is purged', async () => {
+    const db = await makeFunnelDb();
+    await db.query(MIG012);
+    await db.query("INSERT INTO demo_requests (email, status, created_at) VALUES ('gone@b.com', 'new', now() - interval '400 days')");
+    await db.query("INSERT INTO demo_requests (email, status, created_at) VALUES ('kept@b.com', 'paid', now() - interval '400 days')");
+    await db.query("INSERT INTO radar_digest_sends (email, week_start, claim_token) VALUES ('gone@b.com', '2026-01-05', 'a')");
+    await db.query("INSERT INTO radar_digest_sends (email, week_start, claim_token) VALUES ('kept@b.com', '2026-01-05', 'b')");
+    const app = await buildServer(makeTestConfig({ operatorKey: 'funnel-sends' }), db);
+    const res = await app.inject({ method: 'POST', url: '/v1/demo/request', payload: { email: 'trigger2@b.com' } });
+    expect(res.statusCode).toBe(201);
+    await app.close();
+    const sends = (await db.query('SELECT email FROM radar_digest_sends ORDER BY email')).rows.map((r: { email: string }) => r.email);
+    expect(sends).toEqual(['kept@b.com']);
     await db.end();
   });
 

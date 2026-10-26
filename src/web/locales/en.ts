@@ -108,7 +108,7 @@ export const en: Locale = {
     },
     ctaDemo: {
       title: 'Start free',
-      body: 'A weekly summary of 5 renewals for your CPV and region. No card. Emails are kept while the request is new; once a lead advances to contacted, used, paid or lost it is purged after 180 days.',
+      body: 'A weekly summary of 5 renewals for your CPV and region. No card. If you do not become a customer, the signup email is deleted after 12 months.',
       emailLabel: 'Work email',
       emailPlaceholder: 'name@company.com',
       submit: 'Start free',
@@ -206,7 +206,7 @@ export const en: Locale = {
         demoRetention: {
           question: 'How long do you keep demo emails?',
           answer:
-            'Demo emails are kept while the request is new; once a lead advances to contacted, used, paid or lost it is purged after <strong>180 days</strong>.',
+            'If you do not become a customer, the signup email is deleted after <strong>12 months</strong>. A signup marked paid is left out of that purge.',
         },
       },
     },
@@ -350,39 +350,81 @@ export const en: Locale = {
     privacy: {
       title: 'Privacy Policy',
       body: `
-<h2>What data Relicita holds</h2>
-<p>Relicita is an agent-native public procurement intelligence service. It indexes public data from TED and PLACSP and exposes it through REST and MCP. The personal data we process is limited to what is needed to operate the service:</p>
+<h2>Controller</h2>
+<p>Gastón Leonardo Rey Fernández, a natural person operating as a sole trader. NIF 02769985A. Address: C/ Pobla de Segur 15, 3C, 28033 Madrid, Spain. Contact: <a href="mailto:{email}">{email}</a>. Identification details are also on the <a href="/en/legal">legal notice</a>.</p>
+<h2>What we process, and the legal basis</h2>
 <ul>
-  <li><strong>Demo requests</strong> — when you request a demo, we store only the email address you provide, plus the channel, the source URL and lifecycle timestamps.</li>
-  <li><strong>Subscription emails</strong> — when you subscribe via Creem checkout, we store the checkout email to set up your API key and billing account.</li>
-  <li><strong>API keys</strong> — we generate your client key at checkout and send it to you by email. Only a cryptographic hash of the key is stored server-side; the raw key is never persisted after delivery.</li>
-  <li><strong>Payment proofs</strong> — per-call payments (x402) and credit purchases are recorded as proof rows with amount, endpoint, provider and status. Card payments are handled end-to-end by Creem (Merchant of Record); we never see or store card numbers.</li>
+  <li><strong>Free signup.</strong> Email, channel, source URL, status (new, contacted, used, paid or lost) and timestamps, including radar unsubscribe. Basis: consent, when you submit the form.</li>
+  <li><strong>Signup acknowledgement.</strong> When a Resend key is set, we send one email with the subject «Alta recibida en Relicita». DEMO_AUTOREPLY_ENABLED can turn that send off. Basis: the same consent.</li>
+  <li><strong>Weekly radar.</strong> When sending is enabled (DIGEST_ENABLED), each signup address that has not unsubscribed receives at most one Spanish email per UTC week, with up to 5 renewals. An operator can also trigger that send. Basis: consent. Unsubscribe is one click on the link in the email (<a href="/radar/baja">/radar/baja</a>). Nothing in the code reads a reply that says “baja”.</li>
+  <li><strong>Subscription.</strong> After a completed Creem checkout we store the email, a hash of the API key, the account kind and the period end. The raw key is emailed once and is not stored. Basis: contract.</li>
+  <li><strong>x402 payments and credits.</strong> Amount, endpoint, provider and status. For x402, also the payer address, the transaction id and the network. Card numbers never reach us: Creem charges the card. Basis: contract.</li>
+  <li><strong>Technical logs.</strong> Path, status, user agent, referer and, when there is no client key, a hash of the IP. The raw IP and the raw API key are not stored. Basis: legitimate interest in security and operation. These logs have no automatic deletion.</li>
 </ul>
-<h2>How long we keep data</h2>
-<p>Demo emails are kept while the request is new; once a lead advances to contacted, used, paid or lost it is purged after 180 days. New leads are never auto-deleted. Subscription and payment records are kept while an account is active and for the period required by applicable payment and reconciliation rules.</p>
-<h2>Who can access data</h2>
-<p>Access is restricted to operators via a server-side operator key. We do not sell, rent or share personal data with third parties for marketing. We rely on limited processors: Creem (payments), Resend (transactional email) and the x402 facilitator (proof verification).</p>
+<h2>Retention</h2>
+<p>A signup that is not a customer is deleted 12 months after it was created. For this purge, a customer is a row marked paid: that row is kept. The purge runs when a new signup is stored; there is no daily sweep. Subscriber accounts and payments are not deleted by that purge: they are kept while the account remains and for as long as accounting and payment reconciliation require. A weekly-send record (email and week) is deleted once the signup no longer exists.</p>
+<h2>Processors</h2>
+<p>We do not sell data. Access is limited to operators, with an operator key. Processors:</p>
+<ul>
+  <li><strong>Hetzner</strong> — hosting, in the European Union.</li>
+  <li><strong>Cloudflare</strong> — DNS and proxy.</li>
+  <li><strong>Resend</strong> — email delivery, with the account set to the EU region.</li>
+  <li><strong>Creem</strong> — card payments, as Merchant of Record. The charge may involve a transfer outside the European Economic Area; where it does, it relies on the processor’s standard contractual clauses.</li>
+  <li><strong>x402 facilitator</strong> — verification and settlement of the USDC proof (default host x402.org; the URL is configurable). It may sit outside the EEA; where the transfer leaves the EEA, it relies on standard contractual clauses if that processor offers them.</li>
+</ul>
+<h2>Commercial email</h2>
+<p>The product does not email generic addresses taken from a company’s website. The messages above go to the address the person typed at signup or checkout. If the controller writes, outside this application, to a generic company address published on that company’s website, the basis is legitimate interest in a B2B message, the source of the address is that public website, and opt-out is an email to <a href="mailto:{email}">{email}</a> containing the word «baja». That reply is handled by hand: the code does not automate it.</p>
+<h2>Cookies</h2>
+<p>The site code sets no cookies, tracking or otherwise. There is no pixel and no third-party analytics. The operator console keeps its key in the browser’s sessionStorage: that is not a cookie and it is not sent to third parties. If Cloudflare is proxying the site, it may set its own technical cookies; we do not use them for advertising.</p>
 <h2>Your rights</h2>
-<p>Request deletion or ask a privacy question by email at <a href="mailto:{email}">{email}</a>.</p>`,
+<p>You may request access, rectification, erasure, objection, restriction and portability at <a href="mailto:{email}">{email}</a>. We answer within one month. You may also complain to the Spanish Data Protection Agency (<a href="https://www.aepd.es">www.aepd.es</a>).</p>
+<p><em>Last updated: October 2026.</em></p>`,
     },
     terms: {
       title: 'Terms of Service',
       body: `
+<h2>Provider</h2>
+<p>Gastón Leonardo Rey Fernández, a natural person operating as a sole trader. NIF 02769985A. Address: C/ Pobla de Segur 15, 3C, 28033 Madrid, Spain. Email: <a href="mailto:{email}">{email}</a>. Full identification is on the <a href="/en/legal">legal notice</a>.</p>
+<h2>Who it is for</h2>
+<p>The service is for companies and professionals only (B2B), to evaluate public procurement and to integrate it into their own tools. It is not directed at consumers.</p>
 <h2>Service</h2>
-<p>Relicita provides evidence-backed public procurement intelligence: EU (TED) and Spain (PLACSP) tenders, buyers, suppliers and deterministic renewal signals, queryable over REST and MCP. All values come from public sources or deterministic heuristics over them; Relicita never fabricates data.</p>
+<p>Relicita provides evidence-backed public procurement intelligence: EU tenders (TED) and Spanish tenders (PLACSP, when enabled), buyers, suppliers and deterministic renewal signals, over the web, REST and MCP. Values come from public sources or from heuristics over them. Nothing is invented.</p>
 <h2>Use</h2>
-<p>You may use the service for professional evaluation of public procurement opportunities and for integration into your own tools and agents, subject to these terms and to the applicable terms of the upstream sources (TED, PLACSP). You must not use the service to violate law, to abuse or overload the API, to resell the raw index as a competing product, or to circumvent payment.</p>
-<h2>Pricing and payment</h2>
-<p>Endpoints are priced per call; full prices are published at <a href="/v1/pricing">/v1/pricing</a>. You pay with x402 payment proofs, with prepaid credit bundles (<code>x-client-key</code>), or with a monthly subscription via Creem checkout (<code>POST /v1/creem/checkout</code>). Proofs are single-use and expire after 5 minutes. Card payments are processed by Creem as Merchant of Record; we never see card details.</p>
-<h2>API keys and credits</h2>
-<p>Your API key is issued once and sent to you by email after checkout; only a hash is stored server-side. Keep the key safe — it is the only identifier of your credit balance, and a lost balance cannot currently be recovered. Prepaid credits never expire.</p>
-<h2>Data quality</h2>
-<p>Indexed values come from public sources with provenance. Renewal and opportunity signals are deterministic heuristics; confidence reflects evidence strength, not a probability. Relicita does not claim a certification, an uptime SLA, or fitness for a particular decision. Verify before relying on the data for a material decision.</p>
+<p>Subject to these terms and to the terms of TED and PLACSP. Do not use the service to break the law, overload the API, resell the raw index as a competing product, or circumvent payment.</p>
+<h2>Price and payment</h2>
+<p>Per-call prices are at <a href="/v1/pricing">/v1/pricing</a>. You pay with x402 proofs, with prepaid credits (<code>x-client-key</code>), or with a subscription through Creem checkout. Proofs are single-use and expire after 5 minutes. Creem is the Merchant of Record for the card subscription: Relicita does not see or store the card number. The application has no refund endpoint and no subscription-cancellation endpoint of its own.</p>
+<h2>Cancellation and refunds</h2>
+<p>You may cancel the subscription at any time, effective at the end of the period already paid. The first month is refunded if you ask within 14 days of the first charge. Ask by email at <a href="mailto:{email}">{email}</a>; Creem carries it out. This refund does not cover prepaid credits or an x402 payment already settled. Prepaid credits do not expire and are not refunded on this path.</p>
+<h2>API keys</h2>
+<p>The key is emailed once after checkout and only a hash is stored. It identifies the balance. If it is lost, the current code cannot recover the balance.</p>
+<h2>Liability</h2>
+<p>Signals are heuristics: confidence measures evidence, not a probability. There is no certification and no uptime SLA. We are not liable for a procurement decision made on this data alone, nor for outages of TED, PLACSP, Creem or the x402 facilitator, to the extent Spanish law allows. Nothing here limits liability for wilful misconduct or for anything the law forbids excluding.</p>
+<h2>Law and venue</h2>
+<p>Spanish law. Courts of Madrid.</p>
 <h2>Intellectual property</h2>
-<p>The Relicita application is open source under the MIT license (<a href="https://github.com/gastonrey/licita-app">github.com/gastonrey/licita-app</a>). The indexed data remains subject to the terms of its upstream sources.</p>
-<h2>Changes and contact</h2>
-<p>We may update these terms; continued use after a change is posted constitutes acceptance. Questions? Email <a href="mailto:{email}">{email}</a>.</p>
-<p><em>Last updated: September 2026.</em></p>`,
+<p>The code is MIT (<a href="https://github.com/gastonrey/licita-app">github.com/gastonrey/licita-app</a>). Indexed data stays under the terms of its source.</p>
+<h2>Changes</h2>
+<p>These terms may be updated. Use after a change is posted is acceptance of that change.</p>
+<p><em>Last updated: October 2026.</em></p>`,
+    },
+    legal: {
+      title: 'Legal notice',
+      body: `
+<h2>Provider</h2>
+<p>Information required by article 10 of Spanish Law 34/2002 (LSSI):</p>
+<ul>
+  <li><strong>Provider:</strong> Gastón Leonardo Rey Fernández, a natural person operating as a sole trader. There is no company behind this site.</li>
+  <li><strong>NIF:</strong> 02769985A</li>
+  <li><strong>Address:</strong> C/ Pobla de Segur 15, 3C, 28033 Madrid, Spain</li>
+  <li><strong>Email:</strong> <a href="mailto:{email}">{email}</a></li>
+  <li><strong>Site and brand:</strong> eutendersai.com, brand Relicita</li>
+  <li><strong>Activity:</strong> a public-procurement intelligence service. It indexes public notices from TED and, when enabled, from PLACSP, and they are queried on the web, over REST and over MCP.</li>
+</ul>
+<h2>Intellectual property</h2>
+<p>The application code is published under the MIT license (<a href="https://github.com/gastonrey/licita-app">github.com/gastonrey/licita-app</a>). Indexed data comes from public sources (TED and PLACSP) and stays subject to those sources’ terms. The text of this site and the Relicita brand belong to the provider.</p>
+<h2>Governing law</h2>
+<p>Spanish law. Disputes go to the courts of Madrid, except for mandatory rules that cannot be waived. The service is for companies and professionals. Privacy: <a href="/en/privacy">/en/privacy</a>. Terms: <a href="/en/terms">/en/terms</a>.</p>
+<p><em>Last updated: October 2026.</em></p>`,
     },
     status: {
       title: 'Status',
@@ -404,6 +446,7 @@ export const en: Locale = {
     security: 'Security',
     privacy: 'Privacy',
     terms: 'Terms',
+    legal: 'Legal notice',
     status: 'Status',
     github: 'GitHub (MIT)',
     tenderIntelligence: 'Tender intelligence',
