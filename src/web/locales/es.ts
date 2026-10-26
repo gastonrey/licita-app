@@ -46,7 +46,12 @@ export const es: Locale = {
       title: 'Una fila etiquetada del índice en vivo',
       stamp: 'Muestra',
       loading: 'Cargando…',
+      empty: 'Ahora mismo el índice no tiene una fila de muestra. No hemos inventado datos.',
+      error: 'No se ha podido cargar la fila de muestra.',
+      retry: 'Reintentar',
+      notReported: 'No consta',
       sourceStamp: 'GET /v1/demo · estado de la muestra',
+      upstream: 'Abrir la fuente',
     },
     renewalTable: {
       title: 'Contratos que vencen en los próximos 12 meses',

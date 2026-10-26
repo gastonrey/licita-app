@@ -82,7 +82,7 @@ describe('page() head: canonical + OG + meta description (DR4)', () => {
     const app = await webApp();
     const res = await app.inject({ method: 'GET', url: '/' });
     const head = res.body.slice(0, res.body.indexOf('</head>'));
-    expect(head).toContain('<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1">\n<meta name="theme-color" content="#F6F3EA">');
+    expect(head).toContain('<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1">\n<meta name="theme-color" content="#0F172A">');
     // §5 needle: stylesheet link present and BEFORE any canonical/og additions and the title.
     expect(head).toContain('<link rel="stylesheet" href="/styles.css">');
     expect(head.indexOf('<link rel="stylesheet" href="/styles.css">')).toBeLessThan(head.indexOf('<link rel="canonical"'));

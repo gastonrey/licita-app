@@ -119,6 +119,74 @@ function relicitaFill(target, html, state){
   target.setAttribute('aria-busy', state === 'loading' ? 'true' : 'false');
   target.innerHTML = html;
 }
+function bootDemoSample(sample){
+  if (!sample) return;
+  if (sample._relicitaLoad) { sample._relicitaLoad(); return; }
+  var lab = function(key, fb){ return (sample.dataset && sample.dataset[key]) || fb || ''; };
+  function paint(state, html){
+    sample.dataset.state = state;
+    sample.setAttribute('aria-busy', 'false');
+    sample.innerHTML = html;
+  }
+  function lines(xs){
+    var list = Array.isArray(xs) ? xs.filter(function(x){ return typeof x === 'string' && x; }) : [];
+    if (!list.length) return '';
+    return '<ul class="evidence-lines">' + list.map(function(x){ return '<li>' + relicitaEsc(x) + '</li>'; }).join('') + '</ul>';
+  }
+  function field(value){
+    return value == null || value === '' ? relicitaEsc(lab('notReported', 'Not reported')) : relicitaEsc(value);
+  }
+  function render(data, meta){
+    var t = data.tender && typeof data.tender === 'object' ? data.tender : null;
+    var r = data.renewal && typeof data.renewal === 'object' ? data.renewal : null;
+    if (!t && !r) {
+      paint('empty', '<p class="empty-note">' + relicitaEsc(lab('empty', 'No sample row.')) + '</p><p class="source-stamp">' + relicitaEsc(lab('sourceStamp', 'GET /v1/demo')) + '</p>');
+      return;
+    }
+    var html = '';
+    if (t) {
+      html += '<h3>' + field(t.title) + '</h3><p class="finding-meta"><strong>' + relicitaEsc(lab('buyer', 'Buyer')) + ':</strong> ' + field(t.buyer && t.buyer.name) + ' · <strong>' + relicitaEsc(lab('value', 'Value')) + ':</strong> ' + relicitaMoney(t.estimated_value, t.currency, lab('notReported', 'Not reported')) + ' · <strong>' + relicitaEsc(lab('published', 'Published')) + ':</strong> ' + relicitaDay(t.published_at, lab('notReported', 'Not reported')) + '</p>' + lines(t.evidence);
+    }
+    if (r) {
+      html += '<p class="finding-meta"><strong>' + relicitaEsc(lab('renewal', 'Renewal')) + ':</strong> ' + field(r.signal_type) + ' · ' + field(r.confidence) + ' · ' + relicitaDay(r.contract && r.contract.end_date, lab('notReported', 'Not reported')) + '</p>' + lines(r.evidence);
+    }
+    var source = (t && t.source) || (r && r.source) || '';
+    var ref = (t && t.source_ref) || (r && r.source_ref) || '';
+    var when = meta && meta.generated_at ? ' · ' + relicitaEsc(meta.generated_at) : '';
+    html += '<p class="source-stamp">' + field(source) + ' · ' + field(ref) + when + '</p>';
+    var href = (t && t.url) || (r && r.url);
+    if (href && /^https?:/i.test(String(href))) {
+      html += '<p><a class="upstream" href="' + relicitaEsc(href) + '" target="_blank" rel="noreferrer">' + relicitaEsc(lab('upstream', 'Open upstream source')) + '</a></p>';
+    }
+    var metaRows = Array.isArray(data.source_metadata) ? data.source_metadata : [];
+    html += '<p class="source-stamp">source_metadata: ' + relicitaEsc(JSON.stringify(metaRows)) + '</p>';
+    paint('ready', html);
+  }
+  function fail(){
+    paint('error', '<p class="empty-note">' + relicitaEsc(lab('error', 'Sample unavailable.')) + ' <button type="button" class="btn btn-secondary btn-sm" data-retry="1">' + relicitaEsc(lab('retry', 'Retry')) + '</button></p>');
+  }
+  function load(){
+    sample.dataset.state = 'loading';
+    sample.setAttribute('aria-busy', 'true');
+    sample.innerHTML = '<p>' + relicitaEsc(lab('loading', 'Loading…')) + '</p>';
+    var opts = {};
+    if (typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function') opts.signal = AbortSignal.timeout(8000);
+    fetch('/v1/demo', opts).then(function(res){
+      if (!res.ok) throw new Error('sample ' + res.status);
+      return res.json();
+    }).then(function(body){
+      var data = body && body.data;
+      if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('sample shape');
+      render(data, (body && body.meta) || {});
+    }).catch(fail);
+  }
+  sample._relicitaLoad = load;
+  sample.addEventListener('click', function(e){
+    var b = e.target && e.target.closest && e.target.closest('[data-retry]');
+    if (b) load();
+  });
+  load();
+}
 function bootRenewalTable(root){
   var labels = relicitaLabels(root);
   var heads = {
@@ -299,7 +367,10 @@ bindExtraSignups();
 
 /** Homepage script: labeled /v1/demo sample, free signup, and the renewal table. */
 export function homeScript(contactEmail: string): string {
-  return `<script>const sample=document.getElementById('demo-sample');const safe=(v)=>String(v??'Not reported').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));const lines=(xs)=>'<ul class="evidence-lines">'+(xs||[]).map(x=>'<li>'+safe(x)+'</li>').join('')+'</ul>';const lab=(k,fb)=>(sample&&sample.dataset&&sample.dataset[k])||fb;if(sample){fetch('/v1/demo').then(r=>{if(!r.ok)throw new Error('sample unavailable');return r.json()}).then(({data,meta})=>{const t=data.tender,r=data.renewal;sample.dataset.state='ready';sample.innerHTML=(t?'<h3>'+safe(t.title)+'</h3><p><strong>'+safe(lab('buyer','Buyer'))+':</strong> '+safe(t.buyer&&t.buyer.name)+' · <strong>'+safe(lab('value','Value'))+':</strong> '+safe(t.estimated_value)+' '+safe(t.currency||'')+' · <strong>'+safe(lab('published','Published'))+':</strong> '+safe(t.published_at)+'</p>'+lines(t.evidence):'<p>'+safe(lab('emptyTender','No current sample is available.'))+'</p>')+(r?'<p><strong>'+safe(lab('renewal','Renewal signal'))+':</strong> '+safe(r.signal_type)+' · '+safe(r.confidence)+' · '+safe(r.contract&&r.contract.end_date)+'</p>'+lines(r.evidence):'<p>'+safe(lab('emptyRenewal','No current renewal sample is available.'))+'</p>')+'<p class="source-stamp">'+safe((t&&t.source)||(r&&r.source)||'source')+' · '+safe((t&&t.source_ref)||(r&&r.source_ref))+' · '+safe(meta&&meta.generated_at)+'</p>'+(((t&&t.url)||(r&&r.url))?'<p><a class="upstream" href="'+safe((t&&t.url)||(r&&r.url))+'" target="_blank" rel="noreferrer">'+safe(lab('upstream','Open upstream source'))+'</a></p>':'')+'<p class="source-stamp">source_metadata: '+safe(JSON.stringify(data.source_metadata||[]))+'</p>'}).catch(()=>{sample.dataset.state='error';sample.innerHTML='<p>'+safe(lab('error','Sample unavailable.'))+' <a href="/docs">'+safe(lab('docs','Read the methodology'))+'</a>.</p>'})}document.getElementById('demo-request').addEventListener('submit',async(e)=>{e.preventDefault();const f=e.currentTarget,m=document.getElementById('demo-message'),b=f.querySelector('button');m.textContent=f.dataset.pending||'Saving…';b.disabled=true;try{const r=await fetch('/v1/demo/request?source=homepage'+'&cpv='+encodeURIComponent(f.cpv?f.cpv.value:'')+'&region='+encodeURIComponent(f.region?f.region.value:'')+'&plan='+encodeURIComponent(f.plan?f.plan.value:'')),{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({email:f.email.value})});if(!r.ok){const body=await r.json().catch(()=>({}));throw new Error(body.error?.hint||body.error?.message||f.dataset.error||'Check your email and try again.')}m.textContent=f.dataset.success||'Signup received. We will follow up by email; no meeting was booked.';f.reset()}catch(err){m.textContent=err.message+' You can also email ${contactEmail}.'}finally{b.disabled=false}});${PREVIEW_JS}if(document.getElementById('renewal-table'))bootRenewalTable(document.getElementById('renewal-table'));</script>`;
+  return `<script>const sample=document.getElementById('demo-sample');${PREVIEW_JS}
+bootDemoSample(sample);
+document.getElementById('demo-request').addEventListener('submit',async(e)=>{e.preventDefault();const f=e.currentTarget,m=document.getElementById('demo-message'),b=f.querySelector('button');m.textContent=f.dataset.pending||'Saving…';b.disabled=true;try{const r=await fetch('/v1/demo/request?source=homepage'+'&cpv='+encodeURIComponent(f.cpv?f.cpv.value:'')+'&region='+encodeURIComponent(f.region?f.region.value:'')+'&plan='+encodeURIComponent(f.plan?f.plan.value:''),{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({email:f.email.value})});if(!r.ok){const body=await r.json().catch(()=>({}));throw new Error(body.error?.hint||body.error?.message||f.dataset.error||'Check your email and try again.')}m.textContent=f.dataset.success||'Signup received. We will follow up by email; no meeting was booked.';f.reset()}catch(err){m.textContent=err.message+' You can also email ${contactEmail}.'}finally{b.disabled=false}});
+if(document.getElementById('renewal-table'))bootRenewalTable(document.getElementById('renewal-table'));</script>`;
 }
 
 export function radarScript(): string {
