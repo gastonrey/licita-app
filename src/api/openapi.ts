@@ -951,6 +951,12 @@ function paths(): Record<string, unknown> {
                   currency: { type: 'string', enum: ['EUR'] },
                   price_monthly_cents: { type: 'integer', example: 3900 },
                   price_monthly: { type: 'string', example: '39.00' },
+                  vat_note: {
+                    type: 'string',
+                    description:
+                      'The listed subscription price excludes VAT. Creem adds 21% at checkout. price_monthly_cents stays the net amount.',
+                    example: 'Subscription prices exclude VAT (+ VAT). Creem adds 21% VAT at checkout.',
+                  },
                   checkout_endpoint: { type: 'string', example: 'POST /v1/creem/checkout' },
                   mechanics: { type: 'string' },
                   reason: { type: 'string' },

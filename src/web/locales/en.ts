@@ -329,9 +329,9 @@ export const en: Locale = {
   },
   pricing: {
     title: 'Pricing',
-    metaTitle: 'Renewal radar from €39 a month',
+    metaTitle: 'Renewal radar from €39 + VAT a month',
     metaDescription:
-      'Free, Radar (€39/month), Pro (€99) and Team (€199) plans to see which software and cybersecurity public contracts will be re-tendered.',
+      'Free, Radar (€39 + VAT/month), Pro (€99 + VAT) and Team (€199 + VAT) plans to see which software and cybersecurity public contracts will be re-tendered.',
     intro:
       'Per-call prices in USD. Machine-readable version: <a href="/v1/pricing">/v1/pricing</a>. Payments mode: <code>{paymentsMode}</code>. <code>POST /v1/research</code> costs <code>${researchPrice}</code> per call (config-driven).',
     priceTable: { endpointHeader: 'Endpoint', priceHeader: 'Price (USD / call)', freeTag: 'free' },
@@ -347,7 +347,7 @@ export const en: Locale = {
       'Two payment rails, chosen by how you buy: the monthly subscription is paid in <strong>EUR</strong> by card via Creem (no crypto wallet); pay-per-call and prepaid credits are priced in <strong>USD</strong> and paid with USDC proofs via x402.',
     monthlyTitle: 'Monthly subscription',
     monthlyBody:
-      '<strong>Radar</strong>: the public monthly plan is <code>{radarMonthly}/month</code> (€390 a year). Paid signup uses <code>POST /v1/creem/checkout</code>. After payment Creem calls <code>POST /v1/creem/webhook</code> (signature-verified) and the account is marked <code>kind=creem</code> for 30 days. Subscriber calls debit one-time credits — running out returns <code>402</code> until you refill.',
+      '<strong>Radar</strong>: the public monthly plan is <code>{radarMonthly}/month + VAT</code> (€390 + VAT a year). Paid signup uses <code>POST /v1/creem/checkout</code>. After payment Creem calls <code>POST /v1/creem/webhook</code> (signature-verified) and the account is marked <code>kind=creem</code> for 30 days. Subscriber calls debit one-time credits — running out returns <code>402</code> until you refill.',
     buyLine:
       'Buy: <code>POST /v1/billing/credits/5</code> (or <code>/10</code> <code>/25</code>) with the normal machine-to-machine payment flow (402 → <code>PAYMENT-SIGNATURE</code> retry). Check balance: <code>GET /v1/billing</code> with header <code>x-client-key: &lt;your key&gt;</code>. MCP: <code>billing_purchase_credits</code> / <code>billing_get_balance</code>.',
     howPaymentTitle: 'How payment works',
@@ -403,6 +403,7 @@ export const en: Locale = {
 <p>You may use the service for professional evaluation of public procurement opportunities and for integration into your own tools and agents, subject to these terms and to the applicable terms of the upstream sources (TED, PLACSP). You must not use the service to violate law, to abuse or overload the API, to resell the raw index as a competing product, or to circumvent payment.</p>
 <h2>Pricing and payment</h2>
 <p>Endpoints are priced per call; full prices are published at <a href="/v1/pricing">/v1/pricing</a>. You pay with x402 payment proofs, with prepaid credit bundles (<code>x-client-key</code>), or with a monthly subscription via Creem checkout (<code>POST /v1/creem/checkout</code>). Proofs are single-use and expire after 5 minutes. Card payments are processed by Creem as Merchant of Record; we never see card details.</p>
+<p>Paid plan prices charged by card exclude VAT. Creem adds 21% at checkout (€39 + VAT = €47.19).</p>
 <h2>API keys and credits</h2>
 <p>Your API key is issued once and sent to you by email after checkout; only a hash is stored server-side. Keep the key safe — it is the only identifier of your credit balance, and a lost balance cannot currently be recovered. Prepaid credits never expire.</p>
 <h2>Data quality</h2>
@@ -448,7 +449,8 @@ export const en: Locale = {
       'Relicita tells IT and cybersecurity SMEs which software and cyber public contracts will be re-tendered, who holds them today and when to move. Evidence from TED and PLACSP.',
   },
   plans: {
-    vat: 'Prices exclude VAT.',
+    vat: 'Prices exclude VAT. Creem adds 21% at checkout (€39 + VAT = €47.19).',
+    vatSuffix: '+ VAT',
     free: {
       name: 'Free',
       price: '€0',
@@ -460,14 +462,14 @@ export const en: Locale = {
       name: 'Radar',
       price: '€39',
       period: 'per month',
-      desc: 'The renewal list for your market, every week. €390 per year when billed annually.',
+      desc: 'The renewal list for your market, every week. €390 + VAT per year when billed annually.',
       cta: 'I want Radar',
     },
     pro: {
       name: 'Pro',
       price: '€99',
       period: 'per month',
-      desc: 'Radar plus buyer and incumbent context for a working shortlist. €990 per year when billed annually.',
+      desc: 'Radar plus buyer and incumbent context for a working shortlist. €990 + VAT per year when billed annually.',
       cta: 'I want Pro',
     },
     team: {
@@ -480,19 +482,19 @@ export const en: Locale = {
     interestCta: 'Save my interest',
     payCta: 'Continue to payment',
     intervalLabel: 'Billing period',
-    monthlyRadar: 'Monthly, €39',
-    annualRadar: 'Yearly, €390',
-    monthlyPro: 'Monthly, €99',
-    annualPro: 'Yearly, €990',
+    monthlyRadar: 'Monthly, €39 + VAT',
+    annualRadar: 'Yearly, €390 + VAT',
+    monthlyPro: 'Monthly, €99 + VAT',
+    annualPro: 'Yearly, €990 + VAT',
     chosenFree: 'You chose the Free plan. Signup does not ask for a card.',
-    chosenRadar: 'You chose Radar (€39 a month or €390 a year). Leave your email and we save your interest. No card is requested.',
-    chosenPro: 'You chose Pro (€99 a month or €990 a year). Leave your email and we save your interest. No card is requested.',
-    chosenTeam: 'You chose Team (€199 a month, 5 users and a read API). Leave your email and we save your interest. No card is requested.',
-    payRadarMonthly: 'You chose Radar, €39 a month. Payment continues on Creem. We never see the card details.',
-    payRadarAnnual: 'You chose Radar, €390 a year. Payment continues on Creem. We never see the card details.',
-    payProMonthly: 'You chose Pro, €99 a month. Payment continues on Creem. We never see the card details.',
-    payProAnnual: 'You chose Pro, €990 a year. Payment continues on Creem. We never see the card details.',
-    payTeamMonthly: 'You chose Team, €199 a month. Payment continues on Creem. We never see the card details.',
+    chosenRadar: 'You chose Radar (€39 + VAT a month or €390 + VAT a year). Leave your email and we save your interest. No card is requested.',
+    chosenPro: 'You chose Pro (€99 + VAT a month or €990 + VAT a year). Leave your email and we save your interest. No card is requested.',
+    chosenTeam: 'You chose Team (€199 + VAT a month, 5 users and a read API). Leave your email and we save your interest. No card is requested.',
+    payRadarMonthly: 'You chose Radar, €39 + VAT a month. Payment continues on Creem. We never see the card details.',
+    payRadarAnnual: 'You chose Radar, €390 + VAT a year. Payment continues on Creem. We never see the card details.',
+    payProMonthly: 'You chose Pro, €99 + VAT a month. Payment continues on Creem. We never see the card details.',
+    payProAnnual: 'You chose Pro, €990 + VAT a year. Payment continues on Creem. We never see the card details.',
+    payTeamMonthly: 'You chose Team, €199 + VAT a month. Payment continues on Creem. We never see the card details.',
     checkoutNoscript: 'Without JavaScript we save the email as interest and do not open payment.',
   },
   radarPage: {
@@ -534,7 +536,7 @@ export const en: Locale = {
       'REST calls and MCP tools for the Relicita index, paid per call in USDC. Plans for people are on the pricing page.',
     h1: 'API and MCP for integrations',
     intro:
-      'Teams that want a person to read the radar should start on the pricing page. This page is the machine interface: priced REST calls and MCP tools. Nothing here is required to receive the weekly email.',
+      'Teams that want a person to read the radar should start on the pricing page. Paid plans there exclude VAT (+ VAT); Creem adds 21% at checkout (€39 + VAT = €47.19). This page is the machine interface: priced REST calls and MCP tools. Nothing here is required to receive the weekly email.',
     docsCta: 'Read the docs',
     mcpCta: 'MCP server',
     ladderTitle: 'Pay per call',
