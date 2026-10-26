@@ -30,7 +30,7 @@ export const es: Locale = {
     requestDemo: 'Empieza gratis',
   },
   home: {
-    title: 'Contratos públicos de software y ciberseguridad, antes de que vuelvan a salir',
+    title: 'Contratos públicos de software que se relicitan',
     metaDescription:
       'Relicita indica a tu pyme de software o ciberseguridad qué contratos públicos se van a volver a licitar, quién los tiene hoy y cuándo moverte. Evidencia de TED y PLACSP. Empieza gratis, sin tarjeta.',
     heroEyebrow: 'Pymes de software y ciberseguridad',
@@ -222,8 +222,9 @@ export const es: Locale = {
   },
   usecases: {
     title: 'Casos de uso',
+    metaTitle: 'Casos de uso de licitaciones y renovaciones',
     metaDescription:
-      'Misiones concretas de agente para Relicita: endpoints exactos, herramientas MCP, costes y formas reales de respuesta.',
+      'Buscar licitaciones, estudiar un proveedor, leer un órgano de contratación o anticipar una renovación, con el endpoint y el coste de cada misión.',
     intro:
       'Misiones concretas de agente, los endpoints exactos y las herramientas MCP que las resuelven, su coste y cómo es una respuesta real. Cada ejemplo es una muestra etiquetada: los agentes reciben las mismas formas tras pagar por llamada.',
     freeTitle: 'Primera vista gratuita',
@@ -239,6 +240,9 @@ export const es: Locale = {
   usecaseDetail: {
     'tender-intelligence': {
       title: 'Inteligencia de licitaciones — encuentra licitaciones recientes y quién ganó',
+      metaTitle: 'Licitaciones recientes y quién las ganó',
+      metaDescription:
+        'Busca licitaciones y adjudicaciones recientes por tema, comprador e importe, con la evidencia de cada fila.',
       problem:
         'Un agente necesita actividad de contratación reciente sobre un tema: qué licitaciones se publicaron o adjudicaron, por quién, por cuánto y con qué evidencia.',
       tools:
@@ -248,6 +252,9 @@ export const es: Locale = {
     },
     'company-research': {
       title: 'Estudio de proveedores — historial y oportunidades en vivo',
+      metaTitle: 'Historial de proveedores públicos',
+      metaDescription:
+        'Adjudicaciones, CPV y compradores de un proveedor, más las licitaciones que encajan con su perfil.',
       problem:
         'Un agente que evalúa a un proveedor necesita las adjudicaciones ganadas, el valor total adjudicado, los principales CPV y compradores, además de las licitaciones que encajan con ese perfil ahora mismo.',
       tools:
@@ -257,6 +264,9 @@ export const es: Locale = {
     },
     'buyer-intelligence': {
       title: 'Inteligencia de compradores — actividad, concentración, recurrencia',
+      metaTitle: 'Actividad de órganos de contratación',
+      metaDescription:
+        'Historial de adjudicaciones, concentración de proveedores y recurrencia por CPV de un comprador público.',
       problem:
         'Un agente necesita un perfil de comprador: historial de adjudicaciones, concentración de proveedores (cuota del proveedor principal) y recurrencia por CPV para cronometrar el contacto.',
       tools: '<code>GET /v1/buyers/:id/history</code> ($0,05/llamada). MCP: <code>get_buyer_history</code>.',
@@ -265,6 +275,9 @@ export const es: Locale = {
     },
     'renewals-forecasting': {
       title: 'Previsión de renovaciones — qué contratos se volverán a licitar',
+      metaTitle: 'Contratos que se vuelven a licitar',
+      metaDescription:
+        'Señales de renovación con ventana, confianza y evidencia. Son estimaciones, no una fecha oficial de licitación.',
       problem:
         'Un agente que busca cartera quiere contratos y acuerdos marco que probablemente se vuelvan a licitar en una ventana, con evidencia por señal.',
       tools:
@@ -276,6 +289,9 @@ export const es: Locale = {
   data: {
     overview: {
       h1: 'Datos',
+      metaTitle: 'Datos TED y PLACSP de contratación',
+      metaDescription:
+        'Qué indexa Relicita de TED y PLACSP, cómo validarlo antes de pagar y dónde está la evidencia de cada fila.',
       intro:
         'Qué indexa Relicita, de dónde procede y cómo pueden validarlo los agentes antes de pagar. Los recuentos se actualizan en cada ingesta: son hechos operativos, no proyecciones.',
       bullets: [
@@ -289,6 +305,9 @@ export const es: Locale = {
     },
     spain: {
       h1: 'Datos — España (PLACSP)',
+      metaTitle: 'Contratos públicos de España (PLACSP)',
+      metaDescription:
+        'Adjudicaciones del sector público español ingeridas de PLACSP: comprador, adjudicatario, CPV e importe.',
       intro:
         'Contratos del sector público español ingeridos de PLACSP cuando está activado. Las referencias de publicación tienen el formato <code>2026/CONTRAT/000064</code>.',
       bullets: [
@@ -300,6 +319,8 @@ export const es: Locale = {
     },
     eu: {
       h1: 'Datos — UE (TED)',
+      metaTitle: 'Licitaciones de la UE en TED',
+      metaDescription: 'Anuncios de adjudicación de la Unión Europea ingeridos de TED, con enlace al anuncio original.',
       intro:
         'Anuncios de adjudicación de contratación pública de la UE ingeridos de TED (Tenders Electronic Daily). La evidencia enlaza con el anuncio original (<code>ted.europa.eu/udl?uri=TED:NOTICE:…</code>).',
       bullets: [
@@ -312,8 +333,9 @@ export const es: Locale = {
   },
   pricing: {
     title: 'Precios',
+    metaTitle: 'Radar de renovaciones desde 39 € al mes',
     metaDescription:
-      'Precios por llamada en USD para cada endpoint de Relicita, paquetes de créditos prepagados y cómo funciona el pago.',
+      'Planes Gratis, Radar (39 €/mes), Pro (99 €) y Team (199 €) para anticipar qué contratos públicos de software y ciberseguridad se vuelven a licitar.',
     intro:
       'Precios por llamada en USD. Versión legible por máquina: <a href="/v1/pricing">/v1/pricing</a>. Modo de pago: <code>{paymentsMode}</code>. <code>POST /v1/research</code> cuesta <code>${researchPrice}</code> por llamada (configurable).',
     priceTable: { endpointHeader: 'Endpoint', priceHeader: 'Precio (USD / llamada)', freeTag: 'gratis' },
@@ -329,7 +351,7 @@ export const es: Locale = {
       'Dos vías de pago, según cómo compres: la suscripción mensual se paga en <strong>EUR</strong> con tarjeta a través de Creem (sin cartera cripto); el pago por llamada y los créditos prepagados se facturan en <strong>USD</strong> y se pagan con pruebas USDC vía x402.',
     monthlyTitle: 'Suscripción mensual',
     monthlyBody:
-      '<strong>Creem MoR</strong>: suscríbete en <code>POST /v1/creem/checkout</code> por\n<code>€{creemPrice}/mes</code> (configurable — siempre el\n<code>CREEM_PRICE_CENTS</code> configurado). Tras el pago, Creem llama a <code>POST /v1/creem/webhook</code>\n(con firma verificada) y la cuenta queda marcada <code>kind=creem</code> durante 30 días. Las llamadas de suscriptor\ndescuentan créditos de un solo uso: agotarlos devuelve <code>402</code> hasta que recargues.',
+      '<strong>Radar</strong>: el plan mensual público es <code>{radarMonthly}/mes</code> (390 € al año). El alta de pago usa <code>POST /v1/creem/checkout</code>. Tras el pago, Creem llama a <code>POST /v1/creem/webhook</code> (con firma verificada) y la cuenta queda marcada <code>kind=creem</code> durante 30 días. Las llamadas de suscriptor descuentan créditos de un solo uso: agotarlos devuelve <code>402</code> hasta que recargues.',
     buyLine:
       'Compra: <code>POST /v1/billing/credits/5</code> (o <code>/10</code> <code>/25</code>) con el flujo de pago máquina a máquina normal (402 → reintento <code>PAYMENT-SIGNATURE</code>). Consulta el saldo: <code>GET /v1/billing</code> con la cabecera <code>x-client-key: &lt;tu clave&gt;</code>. MCP: <code>billing_purchase_credits</code> / <code>billing_get_balance</code>.',
     howPaymentTitle: 'Cómo funciona el pago',
@@ -343,14 +365,22 @@ export const es: Locale = {
   trust: {
     methodology: {
       title: 'Metodología',
+      metaTitle: 'Metodología de la señal de renovación',
+      metaDescription:
+        'Cómo Relicita calcula la ventana de renovación: heurística determinista, confianza como fuerza de la evidencia, sin probabilidades.',
       body: '<p>Relicita presenta filas de fuentes y heurísticas deterministas con su evidencia. La confianza es la fuerza de la evidencia, no una probabilidad. Los recuentos de cobertura, los rangos indexados y la actualización se muestran solo cuando el índice en vivo los proporciona; los valores desconocidos figuran como No consta.</p>',
     },
     security: {
       title: 'Seguridad',
+      metaTitle: 'Seguridad del acceso y de los leads',
+      metaDescription: 'La clave de operador protege métricas y leads. La captura pública de la demo está limitada en tasa.',
       body: '<p>Las estadísticas de operador y los detalles de los leads requieren la clave de operador del lado del servidor. La captura pública de la demo está limitada en tasa y almacena solo un email normalizado, el canal, la URL de origen y las marcas de tiempo del ciclo de vida. Relicita no declara una certificación ni un SLA en esta página.</p>',
     },
     privacy: {
       title: 'Política de privacidad',
+      metaTitle: 'Privacidad y conservación de datos',
+      metaDescription:
+        'Qué datos personales trata Relicita, cuánto tiempo se conservan los emails de demo y cómo pedir su supresión.',
       body: `
 <h2>Qué datos conserva Relicita</h2>
 <p>Relicita es un servicio de inteligencia de contratación pública nativo de agentes. Indexa datos públicos de TED y PLACSP y los expone vía REST y MCP. Los datos personales que tratamos se limitan a lo necesario para operar el servicio:</p>
@@ -369,6 +399,8 @@ export const es: Locale = {
     },
     terms: {
       title: 'Términos del servicio',
+      metaTitle: 'Términos del servicio Relicita',
+      metaDescription: 'Condiciones de uso del índice de contratación pública, de los precios y de las claves de API.',
       body: `
 <h2>Servicio</h2>
 <p>Relicita ofrece inteligencia de contratación pública con evidencia: licitaciones de la UE (TED) y de España (PLACSP), compradores, proveedores y señales deterministas de renovación, consultables vía REST y MCP. Todos los valores proceden de fuentes públicas o de heurísticas deterministas sobre ellas; Relicita nunca inventa datos.</p>
@@ -388,6 +420,9 @@ export const es: Locale = {
     },
     status: {
       title: 'Estado',
+      metaTitle: 'Estado del índice de licitaciones',
+      metaDescription:
+        'El estado del servicio y la frescura de TED y PLACSP son valores operativos. Esta página no declara un SLA.',
       body: '<p>El estado del servicio y la actualización de las fuentes son valores operativos, no garantías. Consulta los metadatos de la respuesta y contacta con nosotros para informar de una incidencia. Aquí no se declara ningún SLA de disponibilidad.</p>',
     },
   },
@@ -467,9 +502,9 @@ export const es: Locale = {
     checkoutNoscript: 'Sin JavaScript guardamos el email como interés y no se abre el pago.',
   },
   radarPage: {
-    title: 'Radar de renovaciones',
+    title: 'Contratos públicos de software que vencen',
     metaDescription:
-      'Contratos públicos de software y ciberseguridad que se van a volver a licitar: quién los tiene, por cuánto y la fuente de cada señal.',
+      'Filtra contratos de software y ciberseguridad cuya ventana de renovación sigue abierta: adjudicatario, importe y fuente de cada señal.',
     h1: 'Qué contratos vuelven y quién los tiene',
     intro:
       'Filtra la muestra pública por CPV, órgano de contratación, zona y horizonte (6 o 12 meses). Solo entran ventanas que siguen abiertas. La confianza baja va marcada como estimación: es la fuerza de la evidencia, no una probabilidad.',
@@ -500,9 +535,9 @@ export const es: Locale = {
     noscript: 'Esta tabla se carga del índice en vivo. Sin JavaScript, abre GET /v1/radar/preview.',
   },
   developersPage: {
-    title: 'Desarrolladores',
+    title: 'API y MCP de contratación pública',
     metaDescription:
-      'Acceso de pago por llamada al índice de Relicita por REST y MCP. USDC vía x402, o créditos prepagados. Los planes para personas están en Precios.',
+      'Llamadas REST y herramientas MCP al índice de Relicita, con pago por llamada en USDC. Los planes para personas están en la página de precios.',
     h1: 'API y MCP para integraciones',
     intro:
       'Si quieres que una persona lea el radar, empieza en Precios. Esta página es la interfaz para máquinas: llamadas REST de pago y herramientas MCP. No hace falta nada de aquí para recibir el email semanal.',

@@ -1,7 +1,11 @@
-# Licita — MCP distribution quick-wins · ready-to-submit assets
+# Relicita — MCP distribution quick-wins · ready-to-submit assets
 
-Prepared metadata for listing **Licita** (public procurement intelligence MCP server) in the
+Prepared metadata for listing **Relicita** (public procurement intelligence MCP server) in the
 major MCP directories. Live instance: `https://api.eutendersai.com/mcp`.
+
+The product name in titles and descriptions is Relicita. The registry `name` fields stay
+technical ids (`licita`, `io.github.gastonrey/licita-app`) so an already published listing
+does not fork. The x402 Bazaar `serviceName` stays `Licita` for the same reason.
 
 This file is the canonical source for every listing. After a listing is created, note it as
 done (check the box) so we track which directories have he server.
@@ -12,8 +16,8 @@ done (check the box) so we track which directories have he server.
 
 | Field | Value |
 |---|---|
-| Server name | `licita` |
-| Title | Public procurement intelligence for AI agents |
+| Server name | `licita` (technical id; display title is Relicita) |
+| Title | Relicita — public procurement intelligence for AI agents |
 | Description | EU (TED) and Spanish (PLACSP) tenders, renewal signals, company opportunities and buyer activity. Pay per call with USDC via x402, or prepaid bundles. Every finding carries evidence, confidence and provenance. |
 | MCP endpoint | `https://api.eutendersai.com/mcp` |
 | Transport | `streamable-http` |
@@ -34,15 +38,15 @@ Repo: `https://github.com/punkpeye/awesome-mcp-servers` (or `appcypher/awesome-m
 *Data & Databases* or *Business*), matching the existing list format:
 
 ```md
-- [Licita](https://api.eutendersai.com/mcp) - Public procurement intelligence for AI agents: EU (TED) and Spanish (PLACSP) tenders, renewal signals, company opportunities and buyer activity. Pay per call with USDC via x402 or prepaid bundles.
+- [Relicita](https://api.eutendersai.com/mcp) - Public procurement intelligence for AI agents: EU (TED) and Spanish (PLACSP) tenders, renewal signals, company opportunities and buyer activity. Pay per call with USDC via x402 or prepaid bundles.
 ```
 
-**PR title:** `Add Licita — public procurement intelligence MCP server`
+**PR title:** `Add Relicita — public procurement intelligence MCP server`
 
 **PR body:**
 
 ```md
-Adds [Licita](https://github.com/gastonrey/licita-app), an agent-native public procurement
+Adds [Relicita](https://github.com/gastonrey/licita-app), an agent-native public procurement
 intelligence server.
 
 - MCP (streamable-HTTP): https://api.eutendersai.com/mcp
@@ -61,7 +65,7 @@ intelligence server.
 
 URL to submit: `https://mcp.so/submit` (or add via the "Publish" flow).
 
-- **Name:** Licita
+- **Name:** Relicita
 - **Server URL:** `https://api.eutendersai.com/mcp`
 - **Description:** (use the single source of truth above)
 - **Tags:** procurement, tenders, eu, spain, contracts, ai, business-intelligence

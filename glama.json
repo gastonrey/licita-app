@@ -1,7 +1,7 @@
 {
   "$schema": "https://glama.ai/mcp/schemas/server.json",
   "name": "licita",
-  "title": "Licita — public procurement intelligence for AI agents",
+  "title": "Relicita — public procurement intelligence for AI agents",
   "description": "Public procurement intelligence for AI agents: EU (TED) and Spanish (PLACSP) tenders, renewal signals, company opportunities and buyer activity. Pay per call with USDC via x402, or prepaid credit bundles. Every finding carries evidence, confidence and provenance.",
   "version": "0.1.1",
   "categories": ["business", "data", "search", "finance"],

@@ -103,8 +103,8 @@ describe('discovery surfaces teach the x402 v2 flow', () => {
     expect(res.statusCode).toBe(200);
     for (const needle of [
       'POST /v1/creem/checkout',
-      '€49.50/month', // derived from CREEM_PRICE_CENTS=4950, never a hardcoded 29.00
-      'CREEM_PRICE_CENTS',
+      '€49.50/month', // derived from the configured cents, never a hardcoded 29.00
+      '€39/month', // public Radar plan, independent of the legacy cents field
       'POST /v1/creem/webhook',
       'one-time credits',
       '402',
@@ -114,6 +114,7 @@ describe('discovery surfaces teach the x402 v2 flow', () => {
       expect(res.body, `/docs missing "${needle}"`).toContain(needle);
     }
     expect(res.body).not.toContain('not enabled on this deployment');
+    expect(res.body).not.toContain('CREEM_PRICE_CENTS');
     await app.close();
   });
 
@@ -230,10 +231,16 @@ describe('discovery surfaces teach the x402 v2 flow', () => {
     }
     const es = await app.inject({ method: 'GET', url: '/pricing' });
     expect(es.body).toContain('Suscripción mensual');
-    expect(es.body).toContain('€49.50/mes'); // derived from CREEM_PRICE_CENTS=4950
+    expect(es.body).toContain('39 €/mes'); // public Radar price, not the legacy cents field
+    expect(es.body).not.toContain('CREEM_PRICE_CENTS');
+    expect(es.body).not.toContain('€29.00');
+    expect(es.body).not.toContain('€49.50');
     const en = await app.inject({ method: 'GET', url: '/en/pricing' });
     expect(en.body).toContain('Monthly subscription');
-    expect(en.body).toContain('€49.50/month'); // derived from CREEM_PRICE_CENTS=4950
+    expect(en.body).toContain('€39/month');
+    expect(en.body).not.toContain('CREEM_PRICE_CENTS');
+    expect(en.body).not.toContain('€29.00');
+    expect(en.body).not.toContain('€49.50');
     await app.close();
   });
 });

@@ -92,7 +92,7 @@ Optional with prod defaults (override in `.env` to change):
 | `PAY_HMAC_SECRET` | *(empty)* | unused by x402; surfaced so it can never be `change-me-in-prod` |
 | `LEAD_NOTIFY_EMAIL` | `eutendersai@gmail.com` | operator inbox for demo-request mail |
 | `RESEND_API_KEY` | *(empty)* | empty disables lead, digest, and trial mail |
-| `RESEND_FROM` | `Licita Operator <operator@licita.app>` | verified Resend sender |
+| `RESEND_FROM` | `Relicita Operator <operator@licita.app>` | verified Resend sender |
 | `DEMO_AUTOREPLY_ENABLED` | `true` | Spanish confirmation to the lead; still needs `RESEND_API_KEY` |
 | `DIGEST_ENABLED` | `false` | weekly operator digest and customer radar stay off |
 | `DIGEST_CRON` | `0 9 * * 1` | Monday 09:00 UTC, only if the digest gate is open |

@@ -27,7 +27,7 @@ export const en: Locale = {
     requestDemo: 'Start free',
   },
   home: {
-    title: 'Software and cyber public contracts, before they are re-tendered',
+    title: 'Public software contracts before re-tender',
     metaDescription:
       'Relicita tells IT and cybersecurity SMEs which software and cyber public contracts will be re-tendered, who holds them today and when to move. Evidence from TED and PLACSP. Start free, no card.',
     heroEyebrow: 'IT and cybersecurity SMEs',
@@ -219,8 +219,9 @@ export const en: Locale = {
   },
   usecases: {
     title: 'Use cases',
+    metaTitle: 'Use cases for tenders and renewals',
     metaDescription:
-      'Concrete agent missions for Relicita: exact endpoints, MCP tools, costs and real response shapes.',
+      'Search tenders, research a supplier, read a buyer or anticipate a renewal, with the endpoint and cost of each mission.',
     intro:
       'Concrete agent missions, the exact endpoints and MCP tools that solve them, their cost, and what a real response looks like. Every example is a labeled sample — agents get the same shapes after paying per call.',
     freeTitle: 'Free first look',
@@ -236,6 +237,9 @@ export const en: Locale = {
   usecaseDetail: {
     'tender-intelligence': {
       title: 'Tender intelligence — find recent tenders and who won',
+      metaTitle: 'Recent tenders and who won them',
+      metaDescription:
+        'Find recent tenders and awards by topic, buyer and value, with the provenance of every row.',
       problem:
         'An agent needs recent procurement activity on a topic: which tenders were published or awarded, by whom, for how much, with provenance.',
       tools:
@@ -245,6 +249,9 @@ export const en: Locale = {
     },
     'company-research': {
       title: 'Company research — track record and live opportunities',
+      metaTitle: 'Public supplier track records',
+      metaDescription:
+        "A supplier's awards, CPVs and buyers, plus tenders that match that profile now.",
       problem:
         'An agent evaluating a supplier needs wins, total awarded value, top CPVs and buyers, plus tenders matching that company profile right now.',
       tools:
@@ -254,6 +261,8 @@ export const en: Locale = {
     },
     'buyer-intelligence': {
       title: 'Buyer intelligence — activity, concentration, recurrence',
+      metaTitle: 'Public buyer activity and recurrence',
+      metaDescription: 'Award history, supplier concentration and per-CPV recurrence for a public buyer.',
       problem:
         'An agent needs a buyer profile: award history, supplier concentration (top-supplier share) and per-CPV recurrence so it can time outreach.',
       tools:
@@ -263,6 +272,9 @@ export const en: Locale = {
     },
     'renewals-forecasting': {
       title: 'Renewals forecasting — which contracts will be re-tendered',
+      metaTitle: 'Contracts due to be re-tendered',
+      metaDescription:
+        'Renewal signals with a window, a confidence label and the evidence. Estimates, not an official tender date.',
       problem:
         'An agent hunting pipeline wants contracts and frameworks likely to be re-tendered in a window, with per-signal evidence.',
       tools:
@@ -274,6 +286,9 @@ export const en: Locale = {
   data: {
     overview: {
       h1: 'Data',
+      metaTitle: 'TED and PLACSP procurement data',
+      metaDescription:
+        "What Relicita indexes from TED and PLACSP, how to validate it before paying, and where each row's provenance sits.",
       intro:
         'What Relicita indexes, where it comes from, and how agents can validate it before paying. Counts are updated on ingestion — they are operational facts, not projections.',
       bullets: [
@@ -287,6 +302,8 @@ export const en: Locale = {
     },
     spain: {
       h1: 'Data — Spain (PLACSP)',
+      metaTitle: 'Spanish public contracts from PLACSP',
+      metaDescription: 'Spanish public-sector awards ingested from PLACSP: buyer, winner, CPV and value.',
       intro:
         'Spanish public-sector procurement contracts ingested from PLACSP when enabled. Publication references look like <code>2026/CONTRAT/000064</code>.',
       bullets: [
@@ -298,6 +315,8 @@ export const en: Locale = {
     },
     eu: {
       h1: 'Data — EU (TED)',
+      metaTitle: 'EU public contracts from TED',
+      metaDescription: 'European Union award notices ingested from TED, with a link to the original notice.',
       intro:
         'EU public procurement award notices ingested from TED (Tenders Electronic Daily). Provenance links to the original notice (<code>ted.europa.eu/udl?uri=TED:NOTICE:…</code>).',
       bullets: [
@@ -310,8 +329,9 @@ export const en: Locale = {
   },
   pricing: {
     title: 'Pricing',
+    metaTitle: 'Renewal radar from €39 a month',
     metaDescription:
-      'Per-call USD prices for every Relicita endpoint, prepaid credit bundles, and how payment works.',
+      'Free, Radar (€39/month), Pro (€99) and Team (€199) plans to see which software and cybersecurity public contracts will be re-tendered.',
     intro:
       'Per-call prices in USD. Machine-readable version: <a href="/v1/pricing">/v1/pricing</a>. Payments mode: <code>{paymentsMode}</code>. <code>POST /v1/research</code> costs <code>${researchPrice}</code> per call (config-driven).',
     priceTable: { endpointHeader: 'Endpoint', priceHeader: 'Price (USD / call)', freeTag: 'free' },
@@ -327,7 +347,7 @@ export const en: Locale = {
       'Two payment rails, chosen by how you buy: the monthly subscription is paid in <strong>EUR</strong> by card via Creem (no crypto wallet); pay-per-call and prepaid credits are priced in <strong>USD</strong> and paid with USDC proofs via x402.',
     monthlyTitle: 'Monthly subscription',
     monthlyBody:
-      '<strong>Creem MoR</strong>: subscribe at <code>POST /v1/creem/checkout</code> for\n<code>€{creemPrice}/month</code> (config-driven — always the configured\n<code>CREEM_PRICE_CENTS</code>). After payment Creem calls <code>POST /v1/creem/webhook</code>\n(signature-verified) and the account is marked <code>kind=creem</code> for 30 days. Subscriber calls\ndebit one-time credits — running out returns <code>402</code> until you refill.',
+      '<strong>Radar</strong>: the public monthly plan is <code>{radarMonthly}/month</code> (€390 a year). Paid signup uses <code>POST /v1/creem/checkout</code>. After payment Creem calls <code>POST /v1/creem/webhook</code> (signature-verified) and the account is marked <code>kind=creem</code> for 30 days. Subscriber calls debit one-time credits — running out returns <code>402</code> until you refill.',
     buyLine:
       'Buy: <code>POST /v1/billing/credits/5</code> (or <code>/10</code> <code>/25</code>) with the normal machine-to-machine payment flow (402 → <code>PAYMENT-SIGNATURE</code> retry). Check balance: <code>GET /v1/billing</code> with header <code>x-client-key: &lt;your key&gt;</code>. MCP: <code>billing_purchase_credits</code> / <code>billing_get_balance</code>.',
     howPaymentTitle: 'How payment works',
@@ -341,14 +361,21 @@ export const en: Locale = {
   trust: {
     methodology: {
       title: 'Methodology',
+      metaTitle: 'How the renewal signal is calculated',
+      metaDescription:
+        'How Relicita estimates a renewal window: a deterministic heuristic, confidence as evidence strength, not a probability.',
       body: '<p>Relicita presents source rows and deterministic heuristics with their evidence. Confidence is evidence strength, not a probability. Coverage counts, indexed ranges and freshness are shown only when supplied by the live index; unknown values are Not reported.</p>',
     },
     security: {
       title: 'Security',
+      metaTitle: 'Access security for leads and metrics',
+      metaDescription: 'The operator key protects metrics and leads. Public demo capture is rate limited.',
       body: '<p>Operator statistics and lead details require the server-side operator key. Public demo capture is rate limited and stores only a normalized email, channel, source URL and lifecycle timestamps. Relicita does not claim a certification or SLA on this page.</p>',
     },
     privacy: {
       title: 'Privacy Policy',
+      metaTitle: 'Privacy and how long data is kept',
+      metaDescription: 'What personal data Relicita processes, how long demo emails are kept, and how to ask for deletion.',
       body: `
 <h2>What data Relicita holds</h2>
 <p>Relicita is an agent-native public procurement intelligence service. It indexes public data from TED and PLACSP and exposes it through REST and MCP. The personal data we process is limited to what is needed to operate the service:</p>
@@ -367,6 +394,8 @@ export const en: Locale = {
     },
     terms: {
       title: 'Terms of Service',
+      metaTitle: 'Relicita terms of service',
+      metaDescription: 'Terms for using the public procurement index, the prices and the API keys.',
       body: `
 <h2>Service</h2>
 <p>Relicita provides evidence-backed public procurement intelligence: EU (TED) and Spain (PLACSP) tenders, buyers, suppliers and deterministic renewal signals, queryable over REST and MCP. All values come from public sources or deterministic heuristics over them; Relicita never fabricates data.</p>
@@ -386,6 +415,8 @@ export const en: Locale = {
     },
     status: {
       title: 'Status',
+      metaTitle: 'Procurement index status',
+      metaDescription: 'Service status and TED and PLACSP freshness are operational values. This page claims no uptime SLA.',
       body: '<p>Service status and source freshness are operational values, not guarantees. Check the response metadata and contact us to report an issue. No uptime SLA is claimed here.</p>',
     },
   },
@@ -465,9 +496,9 @@ export const en: Locale = {
     checkoutNoscript: 'Without JavaScript we save the email as interest and do not open payment.',
   },
   radarPage: {
-    title: 'Renewal radar',
+    title: 'Public software contracts coming due',
     metaDescription:
-      'Software and cybersecurity public contracts due to be re-tendered: who holds them, for how much, and the source of each signal.',
+      'Filter software and cybersecurity contracts whose renewal window is still open: holder, amount and the source of each signal.',
     h1: 'Which contracts come back, and who holds them',
     intro:
       'Filter the public sample by CPV, buyer, region and horizon (6 or 12 months). Only windows that are still open are listed. Low confidence is marked as an estimate: it is the strength of the evidence, not a probability.',
@@ -498,9 +529,9 @@ export const en: Locale = {
     noscript: 'This table is loaded from the live index. Without JavaScript, open GET /v1/radar/preview.',
   },
   developersPage: {
-    title: 'Developers',
+    title: 'Public procurement API and MCP',
     metaDescription:
-      'Pay-per-call access to the Relicita index over REST and MCP. USDC via x402, or prepaid credits. Human plans live on the pricing page.',
+      'REST calls and MCP tools for the Relicita index, paid per call in USDC. Plans for people are on the pricing page.',
     h1: 'API and MCP for integrations',
     intro:
       'Teams that want a person to read the radar should start on the pricing page. This page is the machine interface: priced REST calls and MCP tools. Nothing here is required to receive the weekly email.',

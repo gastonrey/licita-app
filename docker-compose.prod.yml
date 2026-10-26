@@ -90,7 +90,7 @@ services:
       CREEM_API_KEY: ${CREEM_API_KEY:-}
       CREEM_WEBHOOK_SECRET: ${CREEM_WEBHOOK_SECRET:-}
       CREEM_PRODUCT_ID: ${CREEM_PRODUCT_ID:-}
-      CREEM_PRICE_CENTS: ${CREEM_PRICE_CENTS:-2900}
+      CREEM_PRICE_CENTS: ${CREEM_PRICE_CENTS:-3900}
       # Unused by x402; surfaced so it can never be the placeholder
       # 'change-me-in-prod' if an operator sets it.
       PAY_HMAC_SECRET: ${PAY_HMAC_SECRET:-}
@@ -132,7 +132,7 @@ services:
       # Defaults match src/config.ts so an unset .env does not change behavior.
       LEAD_NOTIFY_EMAIL: ${LEAD_NOTIFY_EMAIL:-eutendersai@gmail.com}
       RESEND_API_KEY: ${RESEND_API_KEY:-}
-      RESEND_FROM: "${RESEND_FROM:-Licita Operator <operator@licita.app>}"
+      RESEND_FROM: "${RESEND_FROM:-Relicita Operator <operator@licita.app>}"
       DEMO_AUTOREPLY_ENABLED: "${DEMO_AUTOREPLY_ENABLED:-true}"
       # Weekly operator digest and customer radar. Off unless DIGEST_ENABLED
       # is set. SCHEDULED_GENERATION_EVENTS stays true (the code default and

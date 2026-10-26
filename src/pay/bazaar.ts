@@ -35,7 +35,7 @@ export const BAZAAR_SERVICE_METADATA: { serviceName?: string; tags?: string[] } 
     url: '', // sanitizeResourceServiceMetadata only checks service metadata fields
     serviceName: 'Licita',
     tags: ['procurement', 'tenders', 'eu', 'contracts', 'ai'],
-    description: 'Licita — EU public procurement intelligence for AI agents',
+    description: 'Relicita — EU public procurement intelligence for AI agents',
   });
 
 /**

@@ -132,7 +132,7 @@ export function validateConfig(config: AppConfig): void {
       );
     }
     if (!Number.isInteger(config.creem.priceCents) || config.creem.priceCents <= 0) {
-      violations.push('CREEM_PRICE_CENTS must be a positive integer number of cents (e.g. 2900 = €29.00).');
+      violations.push('CREEM_PRICE_CENTS must be a positive integer number of cents (e.g. 3900 = €39.00).');
     }
     const planIds: Array<[string, string]> = [
       ['CREEM_PRODUCT_ID_RADAR_MONTHLY', config.creem.plans?.radarMonthly ?? ''],

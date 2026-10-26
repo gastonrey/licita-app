@@ -26,6 +26,8 @@ export type TrustPageSlug = 'methodology' | 'security' | 'privacy' | 'terms' | '
 
 export interface UseCaseDetailDict {
   title: string;
+  metaTitle: string;
+  metaDescription: string;
   problem: string;
   tools: string;
   honestNote: string;
@@ -33,6 +35,8 @@ export interface UseCaseDetailDict {
 
 export interface TrustPageDict {
   title: string;
+  metaTitle: string;
+  metaDescription: string;
   body: string;
 }
 
@@ -162,6 +166,7 @@ export interface Locale {
   };
   usecases: {
     title: string;
+    metaTitle: string;
     metaDescription: string;
     intro: string;
     freeTitle: string;
@@ -172,16 +177,19 @@ export interface Locale {
   data: {
     overview: {
       h1: string;
+      metaTitle: string;
+      metaDescription: string;
       intro: string;
       bullets: [string, string, string];
       accessTitle: string;
       accessBody: string;
     };
-    spain: { h1: string; intro: string; bullets: [string, string, string]; overviewLink: string };
-    eu: { h1: string; intro: string; bullets: [string, string, string]; overviewLink: string };
+    spain: { h1: string; metaTitle: string; metaDescription: string; intro: string; bullets: [string, string, string]; overviewLink: string };
+    eu: { h1: string; metaTitle: string; metaDescription: string; intro: string; bullets: [string, string, string]; overviewLink: string };
   };
   pricing: {
     title: string;
+    metaTitle: string;
     metaDescription: string;
     intro: string;
     priceTable: { endpointHeader: string; priceHeader: string; freeTag: string };
