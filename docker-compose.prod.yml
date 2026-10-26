@@ -124,6 +124,31 @@ services:
       PLACSP_MAX_PAGES: ${PLACSP_MAX_PAGES:-5}
       PLACSP_DELAY_MS: ${PLACSP_DELAY_MS:-1000}
       PLACSP_SCHEDULE: ${PLACSP_SCHEDULE:-true}
+      # Lead mail. Empty RESEND_API_KEY disables sending. RESEND_URL is a
+      # constant in src/obs/notify.ts, not an environment variable.
+      # Defaults match src/config.ts so an unset .env does not change behavior.
+      LEAD_NOTIFY_EMAIL: ${LEAD_NOTIFY_EMAIL:-eutendersai@gmail.com}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      RESEND_FROM: "${RESEND_FROM:-Licita Operator <operator@licita.app>}"
+      DEMO_AUTOREPLY_ENABLED: "${DEMO_AUTOREPLY_ENABLED:-true}"
+      # Weekly operator digest and customer radar. Off unless DIGEST_ENABLED
+      # is set. SCHEDULED_GENERATION_EVENTS stays true (the code default and
+      # the value production already uses when the variable is unset). Both
+      # flags must be true before the weekly timer arms. Flags are quoted so
+      # YAML does not coerce them to booleans before they reach the process.
+      DIGEST_ENABLED: "${DIGEST_ENABLED:-false}"
+      DIGEST_CRON: "${DIGEST_CRON:-0 9 * * 1}"
+      DIGEST_FROM_EMAIL: ${DIGEST_FROM_EMAIL:-}
+      DIGEST_BCC: ${DIGEST_BCC:-}
+      SCHEDULED_GENERATION_EVENTS: "${SCHEDULED_GENERATION_EVENTS:-true}"
+      # SME plan products. Empty keeps the interest fallback (no checkout).
+      CREEM_PRODUCT_ID_RADAR_MONTHLY: ${CREEM_PRODUCT_ID_RADAR_MONTHLY:-}
+      CREEM_PRODUCT_ID_RADAR_ANNUAL: ${CREEM_PRODUCT_ID_RADAR_ANNUAL:-}
+      CREEM_PRODUCT_ID_PRO_MONTHLY: ${CREEM_PRODUCT_ID_PRO_MONTHLY:-}
+      CREEM_PRODUCT_ID_PRO_ANNUAL: ${CREEM_PRODUCT_ID_PRO_ANNUAL:-}
+      CREEM_PRODUCT_ID_TEAM_MONTHLY: ${CREEM_PRODUCT_ID_TEAM_MONTHLY:-}
+      RESEARCH_PRICE_USD: "${RESEARCH_PRICE_USD:-0.50}"
+      TRIAL_ENABLED: "${TRIAL_ENABLED:-false}"
     # No host port mapping: the reverse proxy (Caddy) reaches this service by
     # its DNS name (`app`) over the shared Docker network.
     healthcheck:
