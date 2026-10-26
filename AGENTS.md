@@ -38,6 +38,14 @@ docker compose up --build -d
 docker compose logs -f app
 ```
 
+## Cursor Cloud specific instructions
+
+Cloud Agent boot starts embedded PostgreSQL 18 (user `licita`, password `licita`, database `licita`) on `127.0.0.1:5433`, then `npm run dev`. The process migrates on startup and listens on port 3000. Install is `npm ci`. Node.js 22.19+ is already on the image (`engines` requires it; jsdom/undici 8 needs ≥ 22.19).
+
+Dev payment mode is on. `PAY_HMAC_SECRET` defaults to `dev-only-secret` and `OPERATOR_KEY` defaults to `dev-operator-key` (local placeholders, the same role as in `docker-compose.yml`). `GET /v1/stats` requires header `x-operator-key`. A paid route returns 402 until `POST /v1/dev-faucet` with `{"endpoint":"<METHOD PATH>"}`; retry with header `X-PAYMENT`.
+
+`npm test`, `npm run typecheck`, and `npm run build` match CI and run without a database. `npm run test:integration` reuses Postgres on port 5433 and calls the live TED API. A small harvest is `npm run ingest -- --once --max-notices 25` with `PGHOST=127.0.0.1` and `PGPORT=5433`. Cluster files live in gitignored `.epg-data/`.
+
 ## Definition of done
 
 - The user, primary job, decision, scope, and acceptance scenarios are explicit.
