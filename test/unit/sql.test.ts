@@ -5,6 +5,7 @@ import {
   RENEWALS_METHODOLOGY,
   buildRenewalsQuery,
   mapRenewalRow,
+  renewalHorizonIso,
   renewalsHandler,
 } from '../../src/api/routes/renewals.js';
 import { searchQuerySchema, renewalsQuerySchema } from '../../src/api/validate.js';
@@ -102,17 +103,18 @@ describe('buildRenewalsQuery', () => {
     const q = renewalsQuerySchema.parse({ cpv: '72', buyer: 'Madrid', window_months: '24', min_confidence: 'high' });
     const { text, values } = buildRenewalsQuery(q);
     expect(text).toContain('FROM forecast_signals fs');
-    expect(text).toContain('make_interval(months => $1)');
+    expect(text).toContain('fs.window_end >= CURRENT_DATE');
+    expect(text).toContain('CAST($1 AS date)');
     expect(text).toContain('fs.cpv LIKE $2');
     expect(text).toContain("b.name_norm LIKE '%' || lower(unaccent($3)) || '%'");
     expect(text).toContain("CASE fs.confidence WHEN 'high' THEN 3 WHEN 'medium' THEN 2 WHEN 'low' THEN 1 ELSE 0 END >= $4");
-    expect(values).toEqual([24, '72%', 'madrid', 3, 20, 0]);
+    expect(values).toEqual([renewalHorizonIso(24), '72%', 'madrid', 3, 20, 0]);
   });
 
   it('defaults: 12 months, low confidence, no cpv/buyer filters', () => {
     const q = renewalsQuerySchema.parse({});
     const { text, values } = buildRenewalsQuery(q);
-    expect(values[0]).toBe(12);
+    expect(values[0]).toBe(renewalHorizonIso(12));
     expect(values[1]).toBe(1);
     expect(text).not.toContain('fs.cpv LIKE');
     expect(text).not.toContain('b.name_norm');

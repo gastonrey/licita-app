@@ -56,7 +56,7 @@ export const es: Locale = {
     renewalTable: {
       title: 'Contratos que vencen en los próximos 12 meses',
       intro:
-        'Quién los tiene hoy y por cuánto. Las filas salen del índice en vivo (CPV 48, software, y CPV 72, servicios de TI, incluida la ciberseguridad). Si la fuente no trae un dato, la celda dice No consta.',
+        'Quién los tiene hoy y por cuánto. Son contratos de software e IT (CPV 48 y 72) cuya ventana sigue abierta y empieza como tarde dentro de 12 meses. La confianza es alta, media o baja; baja es una estimación a partir de poca evidencia, no una probabilidad. Si la fuente no trae un dato, la celda dice No consta.',
       loading: 'Cargando la muestra del índice…',
       empty:
         'El índice no tiene ahora mismo señales de renovación de software o servicios TI en esta ventana. No hemos inventado filas.',
@@ -81,7 +81,7 @@ export const es: Locale = {
         framework: 'Fin de acuerdo marco',
         recurrence: 'Patrón de adjudicaciones',
       },
-      confidence: { low: 'Baja', medium: 'Media', high: 'Alta' },
+      confidence: { low: 'Baja · estimación', medium: 'Media', high: 'Alta' },
     },
     evidencePromise: {
       title: 'Cada alerta cita su fuente y su cálculo',
@@ -472,7 +472,7 @@ export const es: Locale = {
       'Contratos públicos de software y ciberseguridad que se van a volver a licitar: quién los tiene, por cuánto y la fuente de cada señal.',
     h1: 'Qué contratos vuelven y quién los tiene',
     intro:
-      'Filtra la muestra pública por CPV, órgano de contratación y zona. Los importes y las fechas quedan vacíos cuando el anuncio no los trae. La confianza es la fuerza de la evidencia, no una probabilidad.',
+      'Filtra la muestra pública por CPV, órgano de contratación, zona y horizonte (6 o 12 meses). Solo entran ventanas que siguen abiertas. La confianza baja va marcada como estimación: es la fuerza de la evidencia, no una probabilidad.',
     filtersLabel: 'Filtrar la muestra',
     cpvLabel: 'CPV',
     windowLabel: 'Ventana',

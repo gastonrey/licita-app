@@ -19,14 +19,29 @@ export const RENEWALS_METHODOLOGY =
 /** The only confidence labels the API emits. */
 export const CONFIDENCE_SCALE = ['low', 'medium', 'high'] as const;
 
+/** ISO date `months` ahead of today (UTC). The far edge of an open renewal window. */
+export function renewalHorizonIso(months: number, now = new Date()): string {
+  const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  d.setUTCMonth(d.getUTCMonth() + months);
+  return d.toISOString().slice(0, 10);
+}
+export function openWindowSql(cutoffParam: string): string {
+  return `fs.window_end IS NOT NULL AND fs.window_end >= CURRENT_DATE AND fs.window_start IS NOT NULL AND fs.window_start <= CAST(${cutoffParam} AS date)`;
+}
+
+/** high, then medium, then low; ties break on how close window_start is to today. */
+export const SIGNAL_ORDER_SQL =
+  "ORDER BY CASE fs.confidence WHEN 'high' THEN 0 WHEN 'medium' THEN 1 WHEN 'low' THEN 2 ELSE 3 END, " +
+  'CASE WHEN fs.window_start::date >= CURRENT_DATE::date THEN fs.window_start::date - CURRENT_DATE::date ELSE CURRENT_DATE::date - fs.window_start::date END, ' +
+  'fs.id';
+
 // --- pure SQL builder -------------------------------------------------------------
 
 export function buildRenewalsQuery(q: RenewalsQuery): { text: string; values: unknown[] } {
   const p = new Params();
   const where: string[] = [];
 
-  // window: signals whose renewal window starts within the next window_months
-  where.push(`fs.window_start <= CURRENT_DATE + make_interval(months => ${p.push(q.window_months)})`);
+  where.push(openWindowSql(p.push(renewalHorizonIso(q.window_months))));
   if (q.cpv) where.push(`fs.cpv LIKE ${p.push(`${q.cpv}%`)}`);
   if (q.buyer) {
     where.push(`b.name_norm LIKE '%' || lower(unaccent(${p.push(q.buyer.trim().toLowerCase())})) || '%'`);
@@ -50,7 +65,7 @@ LEFT JOIN buyers b ON b.id = fs.buyer_id
 LEFT JOIN companies c ON c.id = fs.incumbent_company_id
 LEFT JOIN contracts ct ON ct.id = fs.contract_id
 WHERE ${where.join('\nAND ')}
-ORDER BY fs.window_start ASC NULLS LAST, fs.id ASC
+${SIGNAL_ORDER_SQL}
 ${limitOffset(p, q.page, q.size)}
 `;
   return { text, values: p.values };

@@ -77,9 +77,9 @@ export interface AppConfig {
      *  No trailing slash. Host must be api.creem.io or test-api.creem.io. */
     apiBaseUrl?: string;
   };
-  /** Master gate for ALL periodic scheduled jobs (ingest + digest).
-   *  env SCHEDULED_GENERATION_EVENTS, default true — off disables every
-   *  scheduled runner (operators keep one kill-switch). */
+  /** Gates the weekly digest scheduler.
+   *  env SCHEDULED_GENERATION_EVENTS, default true. The harvest is gated by
+   *  ingestOnBoot, not by this flag. */
   scheduledGenerationEvents: boolean;
   /** Weekly Renewal Radar digest (fiat-revenue-rails RD): flag-gated,
    *  default off. When enabled, the digest scheduler emails the configured

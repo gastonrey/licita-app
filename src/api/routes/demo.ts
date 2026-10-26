@@ -1,13 +1,14 @@
 // GET /v1/demo — a free, zero-cost sample of what the paid API returns (P0.4).
-// Shows the single most recent tender and the single most recent renewal
-// signal, each under an explicit `sample: true` marker, plus the list of
-// currently priced endpoints so agents can see what costs what before paying.
+// The tender is the latest real CPV 48/72 notice. The renewal is the
+// highest-confidence open CPV 48/72 signal in the next 12 months. Either is
+// null when the index has no such row. Nothing is invented.
 
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { ENDPOINT_PRICES, type Provenance } from '../../domain/types.js';
 import type { Db } from '../../db/client.js';
 import { priceOverrides } from '../../pay/prices.js';
 import { dateStr, envelope, notFound, num, tedUrl, type RouteCtx, HttpError, validate } from './common.js';
+import { openWindowSql, renewalHorizonIso, SIGNAL_ORDER_SQL } from './renewals.js';
 import { z } from 'zod';
 import { notifyLeadAck, notifyNewLead } from '../../obs/notify.js';
 
@@ -144,11 +145,13 @@ SELECT t.id, t.source_ref, t.title, t.cpv_main, t.estimated_value, t.currency,
 FROM tenders t
 JOIN sources s ON s.id = t.source_id
 LEFT JOIN buyers b ON b.id = t.buyer_id
+WHERE (t.cpv_main LIKE '48%' OR t.cpv_main LIKE '72%')
 ORDER BY t.publication_date DESC NULLS LAST, t.id DESC
 LIMIT 1
 `;
 
-export const DEMO_RENEWAL_SQL = `
+export function demoRenewalSql(now = new Date()): string {
+  return `
 SELECT fs.id, fs.signal_type, fs.cpv, fs.window_start, fs.window_end, fs.confidence, fs.basis,
        c.name AS incumbent_name,
        ct.title AS contract_title, ct.end_date AS contract_end,
@@ -159,9 +162,14 @@ LEFT JOIN contracts ct ON ct.id = fs.contract_id
 LEFT JOIN awards a ON a.id = ct.award_id
 LEFT JOIN tenders t ON t.id = a.tender_id
 LEFT JOIN sources s ON s.id = t.source_id
-ORDER BY fs.computed_at DESC NULLS LAST, fs.id DESC
+WHERE (fs.cpv LIKE '48%' OR fs.cpv LIKE '72%')
+  AND ${openWindowSql(`'${renewalHorizonIso(12, now)}'`)}
+${SIGNAL_ORDER_SQL}
 LIMIT 1
 `;
+}
+
+export const DEMO_RENEWAL_SQL = demoRenewalSql();
 
 export const DEMO_SOURCE_SQL = `
 SELECT s.code AS source, COUNT(t.id)::int AS records,
@@ -188,12 +196,13 @@ export async function demoData(
   overrides: Record<string, string>,
   placspEnabled = false,
 ): Promise<Record<string, unknown>> {
-  const [t, r, sources] = await Promise.all([db.query(DEMO_TENDER_SQL), db.query(DEMO_RENEWAL_SQL), db.query(DEMO_SOURCE_SQL)]);
+  const [t, r, sources] = await Promise.all([db.query(DEMO_TENDER_SQL), db.query(demoRenewalSql()), db.query(DEMO_SOURCE_SQL)]);
   const tender = t.rows[0];
   const renewal = r.rows[0];
   return {
     note:
-      'Free sample of Relicita data. Paid endpoints require a payment token per call; see GET /v1/pricing for full prices.',
+      'Free sample of Relicita data. Paid endpoints require a payment token per call; see GET /v1/pricing for full prices. ' +
+      'The tender and the renewal are real CPV 48/72 rows; the renewal window is still open. A null sample means the index has none — nothing is invented.',
     priced_endpoints: pricedEndpoints(overrides),
     tender: tender
       ? {
@@ -217,6 +226,7 @@ export async function demoData(
       ? {
           sample: true,
           signal_type: String(renewal.signal_type),
+          cpv: (renewal.cpv as string) ?? null,
           incumbent: (renewal.incumbent_name as string) ?? null,
           contract: {
             title: (renewal.contract_title as string) ?? null,

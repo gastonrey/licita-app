@@ -181,7 +181,32 @@ npm run backfill-identity
 ```
 
 After 4a/4b the data is live and the scheduler handles everything from the
-next 04:00 UTC onward (TED + PLACSP, idempotent upserts). A partial or failed
+next 04:00 UTC onward (TED + PLACSP, idempotent upserts) **only if the app
+process has `INGEST_ON_BOOT=true`**. `docker-compose.prod.yml` defaults that
+to `true`, plus `PLACSP_ENABLED=true` and `PLACSP_SCHEDULE=true`, but a host
+`.env` value wins. `INGEST_ON_BOOT=false` never arms the scheduler: no new
+TED or PLACSP notices arrive until the next manual `--once`. The code default
+in `src/config.ts` is also `false`. TED asks for Spanish award notices in
+CPV 48* and 72* published in the last `INGEST_MONTHS` (default 24). The
+daily PLACSP crawl is newest-first and stops after `PLACSP_MAX_PAGES` pages
+per feed (default 5); `--once --source all` uses the same page cap.
+
+```bash
+docker compose -f docker-compose.prod.yml exec app printenv \
+  INGEST_ON_BOOT PLACSP_ENABLED PLACSP_SCHEDULE INGEST_CRON_HOUR INGEST_MONTHS PLACSP_MAX_PAGES
+
+# In the host .env, then recreate:
+#   INGEST_ON_BOOT=true
+#   PLACSP_ENABLED=true
+#   PLACSP_SCHEDULE=true
+docker compose -f docker-compose.prod.yml up -d app
+
+# Do not wait for 04:00 UTC. Same command as 4a:
+docker compose -f docker-compose.prod.yml run --rm app \
+  node dist/src/ingest/cli.js --once --source all
+```
+
+A partial or failed
 run is safe to re-run.
 
 ---
