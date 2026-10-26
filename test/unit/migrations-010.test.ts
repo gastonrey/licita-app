@@ -23,6 +23,20 @@ async function makeMigratedDb() {
   const { Pool } = mem.adapters.createPg();
   const db = new Pool();
   await db.query(BASE_SCHEMA_SQL);
+  // 007/008 are pre-seeded below, but TEST_SCHEMA_SQL does not mirror
+  // demo_requests. Later files (012) alter that table, so create the
+  // post-008 shape here without unsubscribed_at.
+  await db.query(`
+    CREATE TABLE demo_requests (
+      id bigserial PRIMARY KEY,
+      email text NOT NULL CHECK (email = lower(email)),
+      channel text NOT NULL DEFAULT 'direct' CHECK (channel <> ''),
+      source_url text,
+      status text NOT NULL DEFAULT 'new' CHECK (status IN ('new', 'contacted', 'used', 'paid', 'lost')),
+      created_at timestamptz NOT NULL DEFAULT now()
+    );
+    CREATE UNIQUE INDEX demo_requests_email_lower_ux ON demo_requests (lower(email));
+  `);
   await db.query(
     'CREATE TABLE IF NOT EXISTS schema_migrations(name text PRIMARY KEY, applied_at timestamptz DEFAULT now())',
   );

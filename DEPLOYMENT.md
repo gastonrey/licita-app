@@ -90,6 +90,19 @@ Optional with prod defaults (override in `.env` to change):
 | `PLACSP_DELAY_MS` | `1000` | minimum delay between PLACSP feed requests |
 | `PLACSP_SCHEDULE` | `true` | include PLACSP in the daily scheduler run |
 | `PAY_HMAC_SECRET` | *(empty)* | unused by x402; surfaced so it can never be `change-me-in-prod` |
+| `LEAD_NOTIFY_EMAIL` | `eutendersai@gmail.com` | operator inbox for demo-request mail |
+| `RESEND_API_KEY` | *(empty)* | empty disables lead, digest, and trial mail |
+| `RESEND_FROM` | `Licita Operator <operator@licita.app>` | verified Resend sender |
+| `DEMO_AUTOREPLY_ENABLED` | `true` | Spanish confirmation to the lead; still needs `RESEND_API_KEY` |
+| `DIGEST_ENABLED` | `false` | weekly operator digest and customer radar stay off |
+| `DIGEST_CRON` | `0 9 * * 1` | Monday 09:00 UTC, only if the digest gate is open |
+| `DIGEST_FROM_EMAIL` | *(empty)* | required in production when `DIGEST_ENABLED=true` |
+| `DIGEST_BCC` | *(empty)* | operator-digest recipients; required in production when the digest is on |
+| `SCHEDULED_GENERATION_EVENTS` | `true` | master gate. The weekly mail also needs `DIGEST_ENABLED=true` |
+| `CREEM_API_BASE_URL` | `https://api.creem.io` | `https://test-api.creem.io` for a test-mode checkout. https only; those two hosts |
+| `CREEM_PRODUCT_ID_RADAR_MONTHLY` | *(empty)* | empty records interest instead of checkout. Same for `_RADAR_ANNUAL`, `_PRO_MONTHLY`, `_PRO_ANNUAL`, `_TEAM_MONTHLY` |
+| `RESEARCH_PRICE_USD` | `0.50` | `POST /v1/research` price |
+| `TRIAL_ENABLED` | `false` | trial `lct_` keys stay inert |
 
 ---
 

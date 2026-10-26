@@ -17,7 +17,7 @@ const PAGE = `<!doctype html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Dashboard — Licita (operator)</title>
+<title>Dashboard — Relicita (operator)</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=Source+Serif+4:wght@400;600;700&display=swap" rel="stylesheet">
@@ -39,7 +39,7 @@ const PAGE = `<!doctype html>
   --color-amber-600: #d29922;
   --color-red-600: #f85149;
   --color-info: #58a6ff;
-  --color-muted: #8b949e;
+  --color-muted: #c5d0dc;
   --space-1: 0.25rem;
   --space-2: 0.5rem;
   --space-3: 0.75rem;
@@ -54,9 +54,9 @@ const PAGE = `<!doctype html>
   --font-body: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
   --font-heading: 'Source Serif 4', Georgia, serif;
   --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
-  --text-xs: 0.68rem;
-  --text-sm: 0.72rem;
-  --text-base: 0.85rem;
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
   --text-lg: 1.1rem;
   --text-xl: 1.35rem;
   --text-2xl: clamp(1.6rem, 3vw, 2.4rem);
@@ -246,6 +246,9 @@ button:focus-visible { outline: 3px solid var(--color-brand); outline-offset: 3p
   min-height: 100vh;
 }
 .header-bar {
+  flex-wrap: wrap;
+  height: auto;
+  min-height: 3.5rem;
   position: sticky;
   top: 0;
   z-index: 50;
@@ -739,7 +742,11 @@ section[role="tabpanel"] > :first-child:is(h2) { margin-top: 0; }
   width: 100%;
   max-width: 28rem;
 }
+#login-form h1 { font-size: var(--text-xl); margin-bottom: var(--space-2); }
+#login-form p { margin: 0; }
 #login-form label { font-weight: 600; font-size: var(--text-sm); }
+.sidebar-escape { margin: var(--space-3) var(--space-4) 0; font-size: var(--text-sm); }
+.sidebar-escape a { color: var(--color-foreground); }
 #login-form button {
   align-self: flex-start;
   background: var(--btn-bg);
@@ -787,8 +794,8 @@ section[hidden] { display: none; }
 <!-- Desktop sidebar -->
 <aside class="sidebar" aria-label="Dashboard navigation">
   <div class="sidebar-logo">
-    <a href="/dashboard">Licita</a>
-    <span class="subtitle">Operator Dashboard</span>
+    <a href="/dashboard">Relicita</a>
+    <span class="subtitle">Operator console</span>
   </div>
   <nav class="sidebar-nav" role="tablist" aria-label="Dashboard sections">
     <button role="tab" aria-controls="panel-overview" type="button" data-tab-button="overview" data-view="overview" aria-selected="true" tabindex="0">Overview</button>
@@ -799,19 +806,25 @@ section[hidden] { display: none; }
     <button role="tab" aria-controls="panel-gaps" type="button" data-tab-button="gaps" data-view="data-quality" aria-selected="false" tabindex="-1">Data Quality</button>
   </nav>
   <div class="sidebar-footer">
-    <div class="key-status">Key: <strong>active</strong></div>
+    <div class="key-status">Key: <strong id="key-status">locked</strong></div>
+    <p class="sidebar-escape"><a href="/radar">Customer radar</a></p>
   </div>
 </aside>
 
 <!-- Main content area -->
 <div class="main-content">
 
-  <div id="login" hidden>
+  <div id="login">
     <form id="login-form">
+      <h1>Operator console</h1>
+      <p class="muted">This screen is for the person running Relicita: traffic, payments and data quality. It does not list contracts.</p>
+      <p>To see software and cyber contracts that will be re-tendered, open the <a href="/radar">renewal radar</a>. No operator key is required there.</p>
       <label for="key">Operator key</label>
-      <input type="password" id="key" name="key" autocomplete="current-password" autofocus>
+      <input type="password" id="key" name="key" autocomplete="current-password" spellcheck="false" autofocus aria-describedby="login-help">
+      <p id="login-help" class="muted">Paste the server operator key. It stays in this browser tab only.</p>
       <button type="submit">Unlock</button>
-      <p id="login-msg" class="err"></p>
+      <p id="login-msg" class="err" role="alert"></p>
+      <noscript><p>This console needs JavaScript to load operator statistics. The <a href="/radar">renewal radar</a> is the customer view.</p></noscript>
     </form>
   </div>
 
@@ -819,8 +832,8 @@ section[hidden] { display: none; }
     <!-- Sticky header bar: page title, range presets, date controls, refresh -->
     <div class="header-bar">
       <div class="page-title-wrap">
-        <h1>Operator Dashboard</h1>
-        <div class="page-sub">TED + PLACSP intelligence · operator-only</div>
+        <h1>Operator console</h1>
+        <div class="page-sub">Traffic, payments and data quality. Contract renewals are on the <a href="/radar">radar</a>.</div>
       </div>
       <div class="range-chips" aria-label="Preset ranges">
         <button type="button" class="chip" data-preset="7">7d</button>
@@ -862,10 +875,15 @@ section[hidden] { display: none; }
 
       <!-- Overview panel -->
       <section id="panel-overview" role="tabpanel" data-tab="overview" aria-label="Overview">
+        <div class="card">
+          <h2>Start here</h2>
+          <p>Use this console to answer whether anyone called the API or tried to pay. For the contracts an IT SME would chase — who holds them, for how much, and when the renewal window opens — use the <a href="/radar">renewal radar</a>.</p>
+        </div>
         <div id="overview-alert" class="banner err" hidden role="alert">⚠️ Payment failures: proof rejected, no proof sent, or payment facilitator unavailable. <a href="/dashboard?view=payments" class="link">Review now ↓</a></div>
 
         <div class="card">
-          <h2>KPIs</h2>
+          <h2>At a glance</h2>
+          <p class="muted">Counts for the dates selected above. A zero is a real zero for that period.</p>
           <div id="kpis" class="kpis"></div>
         </div>
 
@@ -906,6 +924,7 @@ section[hidden] { display: none; }
             <button type="button" class="link" data-detail="recent">View all →</button>
           </div>
           <div class="recent-filters-wrap">
+            <p class="muted" id="recent-filter-hint">These filters apply to API request logs, not to tenders or renewal signals.</p>
             <form id="recent-filters" class="filters" aria-label="Filter recent activity">
               <label>Endpoint <input id="recent-endpoint" name="recent_endpoint" type="search" placeholder="/v1/search"></label>
               <label>Source <select id="recent-source" name="recent_source"><option value="">All sources</option><option value="rest">REST</option><option value="mcp">MCP</option></select></label>
@@ -919,7 +938,7 @@ section[hidden] { display: none; }
           <div id="pager-recent" class="pagination" aria-label="Recent activity pagination"></div>
         </div>
 
-        <div id="detail-view" class="card" hidden></div>
+        <div class="detail-view card" hidden></div>
       </section>
 
       <!-- Payments panel -->
@@ -969,7 +988,7 @@ section[hidden] { display: none; }
           <div id="mcp-discovery"></div>
         </div>
 
-        <div id="detail-view" class="card" hidden></div>
+        <div class="detail-view card" hidden></div>
       </section>
 
       <!-- Leads panel -->
@@ -1016,7 +1035,7 @@ section[hidden] { display: none; }
           </div>
         </div>
 
-        <div id="detail-view" class="card" hidden></div>
+        <div class="detail-view card" hidden></div>
       </section>
 
       <!-- Data quality panel -->
@@ -1076,7 +1095,7 @@ function statusClass(st) {
   return '';
 }
 function kvTable(rows, label, codeFirst) {
-  if (!rows || rows.length === 0) return '<p class="muted">None.</p>';
+  if (!rows || rows.length === 0) return '<p class="muted">None. Nothing in this period.</p>';
   return '<table><thead><tr><th>' + label + '</th><th class="num">Requests</th></tr></thead><tbody>' +
     rows.map((r) => {
       const k = Object.keys(r).find((k2) => k2 !== 'requests') || '';
@@ -1523,7 +1542,7 @@ function render(stats, recent) {
 function renderDetail() {
   const panel = $('panel-' + state.tab);
   if (!panel) return;
-  const detailView = panel.querySelector('#detail-view');
+  const detailView = panel.querySelector('.detail-view');
   const head = $('detail-head');
   const show = state.detail && (detailMap[state.tab] || []).includes(state.detail);
 
@@ -1637,6 +1656,7 @@ async function load() {
      selectTab(state.tab || 'overview');
     $('login').hidden = true;
     $('dash').hidden = false;
+    setKeyState(true);
      setLastUpdated(''); $('load-state').textContent = 'Data loaded';
   } catch (err) {
      setLastUpdated(err.message || String(err)); $('load-state').innerHTML = 'Data unavailable. <button type="button" id="inline-retry">Retry</button> Last successful data may be stale.'; $('inline-retry').addEventListener('click', load);
@@ -1695,11 +1715,17 @@ function selectTab(tab, push = true) {
   renderDetail();
 }
 
+function setKeyState(active) {
+  const status = $('key-status');
+  if (status) status.textContent = active ? 'active' : 'locked';
+  document.querySelectorAll('.sidebar-nav [data-tab-button], .mobile-tabs [data-tab-button]').forEach((button) => { button.disabled = !active; });
+}
 function showLogin(msg) {
   LS.removeItem(KEY);
   $('login').hidden = false;
   $('dash').hidden = true;
   $('login-msg').textContent = msg;
+  setKeyState(false);
   $('key').focus();
 }
 function invalidKey() {
@@ -1753,7 +1779,7 @@ $('clear-recent-filters').addEventListener('click', () => {
   load();
 });
 document.querySelectorAll('[data-tab-button]').forEach((button) => button.addEventListener('click', () => selectTab(button.dataset.tabButton)));
-document.querySelectorAll('[data-tab-button]').forEach((button) => button.addEventListener('keydown', (event) => { const buttons = [...document.querySelectorAll('[data-tab-button]')]; const i = buttons.indexOf(button); const next = event.key === 'ArrowRight' ? buttons[(i + 1) % buttons.length] : event.key === 'ArrowLeft' ? buttons[(i - 1 + buttons.length) % buttons.length] : event.key === 'Home' ? buttons[0] : event.key === 'End' ? buttons.at(-1) : null; if (next) { event.preventDefault(); next.focus(); selectTab(next.dataset.tabButton); } }));
+document.querySelectorAll('[data-tab-button]').forEach((button) => button.addEventListener('keydown', (event) => { const list = button.closest('[role="tablist"]'); const buttons = [...list.querySelectorAll('[data-tab-button]')]; const i = buttons.indexOf(button); const next = event.key === 'ArrowRight' ? buttons[(i + 1) % buttons.length] : event.key === 'ArrowLeft' ? buttons[(i - 1 + buttons.length) % buttons.length] : event.key === 'Home' ? buttons[0] : event.key === 'End' ? buttons.at(-1) : null; if (next) { event.preventDefault(); next.focus(); selectTab(next.dataset.tabButton); } }));
 ['from', 'to'].forEach((id) => $(id).addEventListener('change', () => { state.page = '1'; syncUrl(state.tab); load(); }));
 window.addEventListener('popstate', () => { restoreUrl(); selectTab(state.tab, false); load(); });
 
@@ -1859,6 +1885,6 @@ if (LS.getItem(KEY)) { load(); } else { showLogin(''); }
 /** Register the operator traffic dashboard at GET /dashboard. Not in the public NAV. */
 export function registerDashboard(app: FastifyInstance, _config: AppConfig): void {
   app.get('/dashboard', async (_req, reply) => reply.type('text/html; charset=utf-8').send(PAGE));
-  const demoPage = PAGE.replace('<title>Dashboard — Licita (operator)</title>', '<title>Demo pipeline — Licita (operator)</title>');
+  const demoPage = PAGE.replace('<title>Dashboard — Relicita (operator)</title>', '<title>Demo pipeline — Relicita (operator)</title>');
   app.get('/dashboard/demo', async (_req, reply) => reply.type('text/html; charset=utf-8').send(demoPage));
 }

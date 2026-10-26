@@ -23,7 +23,7 @@ describe('openapi document', () => {
 
   it('is OpenAPI 3.1 with info', () => {
     expect(doc.openapi).toBe('3.1.0');
-    expect(doc.info.title).toBe('Licita');
+    expect(doc.info.title).toBe('Relicita');
   });
 
   it('documents every endpoint from ENDPOINT_PRICES', () => {

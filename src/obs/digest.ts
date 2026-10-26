@@ -204,7 +204,7 @@ ${renderList(data.watchlist)}
 <h2 style="font-size: 15px; margin: 20px 0 8px;">Churn risk (no payment for ${DIGEST_CHURN_DAYS}d)</h2>
 ${renderList(data.churnRisk)}
 
-<p style="font-size: 12px; color: #999; margin-top: 28px;">Licita · EU public procurement intelligence · ${escapeHtml(baseUrl || 'deployment origin unset')} · Data is evidence-backed from the live index; nulls are shown honestly.</p>
+<p style="font-size: 12px; color: #999; margin-top: 28px;">Relicita · EU public procurement intelligence · ${escapeHtml(baseUrl || 'deployment origin unset')} · Data is evidence-backed from the live index; nulls are shown honestly.</p>
 </body></html>`;
   return { subject, html, from, to: [from], bcc: [] };
 }

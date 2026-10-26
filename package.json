@@ -15,6 +15,7 @@
     "migrate": "tsx src/db/migrate.ts",
     "backfill-identity": "tsx scripts/backfill-identity.ts",
     "ingest": "tsx src/ingest/cli.ts",
+    "radar:digest": "tsx src/obs/customer-radar-cli.ts",
     "smoke": "tsx scripts/smoke-agent.ts",
     "test": "vitest run -c test/vitest.config.ts",
     "test:api-smoke": "vitest run -c test/vitest.smoke.config.ts",

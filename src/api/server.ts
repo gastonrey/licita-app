@@ -30,6 +30,8 @@ import {
 } from './routes/companies.js';
 import { buyerHistoryHandler, buyerIdValidation } from './routes/buyers.js';
 import { renewalsHandler, renewalsValidation } from './routes/renewals.js';
+import { radarPreviewHandler, radarPreviewValidation } from './routes/radar.js';
+import { customerRadarDigestHandler, unsubscribeHandler } from '../obs/customer-radar.js';
 import { researchHandler, researchBodyValidation } from './routes/research.js';
 import {
   demoHandler,
@@ -67,6 +69,9 @@ const PUBLIC_WEB_EXACT = new Set([
   '/en',
   '/pricing',
   '/docs',
+  '/radar',
+  '/radar/baja',
+  '/developers',
   '/use-cases',
   '/data',
   '/data/spain',
@@ -288,6 +293,13 @@ export async function buildServer(config: AppConfig, db: Db): Promise<FastifyIns
   );
   // free endpoints
   app.get('/v1/demo', { preHandler: [paymentPreHandler('GET /v1/demo')] }, demoHandler(ctx));
+  app.get(
+    '/v1/radar/preview',
+    { preHandler: [paymentPreHandler('GET /v1/radar/preview'), radarPreviewValidation] },
+    radarPreviewHandler(ctx),
+  );
+  app.get('/radar/baja', unsubscribeHandler(ctx));
+  app.post('/v1/radar/digest', { preHandler: [statsAuth(config.operatorKey)] }, customerRadarDigestHandler(ctx));
   app.post('/v1/demo/request', { preHandler: [demoRequestValidation] }, demoRequestHandler(ctx));
   // Operator-only lead management (x-operator-key, same gate as /v1/stats*).
   app.get('/v1/demo/requests', { preHandler: [statsAuth(config.operatorKey), demoListQueryValidation] }, demoRequestsListHandler(ctx));

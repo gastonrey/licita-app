@@ -3,7 +3,7 @@
 // construct partial configs freely). Throws a single Error listing EVERY
 // violation so operators fix all missing/invalid vars in one boot cycle.
 
-import type { AppConfig } from './config.js';
+import { creemApiBaseViolation, type AppConfig } from './config.js';
 
 /** Known placeholder secrets that must never reach production. */
 const PLACEHOLDER_SECRETS = new Set(['change-me', 'change-me-in-prod']);
@@ -134,7 +134,26 @@ export function validateConfig(config: AppConfig): void {
     if (!Number.isInteger(config.creem.priceCents) || config.creem.priceCents <= 0) {
       violations.push('CREEM_PRICE_CENTS must be a positive integer number of cents (e.g. 2900 = €29.00).');
     }
+    const planIds: Array<[string, string]> = [
+      ['CREEM_PRODUCT_ID_RADAR_MONTHLY', config.creem.plans?.radarMonthly ?? ''],
+      ['CREEM_PRODUCT_ID_RADAR_ANNUAL', config.creem.plans?.radarAnnual ?? ''],
+      ['CREEM_PRODUCT_ID_PRO_MONTHLY', config.creem.plans?.proMonthly ?? ''],
+      ['CREEM_PRODUCT_ID_PRO_ANNUAL', config.creem.plans?.proAnnual ?? ''],
+      ['CREEM_PRODUCT_ID_TEAM_MONTHLY', config.creem.plans?.teamMonthly ?? ''],
+    ];
+    for (const [name, value] of planIds) {
+      if (value.length > 0 && !/^prod_[A-Za-z0-9]+$/.test(value)) {
+        violations.push(
+          `${name} must be a Creem product id (prod_…). Leave it empty to keep the interest form for that price.`,
+        );
+      }
+    }
   }
+
+  // The API origin is checked even when Creem is off, so a bad test URL
+  // fails at boot instead of on the first checkout.
+  const apiBaseViolation = creemApiBaseViolation(config.creem.apiBaseUrl);
+  if (apiBaseViolation) violations.push(apiBaseViolation);
 
   // Weekly digest (fiat-revenue-rails C1.2): DIGEST_ENABLED=true in
   // production requires DIGEST_FROM_EMAIL and DIGEST_BCC — fail closed so a

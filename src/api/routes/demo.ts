@@ -193,7 +193,7 @@ export async function demoData(
   const renewal = r.rows[0];
   return {
     note:
-      'Free sample of Licita data. Paid endpoints require a payment token per call; see GET /v1/pricing for full prices.',
+      'Free sample of Relicita data. Paid endpoints require a payment token per call; see GET /v1/pricing for full prices.',
     priced_endpoints: pricedEndpoints(overrides),
     tender: tender
       ? {

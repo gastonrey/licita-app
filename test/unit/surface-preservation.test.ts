@@ -77,7 +77,7 @@ describe('agent-surface preservation after homepage changes', () => {
     // Content-flip needle migration matrix (S2.2/S2.3): /docs is a single-locale
     // English dev page that stays at root; human pages serve ES at / and EN at /en.
     const htmlContracts = [
-      ['/docs', '<h1>Docs — Licita</h1>'],
+      ['/docs', '<h1>Docs — Relicita</h1>'],
       ['/en/use-cases', 'Concrete agent missions'],
       ['/use-cases', 'Misiones concretas de agente'],
       ['/en/use-cases/tender-intelligence', 'Tender intelligence — find recent tenders and who won'],
@@ -101,7 +101,7 @@ describe('agent-surface preservation after homepage changes', () => {
     expect(demo.statusCode).toBe(200);
     expect(demo.headers['content-type']).toMatch(/^application\/json/);
     expect(demo.json().data).toMatchObject({
-      note: expect.stringContaining('Free sample of Licita data'),
+      note: expect.stringContaining('Free sample of Relicita data'),
       tender: null,
       renewal: null,
     });

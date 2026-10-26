@@ -62,7 +62,7 @@ describe('page() head: canonical + OG + meta description (DR4)', () => {
     expect(res.body).toContain(`<link rel="canonical" href="${BASE}/">`);
     expect(res.body).toContain(`<meta property="og:url" content="${BASE}/">`);
     expect(res.body).toContain('<meta property="og:type" content="website">');
-    expect(res.body).toContain('<meta property="og:site_name" content="Licita">');
+    expect(res.body).toContain('<meta property="og:site_name" content="Relicita">');
     expect(res.body).toContain('<meta property="og:title" content="');
     expect(res.body).toContain('<meta name="description" content="');
     await app.close();

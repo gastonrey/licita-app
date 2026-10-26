@@ -153,7 +153,24 @@ missing/invalid variable (`src/config.validate.ts`, called from `src/index.ts`).
 | `DIGEST_ENABLED` | `false` | Weekly Renewal Radar digest email. **Default off** — requires `RESEND_API_KEY` and (in production) `DIGEST_FROM_EMAIL` + `DIGEST_BCC` |
 | `DIGEST_CRON` | `0 9 * * 1` | Weekly digest schedule (`M H * * DOW`, UTC) — default Monday 09:00 UTC |
 | `DIGEST_FROM_EMAIL` | — | Digest sender address (a verified Resend sender domain). Required in production when `DIGEST_ENABLED=true` |
-| `DIGEST_BCC` | — | Comma-separated digest recipients, delivered as Bcc. The ONLY addresses a digest can send to — the rate-guard that keeps test/dev runs from emailing strangers. Required in production when `DIGEST_ENABLED=true` |
+| `DIGEST_BCC` | — | Operator-digest recipients, delivered as Bcc. This list is the only audience of the operator digest. The customer radar does not use it. Required in production when `DIGEST_ENABLED=true` |
+| `CREEM_ENABLED` | `false` | Creem checkout and webhook. Off → `/v1/creem/*` is 404 and plan buttons record interest |
+| `CREEM_API_BASE_URL` | `https://api.creem.io` | Creem REST origin, no trailing slash. `https://test-api.creem.io` for a test-mode checkout. Host must be `api.creem.io` or `test-api.creem.io` over https |
+| `CREEM_API_KEY` | — | Creem API key. Required when `CREEM_ENABLED=true`. Use the test key to try a payment |
+| `CREEM_WEBHOOK_SECRET` | — | Signs `POST /v1/creem/webhook`. Required when `CREEM_ENABLED=true` |
+| `CREEM_PRODUCT_ID` | — | Legacy single product. Checkout without `plan` still charges this id. Required when `CREEM_ENABLED=true` |
+| `CREEM_PRICE_CENTS` | `2900` | Display price of that legacy product, in cents. The charged amount is the Creem product price |
+| `CREEM_PRODUCT_ID_RADAR_MONTHLY` | empty | Radar €39/month. Empty → the Radar monthly button records interest and shows no error |
+| `CREEM_PRODUCT_ID_RADAR_ANNUAL` | empty | Radar €390/year. Same graceful fallback |
+| `CREEM_PRODUCT_ID_PRO_MONTHLY` | empty | Pro €99/month |
+| `CREEM_PRODUCT_ID_PRO_ANNUAL` | empty | Pro €990/year |
+| `CREEM_PRODUCT_ID_TEAM_MONTHLY` | empty | Team €199/month. Team has no annual price |
+
+The same webhook (`POST /v1/creem/webhook`, production `https://api.eutendersai.com/v1/creem/webhook`) activates `kind=creem` for the legacy product and for every plan product above. It does not require the event's product id to equal `CREEM_PRODUCT_ID`. An event with no product id still activates. An unknown product id is acknowledged and does not grant a subscription.
+
+Product ids are not code defaults. Creative Machine, test mode: Radar monthly `prod_DQLeAZkGLgSWSBe79doNr`, Radar annual `prod_39q3c29aWwXvkE4pqU4YUT`, Pro monthly `prod_4Iyrui9hjVwSeftMImc9Yg`, Pro annual `prod_3vkS91sGzp4aueHBuRCNEH`, Team monthly `prod_5z4JBpuINvsVJNU0avrcy0`. Live mode: Radar monthly `prod_6u3gvUJkvWAoGxaTErNAkX`, Radar annual `prod_7gx0yupTdQCxidUSmSdhWx`, Pro monthly `prod_4G9C8ej8VdeZgrWbY3jWYR`, Pro annual `prod_2tukZ9IRVOgeYsZ59Ar59W`, Team monthly `prod_PvJQIwYRo0wbntVsrBQVi`. Put the test ids in the server env only while `CREEM_API_KEY` is a test key.
+
+To try a test payment: set `CREEM_ENABLED=true`, `CREEM_API_BASE_URL=https://test-api.creem.io`, the test API key, the test webhook secret, `CREEM_PRODUCT_ID`, and the five test ids. Open `/pricing?plan=radar&interval=monthly`, enter an email, and continue to payment. Creem's test checkout completes the charge and calls the webhook. The address becomes `kind=creem` and, when Resend is set, receives the `lct_` key. A second click in the same browser session is a new checkout. Unset one plan id and that button goes back to "Guardar mi interés" with no error. Do not mix test product ids with a live API key.
 
 ## First ingestion
 
@@ -378,11 +395,25 @@ dashboard:
    subscribers (which were actually purchased) keep working regardless of the
    flag.
 6. **Weekly digest (optional).** Set `DIGEST_ENABLED=true` plus
-   `RESEND_API_KEY`, a verified `DIGEST_FROM_EMAIL` and `DIGEST_BCC` (the only
+   `RESEND_API_KEY`, a verified `DIGEST_FROM_EMAIL` and `DIGEST_BCC` (operator
    digest recipients, delivered as Bcc — set it to your own address first).
    Production requires the Resend sender domain to be verified. `DIGEST_CRON`
    (default `0 9 * * 1`, UTC) controls cadence and
    `SCHEDULED_GENERATION_EVENTS=false` kills the digest scheduler entirely.
+   The same timer sends the customer radar: up to 5 real CPV 48/72 renewals
+   to each `demo_requests` address that has not unsubscribed. The sender is
+   `DIGEST_FROM_EMAIL`, or `RESEND_FROM` when that is empty. Unsubscribe links
+   are signed with the existing `OPERATOR_KEY`. No new environment variables.
+   A manual run uses the same env and sends real mail when Resend is set:
+
+   ```bash
+   npm run radar:digest
+   node dist/src/obs/customer-radar-cli.js   # production image
+   ```
+
+   `POST /v1/radar/digest` with header `x-operator-key` does the same job.
+   A second run in the same UTC week does not send again. The command still
+   works when the timer is unarmed.
 7. **Observe.** `GET /v1/stats/readiness` (with `x-operator-key`) is a
    read-only grant document: every fiat switch in tri-state
    (`disabled`/`enabled-dry`/`enabled`), the base URL https status, and the

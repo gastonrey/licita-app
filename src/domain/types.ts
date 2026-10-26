@@ -166,6 +166,7 @@ export const ENDPOINT_PRICES: Record<string, string> = {
   'GET /v1/pricing': '0.00',
   'GET /v1/stats': '0.00',
   'GET /v1/demo': '0.00',
+  'GET /v1/radar/preview': '0.00',
   'POST /v1/billing/credits/5': '5.00',
   'POST /v1/billing/credits/10': '10.00',
   'POST /v1/billing/credits/25': '25.00',

@@ -968,7 +968,7 @@ function paths(): Record<string, unknown> {
         operationId: 'creemWebhook',
         summary: 'Creem MoR webhook receiver (signature-verified checkout completion)',
         description:
-          'Receives signed Creem events. CREEM_ENABLED=false → 404. Verifies the creem-signature HMAC-SHA256 over the RAW bytes (timing-safe comparison); checkout.completed upgrades/creates the api_clients row to kind=creem with a 30-day period (zero credits granted — calls use one-time credits bought separately). Other event types are acknowledged 200 {ok:true} without side effects. Exempt from the per-key rate limiter; the signature is the throttle.',
+          'Receives signed Creem events. CREEM_ENABLED=false → 404. Verifies the creem-signature HMAC-SHA256 over the RAW bytes (timing-safe comparison); checkout.completed upgrades/creates the api_clients row to kind=creem with a 30-day period (zero credits granted — calls use one-time credits bought separately). Activation does not depend on a single product id: the legacy CREEM_PRODUCT_ID and every configured plan product (CREEM_PRODUCT_ID_RADAR_MONTHLY, _RADAR_ANNUAL, _PRO_MONTHLY, _PRO_ANNUAL, _TEAM_MONTHLY) all activate. An event with no product id still activates. An unknown product id is acknowledged without granting a subscription. Other event types are acknowledged 200 {ok:true} without side effects. Exempt from the per-key rate limiter; the signature is the throttle.',
         responses: {
           '200': {
             description: 'Event processed (or benign event acknowledged)',
@@ -983,9 +983,9 @@ function paths(): Record<string, unknown> {
     '/v1/creem/checkout': {
       post: {
         operationId: 'creemCheckout',
-        summary: 'Create a Creem MoR Checkout Session for the monthly subscription',
+        summary: 'Create a Creem MoR Checkout Session',
         description:
-          'CREEM_ENABLED=false → 404. Creates a Checkout Session for the configured CREEM_PRODUCT_ID and returns 303 with the session URL. Default successUrl is {baseUrl}/?checkout=success, default cancelUrl is {baseUrl}/pricing.',
+          'CREEM_ENABLED=false → 404. Without plan, creates a Checkout Session for CREEM_PRODUCT_ID. With plan (radar, pro, team) and interval (monthly default, or annual), uses that plan product. Team has no annual price (422). A missing plan product id returns 409 and does not charge; the pricing page then records interest. Returns 303 with the session URL. Default successUrl is {baseUrl}/?checkout=success, default cancelUrl is {baseUrl}/pricing.',
         requestBody: {
           required: true,
           content: {
@@ -997,6 +997,8 @@ function paths(): Record<string, unknown> {
                   email: { type: 'string', format: 'email' },
                   successUrl: { type: 'string', format: 'uri', description: 'Optional; defaults to {baseUrl}/?checkout=success' },
                   cancelUrl: { type: 'string', format: 'uri', description: 'Optional; defaults to {baseUrl}/pricing' },
+                  plan: { type: 'string', enum: ['radar', 'pro', 'team'], description: 'Optional SME plan. Omitted = CREEM_PRODUCT_ID.' },
+                  interval: { type: 'string', enum: ['monthly', 'annual'], description: 'Optional. Default monthly. Team rejects annual.' },
                 },
               },
             },
@@ -1009,6 +1011,8 @@ function paths(): Record<string, unknown> {
           },
           '400': errResp('Invalid email or URL'),
           '404': errResp('Creem billing not enabled'),
+          '409': errResp('Plan product id is not configured'),
+          '422': errResp('Team has no annual price'),
         },
       },
     },
@@ -1024,6 +1028,37 @@ function paths(): Record<string, unknown> {
           content: { 'application/json': { schema: researchBody } },
         },
         responses: stdResponses(researchData, true),
+      },
+    },
+    '/v1/radar/preview': {
+      get: {
+        operationId: 'getRadarPreview',
+        summary: 'Free capped sample of IT renewal signals and recent tenders',
+        description:
+          'Free public sample (price 0.00) of the live index, limited to CPV 48 and 72 and at most 8 renewal rows plus 8 recent tenders. ' +
+          'window_months is 6 or 12. Nulls are explicit. calculation quotes stored basis fields and is not a generated narrative. ' +
+          'The paid renewal feed remains GET /v1/renewals.',
+        parameters: [
+          qParam('cpv', 'Optional CPV prefix under 48 or 72', { type: 'string', pattern: '^(48|72)\\d{0,6}$' }),
+          qParam('buyer', 'Optional buyer name fragment', { type: 'string', maxLength: 80 }),
+          qParam('region', 'Optional NUTS prefix (2–5 characters)', { type: 'string', pattern: '^[A-Za-z0-9]{2,5}$' }),
+          qParam('window_months', 'Renewal window: 6 or 12 (default 12)', { type: 'integer', enum: [6, 12], default: 12 }),
+        ],
+        responses: stdResponses({ type: 'object' }, false),
+      },
+    },
+    '/v1/radar/digest': {
+      post: {
+        operationId: 'postCustomerRadarDigest',
+        summary: 'Send this week’s customer radar (operator only)',
+        description:
+          'Operator-only. Requires header x-operator-key. Sends the Spanish weekly radar to each demo_requests address that has not unsubscribed, using the same renewal rows as GET /v1/radar/preview (CPV 48 and 72, at most 5). A second call in the same UTC week does not send again. Does not read Creem plan ids.',
+        parameters: [{ name: 'x-operator-key', in: 'header', required: true, schema: { type: 'string' } }],
+        responses: {
+          '200': { description: 'Digest run counts', content: { 'application/json': { schema: envelopeOf({ type: 'object' }) } } },
+          '401': errResp('Missing/invalid operator key'),
+          '409': errResp('Resend, sender or operator key is not configured'),
+        },
       },
     },
     '/v1/demo': {
@@ -1273,7 +1308,7 @@ export function buildOpenApi(): Record<string, unknown> {
   return {
     openapi: '3.1.0',
     info: {
-      title: 'Licita',
+      title: 'Relicita',
       version: '0.1.0',
       description:
         'Agent-native procurement intelligence API for the Spanish public sector (TED data, IT/software/cyber CPV vertical). ' +

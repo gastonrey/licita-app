@@ -7,12 +7,82 @@
 // the validated config.
 
 import { createHmac, timingSafeEqual } from 'node:crypto';
-import type { AppConfig } from '../config.js';
+import { normalizeCreemApiBaseUrl, type AppConfig, type CreemPlanProducts } from '../config.js';
+
+export type CreemPlan = 'radar' | 'pro' | 'team';
+export type CreemInterval = 'monthly' | 'annual';
+
+const EMPTY_PLANS: CreemPlanProducts = {
+  radarMonthly: '',
+  radarAnnual: '',
+  proMonthly: '',
+  proAnnual: '',
+  teamMonthly: '',
+};
+
+export function creemPlansOf(creem: AppConfig['creem']): CreemPlanProducts {
+  return creem.plans ?? EMPTY_PLANS;
+}
+
+/** Product id for a public plan price. Empty when that env var is unset.
+ *  Team has no annual price. */
+export function planProductId(creem: AppConfig['creem'], plan: CreemPlan, interval: CreemInterval): string {
+  const plans = creemPlansOf(creem);
+  if (plan === 'team') return interval === 'annual' ? '' : plans.teamMonthly;
+  if (plan === 'radar') return interval === 'annual' ? plans.radarAnnual : plans.radarMonthly;
+  return interval === 'annual' ? plans.proAnnual : plans.proMonthly;
+}
+
+/** Legacy CREEM_PRODUCT_ID plus every configured plan product. */
+export function acceptedCreemProductIds(creem: AppConfig['creem']): Set<string> {
+  const ids = new Set<string>();
+  if (creem.productId) ids.add(creem.productId);
+  for (const id of Object.values(creemPlansOf(creem))) {
+    if (id) ids.add(id);
+  }
+  return ids;
+}
+
+/** Events with no product id keep the historical activation path.
+ *  A present id must match the legacy product or any configured plan product. */
+export function acceptsCreemProduct(creem: AppConfig['creem'], productId: string | null): boolean {
+  if (!productId) return true;
+  return acceptedCreemProductIds(creem).has(productId);
+}
+
+/** Product id carried on a Creem checkout.completed object, if the payload has one. */
+export function checkoutProductId(event: Record<string, unknown>): string | null {
+  const obj = (event.object ?? {}) as Record<string, unknown>;
+  const asId = (value: unknown): string | null => {
+    if (typeof value === 'string' && value.trim()) return value.trim();
+    if (value && typeof value === 'object') {
+      const id = (value as Record<string, unknown>).id;
+      if (typeof id === 'string' && id.trim()) return id.trim();
+    }
+    return null;
+  };
+  return (
+    asId(obj.product_id) ??
+    asId(obj.productId) ??
+    asId(obj.product) ??
+    asId((obj.order as Record<string, unknown> | undefined)?.product) ??
+    null
+  );
+}
+
+/** Absolute Creem REST URL. Every outbound Creem call goes through this. */
+export function creemApiUrl(creem: AppConfig['creem'], path: string): string {
+  const base = normalizeCreemApiBaseUrl(creem.apiBaseUrl);
+  const suffix = path.startsWith('/') ? path : `/${path}`;
+  return `${base}${suffix}`;
+}
 
 export interface CheckoutSessionInput {
   email: string;
   successUrl: string;
   cancelUrl: string;
+  /** Overrides CREEM_PRODUCT_ID. Plan checkout passes the plan product. */
+  productId?: string;
 }
 
 export interface CheckoutCompletedEvent {
@@ -24,9 +94,9 @@ export interface CheckoutCompletedEvent {
 
 /**
  * Create a Creem checkout session for a subscription.
- * Price is derived from config.creem.productId (Creem-managed product).
+ * The charged product is input.productId, or CREEM_PRODUCT_ID when omitted.
  * Returns the checkout session URL for browser redirect.
- * Throws when CREEM_ENABLED=false or apiKey is missing.
+ * Throws when CREEM_ENABLED=false, apiKey is missing, or no product id is set.
  */
 export async function createCheckoutSession(
   config: AppConfig,
@@ -39,14 +109,18 @@ export async function createCheckoutSession(
   if (!creem.apiKey) {
     throw new Error('CREEM_API_KEY is missing — cannot create checkout session.');
   }
-  const res = await fetch('https://api.creem.io/v1/checkouts', {
+  const productId = input.productId ?? creem.productId;
+  if (!productId) {
+    throw new Error('Creem product id is missing — cannot create checkout session.');
+  }
+  const res = await fetch(creemApiUrl(creem, '/v1/checkouts'), {
     method: 'POST',
     headers: {
       'x-api-key': creem.apiKey,
       'content-type': 'application/json',
     },
     body: JSON.stringify({
-      product_id: creem.productId,
+      product_id: productId,
       success_url: input.successUrl,
       customer: { email: input.email },
     }),

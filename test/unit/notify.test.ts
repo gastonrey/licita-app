@@ -167,11 +167,12 @@ describe('notifyLeadAck (lead auto-reply)', () => {
 
     const body = JSON.parse(String(capturedInit?.body));
     expect(body.to).toEqual(['lead@example.com']);
-    expect(body.subject).toBe('Licita demo request received — what happens next');
+    expect(body.subject).toBe('Alta recibida en Relicita');
     expect(body.reply_to).toBe('ops@licita.test');
-    expect(body.html).toContain('guided review');
-    expect(body.html).toContain('/v1/demo');
-    expect(body.html).toContain('/docs');
+    expect(body.html).toContain('Cada semana');
+    expect(body.html).toContain('/radar');
+    expect(body.html).not.toContain('not switched');
+    expect(body.html).not.toContain('no está activado');
     // The lead's email must be HTML-escaped in the body.
     expect(body.html).toContain('lead@example.com');
   });
@@ -195,16 +196,14 @@ describe('notifyLeadAck (lead auto-reply)', () => {
     notifyLeadAck(log, baseLead, cfg({ baseUrl: 'https://licita.test' }));
     await new Promise((r) => setTimeout(r, 5));
     let body = JSON.parse(String(capturedInit?.body));
-    expect(body.html).toContain('https://licita.test/v1/demo');
-    expect(body.html).toContain('https://licita.test/docs');
+    expect(body.html).toContain('https://licita.test/radar');
     expect(body.html).not.toContain('licita.app');
 
     // Root-relative fallback when baseUrl is unset — no hardcoded host.
     notifyLeadAck(log, baseLead, cfg({ baseUrl: '' }));
     await new Promise((r) => setTimeout(r, 5));
     body = JSON.parse(String(capturedInit?.body));
-    expect(body.html).toContain('href="/v1/demo"');
-    expect(body.html).toContain('href="/docs"');
+    expect(body.html).toContain('href="/radar"');
     expect(body.html).not.toMatch(/duckdns|licita\.app/);
   });
 });
@@ -248,7 +247,7 @@ describe('notifySubscriberKey', () => {
     const body = JSON.parse(String(capturedInit?.body));
     expect(body.from).toBe('Licita <operator@licita.test>');
     expect(body.to).toEqual(['sub@example.com']);
-    expect(body.subject).toBe('Your Licita API key — welcome to the monthly plan');
+    expect(body.subject).toBe('Your Relicita API key — welcome to the monthly plan');
     expect(body.reply_to).toBe('ops@licita.test');
     // HTML contains the raw key
     expect(body.html).toContain('lct_abc123def456');
@@ -261,7 +260,7 @@ describe('notifySubscriberKey', () => {
     expect(body.html).toContain('balance cannot currently be recovered');
     expect(body.html).toContain('You will not see this key again');
     // Signature
-    expect(body.html).toContain('The Licita team');
+    expect(body.html).toContain('The Relicita team');
   });
 
   it('does not throw on non-2xx (logs warn)', async () => {

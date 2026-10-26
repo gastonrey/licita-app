@@ -15,6 +15,7 @@
 import type { AppConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import { sendWeeklyDigest, type DigestSendEnv } from './digest.js';
+import { sendCustomerRadarDigest, type CustomerRadarEnv } from './customer-radar.js';
 import type { NotifyLogger } from './notify.js';
 
 export interface DigestSchedulerHandle {
@@ -76,8 +77,10 @@ function jsonLog(entry: Record<string, unknown>): void {
 }
 
 export interface DigestSchedulerDeps {
-  /** Injection seam for the send path (defaults to sendWeeklyDigest). */
+  /** Injection seam for the operator digest (defaults to sendWeeklyDigest). */
   send?: (env: DigestSendEnv) => Promise<boolean>;
+  /** Injection seam for the customer radar (defaults to sendCustomerRadarDigest). */
+  sendCustomer?: (env: CustomerRadarEnv) => Promise<unknown>;
   /** Injection seam for the clock (defaults to new Date()). */
   now?: () => Date;
   log?: NotifyLogger;
@@ -92,6 +95,7 @@ export function startDigestScheduler(
   deps: DigestSchedulerDeps = {},
 ): DigestSchedulerHandle {
   const send = deps.send ?? sendWeeklyDigest;
+  const sendCustomer = deps.sendCustomer ?? sendCustomerRadarDigest;
   const now = deps.now ?? (() => new Date());
   const log: NotifyLogger = deps.log ?? {
     debug: (msg, fields) => jsonLog({ level: 'debug', msg, ...fields }),
@@ -129,6 +133,19 @@ export function startDigestScheduler(
       log.info('weekly digest done');
     } catch (err) {
       log.error('weekly digest failed', { error: err instanceof Error ? err.message : String(err) });
+    }
+    try {
+      await sendCustomer({
+        db,
+        log,
+        resendApiKey: config.resendApiKey,
+        from: config.digestFromEmail || config.resendFrom,
+        baseUrl: config.baseUrl,
+        operatorKey: config.operatorKey,
+        now: now(),
+      });
+    } catch (err) {
+      log.error('customer radar digest failed', { error: err instanceof Error ? err.message : String(err) });
     }
   };
 

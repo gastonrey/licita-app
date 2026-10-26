@@ -59,8 +59,8 @@ describe('web.locales — dictionary parity es <-> en', () => {
 
   it('en dict keeps byte-fidelity of the protected text needles (spec N1)', () => {
     expect(t('en', 'nav.home')).toBe('Home');
-    expect(t('en', 'nav.requestDemo')).toBe('Request demo');
-    expect(t('en', 'home.heroTitle')).toBe('Know which public contracts deserve your next conversation.');
+    expect(t('en', 'nav.requestDemo')).toBe('Start free');
+    expect(t('en', 'home.heroTitle')).toBe('Before the tender is published, you already know which one it will be.');
     expect(t('en', 'home.builtOn')).toBe('Built on primary sources');
     expect(t('en', 'home.trustStrip.dates.label')).toBe('Not reported when unknown');
     expect(t('en', 'usecases.title')).toBe('Use cases');
@@ -106,7 +106,7 @@ describe('web.locales — resolver t()', () => {
     expect(t('en', 'home.connect.body', { mcpEndpoint: 'https://licita.example/mcp' })).toContain(
       'https://licita.example/mcp',
     );
-    expect(t('en', 'footer.copyright', { year: 2026 })).toBe('© 2026 Licita');
+    expect(t('en', 'footer.copyright', { year: 2026 })).toBe('© 2026 Relicita');
     expect(t('en', 'trust.privacy.body', { email: 'eutendersai@gmail.com' })).toContain(
       'mailto:eutendersai@gmail.com',
     );
