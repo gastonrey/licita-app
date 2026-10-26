@@ -1,3 +1,5 @@
+import { PUBLIC_PLAN_EUR } from './domain/public-plans.js';
+
 export interface AppConfig {
   port: number;
   logLevel: string;
@@ -67,8 +69,9 @@ export interface AppConfig {
     /** Legacy single product (env CREEM_PRODUCT_ID). POST /v1/creem/checkout
      *  without a plan still charges this product. */
     productId: string;
-    /** Monthly subscription price in cents (env CREEM_PRICE_CENTS, default 2900).
-     *  Display price for the legacy API subscription, not the SME plans. */
+    /** Monthly subscription price in cents (env CREEM_PRICE_CENTS).
+     *  Default is the public Radar price (3900 = 39 €). /docs and /v1/pricing
+     *  mirror this value; the human plan cards use PUBLIC_PLAN_EUR. */
     priceCents: number;
     /** SME plan products. Empty string = that button keeps recording interest.
      *  Never defaulted to a live or test Creem id. */
@@ -220,7 +223,7 @@ export function loadConfig(): AppConfig {
     apiBaseUrl: env('API_BASE_URL') || undefined,
     notifyEmail: env('LEAD_NOTIFY_EMAIL', 'eutendersai@gmail.com'),
     resendApiKey: env('RESEND_API_KEY'),
-    resendFrom: env('RESEND_FROM', 'Licita Operator <operator@licita.app>'),
+    resendFrom: env('RESEND_FROM', 'Relicita Operator <operator@licita.app>'),
     demoAutoReplyEnabled: env('DEMO_AUTOREPLY_ENABLED', 'true') === 'true',
     trustProxy: parseTrustProxy(env('TRUST_PROXY', 'false')),
     rateLimitMaxKeys: parseInt(env('RATE_LIMIT_MAX_KEYS', '10000'), 10),
@@ -238,7 +241,7 @@ export function loadConfig(): AppConfig {
       apiKey: env('CREEM_API_KEY'),
       webhookSecret: env('CREEM_WEBHOOK_SECRET'),
       productId: env('CREEM_PRODUCT_ID'),
-      priceCents: parseInt(env('CREEM_PRICE_CENTS', '2900'), 10),
+      priceCents: parseInt(env('CREEM_PRICE_CENTS', String(PUBLIC_PLAN_EUR.radarMonthly * 100)), 10),
       plans: {
         radarMonthly: env('CREEM_PRODUCT_ID_RADAR_MONTHLY'),
         radarAnnual: env('CREEM_PRODUCT_ID_RADAR_ANNUAL'),

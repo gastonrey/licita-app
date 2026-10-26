@@ -41,7 +41,7 @@ const env = envEntries(block);
 const FORWARDED: Record<string, string> = {
   LEAD_NOTIFY_EMAIL: '${LEAD_NOTIFY_EMAIL:-eutendersai@gmail.com}',
   RESEND_API_KEY: '${RESEND_API_KEY:-}',
-  RESEND_FROM: '"${RESEND_FROM:-Licita Operator <operator@licita.app>}"',
+  RESEND_FROM: '"${RESEND_FROM:-Relicita Operator <operator@licita.app>}"',
   DEMO_AUTOREPLY_ENABLED: '"${DEMO_AUTOREPLY_ENABLED:-true}"',
   DIGEST_ENABLED: '"${DIGEST_ENABLED:-false}"',
   DIGEST_CRON: '"${DIGEST_CRON:-0 9 * * 1}"',

@@ -220,7 +220,7 @@ export class X402PaymentProvider implements PaymentProvider {
       x402Version: 2,
       resource: {
         url: endpoint,
-        description: `Licita — EU public procurement intelligence for AI agents (${endpoint})`,
+        description: `Relicita — EU public procurement intelligence for AI agents (${endpoint})`,
         mimeType: 'application/json',
         // sanitized Bazaar service metadata (serviceName + tags) so facilitators
         // can catalog Licita in Bazaar search; iconUrl is intentionally omitted.

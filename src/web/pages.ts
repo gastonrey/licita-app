@@ -5,6 +5,7 @@
 
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { CREDIT_BUNDLES, ENDPOINT_PRICES } from '../domain/types.js';
+import { formatPublicEur, PUBLIC_PLAN_EUR } from '../domain/public-plans.js';
 import { absoluteUrl, type AppConfig } from '../config.js';
 import { planProductId, type CreemInterval } from '../pay/creem.js';
 import { registerDevFaucet } from '../pay/devProvider.js';
@@ -12,6 +13,18 @@ import { HUMAN_CSS } from './site.css.js';
 import { t, href, otherLocale, languageName, type LocaleCode } from './i18n.js';
 import type { TrustPageSlug } from './locales/types.js';
 import { homeScript, radarScript, signupScript } from './preview-script.js';
+import { OG_PNG } from './og-image.js';
+import {
+  OG_IMAGE_HEIGHT,
+  OG_IMAGE_PATH,
+  OG_IMAGE_WIDTH,
+  SITE_DESCRIPTION,
+  faqLd,
+  jsonLdScript,
+  organizationLd,
+  pricingProductLd,
+  websiteLd,
+} from './seo.js';
 
 const CSS = `
 :root { color-scheme: light; }
@@ -28,14 +41,10 @@ function escapeXml(s: string): string {
   return s.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c] ?? c));
 }
 
-/** Fallback meta description for pages without a dedicated one. */
-const SITE_DESCRIPTION =
-  'Relicita tells IT and cybersecurity SMEs which software and cyber public contracts will be re-tendered, who holds them today and when to move. Evidence from TED and PLACSP.';
-
 /**
  * SEO/social head extras for a human page (spec DR3/DR4 + R3): per-locale
  * canonical, hreflang pair (es | en) + x-default→/, og:locale + og:locale:alternate,
- * og:type/site_name/title/url and meta description, all derived from
+ * og:type/site_name/title/description/url/image and twitter:card, all derived from
  * config.baseUrl (root-relative fallback when BASE_URL is unset — dev/test).
  * Single-locale pages (/docs) render canonical + their own og:locale only —
  * no hreflang alternates, no x-default (design: docs opts.switcher=false).
@@ -69,12 +78,25 @@ function pageMeta(
   if (!opts.singleLocale) {
     lines.push(`<meta property="og:locale:alternate" content="${locale === 'es' ? 'en_US' : 'es_ES'}">`);
   }
+  const desc = escapeAttr(description ?? SITE_DESCRIPTION);
+  const socialTitle = escapeAttr(`${title} — Relicita`);
+  const image = escapeAttr(absoluteUrl(config.baseUrl, OG_IMAGE_PATH));
   lines.push(
     '<meta property="og:type" content="website">',
     '<meta property="og:site_name" content="Relicita">',
-    `<meta property="og:title" content="${escapeAttr(`${title} — Relicita`)}">`,
+    `<meta property="og:title" content="${socialTitle}">`,
+    `<meta property="og:description" content="${desc}">`,
     `<meta property="og:url" content="${url}">`,
-    `<meta name="description" content="${escapeAttr(description ?? SITE_DESCRIPTION)}">`,
+    `<meta property="og:image" content="${image}">`,
+    `<meta property="og:image:type" content="image/png">`,
+    `<meta property="og:image:width" content="${OG_IMAGE_WIDTH}">`,
+    `<meta property="og:image:height" content="${OG_IMAGE_HEIGHT}">`,
+    '<meta property="og:image:alt" content="Relicita">',
+    '<meta name="twitter:card" content="summary_large_image">',
+    `<meta name="twitter:title" content="${socialTitle}">`,
+    `<meta name="twitter:description" content="${desc}">`,
+    `<meta name="twitter:image" content="${image}">`,
+    `<meta name="description" content="${desc}">`,
   );
   return lines.join('\n');
 }
@@ -83,7 +105,15 @@ function page(
   locale: LocaleCode,
   title: string,
   body: string,
-  opts: { config?: AppConfig; path?: string; description?: string; switcher?: boolean; noindex?: boolean; switchSearch?: string } = {},
+  opts: {
+    config?: AppConfig;
+    path?: string;
+    description?: string;
+    switcher?: boolean;
+    noindex?: boolean;
+    switchSearch?: string;
+    graph?: Record<string, unknown>[];
+  } = {},
 ): string {
   const meta =
     opts.config && opts.path !== undefined
@@ -91,19 +121,19 @@ function page(
           singleLocale: opts.switcher === false,
         })
       : '';
-  const jsonLd = `
-<script type="application/ld+json">
-{
-  "@context": "https://schema.org",
-  "@type": ["WebSite", "SoftwareApplication"],
-  "name": "Relicita",
-  "url": "${opts.config && opts.path !== undefined ? absoluteUrl(opts.config.baseUrl, opts.path) : opts.config?.baseUrl ?? ''}",
-  "inLanguage": "${locale}",
-  "description": "${opts.description ?? t(locale, 'jsonLd.description')}",
-  "applicationCategory": "BusinessApplication",
-  "operatingSystem": "Web"
-}
-</script>`.trim();
+  const description = opts.description ?? SITE_DESCRIPTION;
+  const graph =
+    opts.config && opts.path !== undefined
+      ? [organizationLd(opts.config, locale), websiteLd(opts.config, locale, opts.path, description), ...(opts.graph ?? [])]
+      : [
+          {
+            '@type': 'WebSite',
+            name: 'Relicita',
+            inLanguage: locale,
+            description: opts.description ?? t(locale, 'jsonLd.description'),
+          },
+        ];
+  const jsonLd = jsonLdScript(graph);
   return `<!doctype html>
 <html lang="${locale}">
 <head>
@@ -422,6 +452,12 @@ function homePage(config: AppConfig, locale: LocaleCode, demoStatus = false): st
   const l = locale;
   const path = href(l, '/');
   const vars = { email: CONTACT_EMAIL, year: String(new Date().getFullYear()) };
+  const faqItems = [
+    {
+      question: t(l, 'home.faq.items.demoRetention.question'),
+      answer: t(l, 'home.faq.items.demoRetention.answer'),
+    },
+  ];
   return page(
     l,
     t(l, 'home.title'),
@@ -500,14 +536,14 @@ ${planGrid(l)}
 <h2>${t(l, 'home.faq.title')}</h2>
 <div class="faq-list">
   <details class="faq-item" open>
-    <summary>${t(l, 'home.faq.items.demoRetention.question')}<span class="chev" aria-hidden="true">▾</span></summary>
-    <p class="answer">${t(l, 'home.faq.items.demoRetention.answer')}</p>
+    <summary>${faqItems[0].question}<span class="chev" aria-hidden="true">▾</span></summary>
+    <p class="answer">${faqItems[0].answer}</p>
   </details>
 </div>
 </section>
 
 ${homeScript(CONTACT_EMAIL)}`,
-    { config, path, description: t(l, 'home.metaDescription') },
+    { config, path, description: t(l, 'home.metaDescription'), graph: [faqLd(faqItems)] },
   );
 }
 
@@ -537,7 +573,7 @@ curl -s 'http://localhost:3000/v1/search?q=software&type=award' \\
 function docsPage(config: AppConfig): string {
   return page(
     'en',
-    'Docs',
+    'Tender API docs: x402, credits, MCP',
     `
 <h1>Docs — Relicita</h1>
 
@@ -602,9 +638,9 @@ content; proofs are single-use.</li>
 proof path.</p>
 ${
   config.creem.enabled
-    ? `<p><strong>Monthly subscription (Creem MoR)</strong>: <code>POST /v1/creem/checkout</code>
-with an email opens a Creem Checkout session for <code>€${(config.creem.priceCents / 100).toFixed(2)}/month</code>
-(config-driven — the price shown here is always the configured <code>CREEM_PRICE_CENTS</code>). After payment,
+    ? `<p><strong>Monthly subscription (Creem)</strong>: <code>POST /v1/creem/checkout</code>
+with an email opens a Creem Checkout session for <code>€${(config.creem.priceCents / 100).toFixed(2)}/month</code>.
+The public plans (Radar at €${PUBLIC_PLAN_EUR.radarMonthly}/month) are on <a href="/pricing">/pricing</a>. After payment,
 Creem calls <code>POST /v1/creem/webhook</code> (signature-verified) and the account is marked
 <code>kind=creem</code> for 30 days. The subscriber's API key (<code>lct_...</code>) is generated
 and emailed to the checkout email right after payment — send it as <code>x-client-key</code> to buy
@@ -659,14 +695,14 @@ a per-call proof. Buy credits via <code>billing_purchase_credits</code> and chec
 <ul>
 <li><strong>Bazaar extension on 402s</strong> — every paid endpoint and paid MCP tool advertises its
 discovery info via <code>extensions.bazaar</code> on the 402 <code>PAYMENT-REQUIRED</code>, so x402
-facilitators can catalog Licita in Bazaar search (method, input/output examples, input schema).</li>
+facilitators can catalog Relicita in Bazaar search (method, input/output examples, input schema).</li>
 <li><strong>Server card</strong> — static MCP server card at
 <a href="/.well-known/mcp/server-card.json">/.well-known/mcp/server-card.json</a>: identity, SSE
 transport URL and the 11 tools with descriptions and input schemas, for directory crawlers that prefer
 a static card over a live scan.</li>
-<li><strong>How a facilitator catalogs Licita</strong> — hit <code>GET /v1/pricing</code> (free) for
+<li><strong>How a facilitator catalogs Relicita</strong> — hit <code>GET /v1/pricing</code> (free) for
 the ladder, then any paid call; the 402 requirement carries <code>extensions.bazaar</code> and the
-sanitized service metadata (name "Licita", tags <code>procurement/tenders/eu/contracts/ai</code>).
+sanitized service metadata (serviceName "Licita", the published catalog id; tags <code>procurement/tenders/eu/contracts/ai</code>).
 Read the card at <code>/.well-known/mcp/server-card.json</code> for the MCP surface.</li>
 </ul>
 
@@ -680,7 +716,13 @@ Read the card at <code>/.well-known/mcp/server-card.json</code> for the MCP surf
 and contract dates with confidence <code>low</code>/<code>medium</code>/<code>high</code> — not calibrated
 probabilities. Each signal exposes its full evidence in <code>basis</code>.</li>
 </ul>`,
-    { config, path: '/docs', description: 'How to call Relicita: discovery order, x402 payment flow, credits, MCP tools, server card and response conventions.', switcher: false },
+    {
+      config,
+      path: '/docs',
+      description:
+        'How to call the Relicita tender API: discovery order, the x402 payment flow, prepaid credits, MCP tools and response conventions.',
+      switcher: false,
+    },
   );
 }
 
@@ -707,6 +749,7 @@ function pricingPage(config: AppConfig, locale: LocaleCode, plan: '' | ChosenPla
   const l = locale;
   const vars = {
     creemPrice: (config.creem.priceCents / 100).toFixed(2),
+    radarMonthly: formatPublicEur(PUBLIC_PLAN_EUR.radarMonthly, l),
     researchPrice: config.researchPriceUsd,
     paymentsMode: config.paymentsMode,
     email: CONTACT_EMAIL,
@@ -721,7 +764,7 @@ function pricingPage(config: AppConfig, locale: LocaleCode, plan: '' | ChosenPla
     .join('\n');
   return page(
     l,
-    t(l, 'pricing.title'),
+    t(l, 'pricing.metaTitle'),
     `
 <h1>${t(l, 'pricing.title')}</h1>
 <p>${t(l, 'home.plansIntro.body')}</p>
@@ -774,6 +817,7 @@ ${signupScript()}`,
       path: href(l, '/pricing'),
       description: t(l, 'pricing.metaDescription'),
       switchSearch: plan ? `?plan=${plan}&interval=${billingIntervalFor(plan, requestedInterval)}#alta` : '',
+      graph: [pricingProductLd(config, l)],
     },
   );
 }
@@ -855,7 +899,8 @@ ${lines}
 - /llms.txt (this file), /openapi.json (OpenAPI 3.1), /v1/pricing (machine-readable price ladder +
   payment flow), /docs (human docs), /pricing (price table), /mcp (MCP endpoint),
   /.well-known/mcp/server-card.json (MCP server card)
-- Paid 402s carry extensions.bazaar (x402 Bazaar discovery extension) so facilitators catalog Licita.
+- Paid 402s carry extensions.bazaar (x402 Bazaar discovery extension) so facilitators catalog Relicita.
+  The published Bazaar serviceName stays "Licita" so existing catalog entries keep the same id.
 - Use cases: /use-cases (index) and /use-cases/tender-intelligence, /use-cases/company-research,
   /use-cases/buyer-intelligence, /use-cases/renewals-forecasting — agent missions with the exact
   endpoints, costs and real response shapes.
@@ -1130,7 +1175,7 @@ function useCasesIndex(config: AppConfig, locale: LocaleCode): string {
   const l = locale;
   return page(
     l,
-    t(l, 'usecases.title'),
+    t(l, 'usecases.metaTitle'),
     `
 <h1>${t(l, 'usecases.title')}</h1>
 <p class="muted">${t(l, 'usecases.intro')}</p>
@@ -1150,7 +1195,7 @@ function useCasePage(config: AppConfig, locale: LocaleCode, slug: string): strin
   const l = locale;
   return page(
     l,
-    `Use case: ${t(l, `usecaseDetail.${slug}.title`)}`,
+    t(l, `usecaseDetail.${slug}.metaTitle`),
     `
 <h1>${t(l, `usecaseDetail.${slug}.title`)}</h1>
 <p>${t(l, `usecaseDetail.${slug}.problem`)}</p>
@@ -1161,7 +1206,7 @@ function useCasePage(config: AppConfig, locale: LocaleCode, slug: string): strin
 <h2>${t(l, 'usecases.detail.honestyTitle')}</h2>
 <p class="muted">${t(l, `usecaseDetail.${slug}.honestNote`)}</p>
 <p class="muted"><a href="${href(l, '/use-cases')}">${t(l, 'usecases.detail.allUseCases')}</a></p>`,
-    { config, path: href(l, `/use-cases/${slug}`), description: t(l, `usecaseDetail.${slug}.problem`) },
+    { config, path: href(l, `/use-cases/${slug}`), description: t(l, `usecaseDetail.${slug}.metaDescription`) },
   );
 }
 
@@ -1177,7 +1222,7 @@ function dataPage(config: AppConfig, locale: LocaleCode, kind: 'overview' | 'spa
       : `<p class="muted"><a href="${href(l, '/data')}">${t(l, `${base}.overviewLink`)}</a></p>`;
   return page(
     l,
-    t(l, `${base}.h1`),
+    t(l, `${base}.metaTitle`),
     `
 <h1>${t(l, `${base}.h1`)}</h1>
 <p class="muted">${t(l, `${base}.intro`)}</p>
@@ -1185,7 +1230,7 @@ function dataPage(config: AppConfig, locale: LocaleCode, kind: 'overview' | 'spa
 ${bullets}
 </ul>
 ${tail}`,
-    { config, path: href(l, path) },
+    { config, path: href(l, path), description: t(l, `${base}.metaDescription`) },
   );
 }
 
@@ -1195,9 +1240,9 @@ function trustPage(config: AppConfig, locale: LocaleCode, slug: TrustPageSlug): 
   const l = locale;
   return page(
     l,
-    t(l, `trust.${slug}.title`),
+    t(l, `trust.${slug}.metaTitle`),
     `\n<h1>${t(l, `trust.${slug}.title`)}</h1>${t(l, `trust.${slug}.body`, { email: CONTACT_EMAIL })}<p><a href="${href(l, '/')}">${t(l, 'footer.backToLicita')}</a></p>`,
-    { config, path: href(l, `/${slug}`) },
+    { config, path: href(l, `/${slug}`), description: t(l, `trust.${slug}.metaDescription`) },
   );
 }
 
@@ -1206,7 +1251,7 @@ function serverCard(config: AppConfig): Record<string, unknown> {
     schemaVersion: '2025-12-11',
     name: 'licita',
     description:
-      'Public procurement intelligence for AI agents: EU tenders, renewal signals, company opportunities and buyer activity. Pay per call with USDC via x402.',
+      'Relicita — public procurement intelligence for AI agents: EU tenders, renewal signals, company opportunities and buyer activity. Pay per call with USDC via x402. Machine id: licita.',
     url: absoluteUrl(config.apiBaseUrl ?? config.baseUrl, '/mcp'),
     transports: ['sse'],
     tools: SERVER_CARD_TOOLS,
@@ -1283,6 +1328,22 @@ function developersPage(config: AppConfig, locale: LocaleCode): string {
     year: String(new Date().getFullYear()),
     paymentsMode: config.paymentsMode,
   };
+  const faqItems = [
+    {
+      question: t(l, 'home.faq.items.accountSubscription.question'),
+      answer: config.creem.enabled
+        ? t(l, 'home.faq.items.accountSubscription.answerCreem')
+        : t(l, 'home.faq.items.accountSubscription.answer'),
+    },
+    {
+      question: t(l, 'home.faq.items.creditsAndKeys.question'),
+      answer: t(l, 'home.faq.items.creditsAndKeys.answer'),
+    },
+    {
+      question: t(l, 'home.faq.items.usdcWallet.question'),
+      answer: t(l, 'home.faq.items.usdcWallet.answer'),
+    },
+  ];
   return page(
     l,
     t(l, 'developersPage.title'),
@@ -1296,21 +1357,17 @@ function developersPage(config: AppConfig, locale: LocaleCode): string {
 ${priceTable(config, l)}
 <h2>${t(l, 'home.faq.title')}</h2>
 <div class="faq-list">
-  <details class="faq-item" open>
-    <summary>${t(l, 'home.faq.items.accountSubscription.question')}<span class="chev" aria-hidden="true">▾</span></summary>
-    <p class="answer">${config.creem.enabled ? t(l, 'home.faq.items.accountSubscription.answerCreem') : t(l, 'home.faq.items.accountSubscription.answer')}</p>
-  </details>
-  <details class="faq-item">
-    <summary>${t(l, 'home.faq.items.creditsAndKeys.question')}<span class="chev" aria-hidden="true">▾</span></summary>
-    <p class="answer">${t(l, 'home.faq.items.creditsAndKeys.answer')}</p>
-  </details>
-  <details class="faq-item">
-    <summary>${t(l, 'home.faq.items.usdcWallet.question')}<span class="chev" aria-hidden="true">▾</span></summary>
-    <p class="answer">${t(l, 'home.faq.items.usdcWallet.answer')}</p>
-  </details>
+${faqItems
+  .map(
+    (item, index) => `  <details class="faq-item"${index === 0 ? ' open' : ''}>
+    <summary>${item.question}<span class="chev" aria-hidden="true">▾</span></summary>
+    <p class="answer">${item.answer}</p>
+  </details>`,
+  )
+  .join('\n')}
 </div>
 <p>${t(l, 'home.connect.body', vars)}</p>`,
-    { config, path: href(l, '/developers'), description: t(l, 'developersPage.metaDescription') },
+    { config, path: href(l, '/developers'), description: t(l, 'developersPage.metaDescription'), graph: [faqLd(faqItems)] },
   );
 }
 
@@ -1454,8 +1511,11 @@ export function registerWeb(app: FastifyInstance, config: AppConfig): void {
   app.get('/es/*', async (req, reply) => reply.redirect(req.url.replace(/^\/es(?=\/|$)/, '') || '/', 301));
   app.get('/llms.txt', async (_req, reply) => reply.type('text/plain; charset=utf-8').send(llmsTxt(config)));
   app.get('/robots.txt', async (_req, reply) =>
-    reply.type('text/plain; charset=utf-8').send('User-agent: *\nAllow: /\n'),
+    reply.type('text/plain; charset=utf-8').send(
+      `User-agent: *\nAllow: /\n\nSitemap: ${absoluteUrl(config.baseUrl, '/sitemap.xml')}\n`,
+    ),
   );
+  app.get('/og.png', async (_req, reply) => reply.type('image/png').send(OG_PNG));
   app.get('/sitemap.xml', async (_req, reply) =>
     reply.type('application/xml; charset=utf-8').send(sitemapXml(config)),
   );

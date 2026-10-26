@@ -40,13 +40,13 @@ Client config snippet for the live instance:
 
 ## Distribution &amp; contact
 
-Licita is listed in MCP registries and directories for agent and human discovery:
+Relicita is listed in MCP registries and directories for agent and human discovery:
 
 - **MCP registry manifest:** [`server.json`](./server.json) — streamable-HTTP at `https://api.eutendersai.com/mcp`.
 - **Static server card:** `/.well-known/mcp/server-card.json` (identity, SSE URL, all 11 tool schemas).
 - **Glama:** [glama.json](./glama.json) + [Glama server](https://glama.ai/mcp/servers) (badge).
-- **mcp.so:** [Licita on mcp.so](https://mcp.so).
-- **x402 Bazaar:** paid 402s carry `extensions.bazaar`, so x402 facilitators catalog Licita automatically.
+- **mcp.so:** [Relicita on mcp.so](https://mcp.so).
+- **x402 Bazaar:** paid 402s carry `extensions.bazaar`, so x402 facilitators catalog Relicita automatically. The Bazaar `serviceName` stays `Licita` so an existing catalog entry keeps the same id.
 
 For a project, white-label data deal or prepaid plan, contact `eutendersai@gmail.com`.
 
@@ -159,7 +159,7 @@ missing/invalid variable (`src/config.validate.ts`, called from `src/index.ts`).
 | `CREEM_API_KEY` | — | Creem API key. Required when `CREEM_ENABLED=true`. Use the test key to try a payment |
 | `CREEM_WEBHOOK_SECRET` | — | Signs `POST /v1/creem/webhook`. Required when `CREEM_ENABLED=true` |
 | `CREEM_PRODUCT_ID` | — | Legacy single product. Checkout without `plan` still charges this id. Required when `CREEM_ENABLED=true` |
-| `CREEM_PRICE_CENTS` | `2900` | Display price of that legacy product, in cents. The charged amount is the Creem product price |
+| `CREEM_PRICE_CENTS` | `3900` | Display price of the legacy single product, in cents (3900 = €39.00, the public Radar monthly price). `/docs` and `GET /v1/pricing` mirror this value. The human plan cards use the same €39 figure and do not print this variable name. The charged amount is still the Creem product price |
 | `CREEM_PRODUCT_ID_RADAR_MONTHLY` | empty | Radar €39/month. Empty → the Radar monthly button records interest and shows no error |
 | `CREEM_PRODUCT_ID_RADAR_ANNUAL` | empty | Radar €390/year. Same graceful fallback |
 | `CREEM_PRODUCT_ID_PRO_MONTHLY` | empty | Pro €99/month |

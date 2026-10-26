@@ -153,7 +153,7 @@ describe('REST bazaar discovery (http)', () => {
       expect(res.url).toBe(key);
       expect(res.mimeType).toBe('application/json');
       expect(res.serviceName).toBe('Licita');
-      expect(res.description).toContain('Licita');
+      expect(res.description).toContain('Relicita');
     }
   });
 

@@ -15,7 +15,7 @@ describe('agent-surface preservation after homepage changes', () => {
     const robots = await app.inject({ method: 'GET', url: '/robots.txt' });
     expect(robots.statusCode).toBe(200);
     expect(robots.headers['content-type']).toMatch(/^text\/plain; charset=utf-8/);
-    expect(robots.body).toBe('User-agent: *\nAllow: /\n');
+    expect(robots.body).toBe('User-agent: *\nAllow: /\n\nSitemap: /sitemap.xml\n');
 
     const llms = await app.inject({ method: 'GET', url: '/llms.txt' });
     expect(llms.statusCode).toBe(200);

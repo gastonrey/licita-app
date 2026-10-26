@@ -1,8 +1,8 @@
-# Licita Project Guidelines
+# Relicita Project Guidelines
 
 ## Product context
 
-Licita is an agent-native public procurement intelligence product for professional teams. It indexes TED and, when enabled, PLACSP data to expose evidence-backed intelligence about tenders, buyers, suppliers, opportunities, and renewal signals through REST and MCP.
+Relicita is an agent-native public procurement intelligence product for professional teams. It indexes TED and, when enabled, PLACSP data to expose evidence-backed intelligence about tenders, buyers, suppliers, opportunities, and renewal signals through REST and MCP. The package name stays `licita-agent` and the MCP registry id stays `licita`.
 
 Primary users:
 
