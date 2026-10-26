@@ -53,7 +53,7 @@ export const en: Locale = {
     renewalTable: {
       title: 'Contracts expiring in the next 12 months',
       intro:
-        'Who holds them today, and for how much. These rows come from the live index (CPV 48 software and CPV 72 IT services, including cybersecurity). If a value was not in the source, the cell says Not reported.',
+        'Who holds them today, and for how much. These are software and IT contracts (CPV 48 and 72) whose window is still open and starts no later than 12 months from today. Confidence is high, medium or low; low is an estimate from thin evidence, not a probability. If a value was not in the source, the cell says Not reported.',
       loading: 'Loading the index sample…',
       empty:
         'The index has no software or IT renewal signals in this window right now. No rows were invented.',
@@ -78,7 +78,7 @@ export const en: Locale = {
         framework: 'Framework end',
         recurrence: 'Award pattern',
       },
-      confidence: { low: 'Low', medium: 'Medium', high: 'High' },
+      confidence: { low: 'Low · estimate', medium: 'Medium', high: 'High' },
     },
     evidencePromise: {
       title: 'Every alert cites its source and its calculation',
@@ -470,7 +470,7 @@ export const en: Locale = {
       'Software and cybersecurity public contracts due to be re-tendered: who holds them, for how much, and the source of each signal.',
     h1: 'Which contracts come back, and who holds them',
     intro:
-      'Filter the public sample by CPV, buyer and region. Amounts and dates stay empty when the notice did not report them. Confidence is the strength of the evidence, not a probability.',
+      'Filter the public sample by CPV, buyer, region and horizon (6 or 12 months). Only windows that are still open are listed. Low confidence is marked as an estimate: it is the strength of the evidence, not a probability.',
     filtersLabel: 'Filter the sample',
     cpvLabel: 'CPV',
     windowLabel: 'Window',

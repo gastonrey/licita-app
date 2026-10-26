@@ -149,7 +149,7 @@ missing/invalid variable (`src/config.validate.ts`, called from `src/index.ts`).
 | `STRIPE_WEBHOOK_SECRET` | — | Stripe webhook signing secret (`whsec_`). Required + format-checked when `STRIPE_ENABLED=true` |
 | `PRICE_CENTS` | `2900` | Monthly subscription price in cents (e.g. `2900` = €29.00). Published on `/docs`, `/v1/pricing` and the Stripe line item — keep them in sync by changing only this var |
 | `TRIAL_ENABLED` | `false` | Trial/pro `lct_` api_clients key seam. **Default off** — when off, trial keys are inert and revert to the legacy credit/x402 path (stripe-subscriber keys keep working: they were purchased). Production `true` requires `RESEND_API_KEY` + `BASE_URL` |
-| `SCHEDULED_GENERATION_EVENTS` | `true` | Master gate for ALL scheduled jobs (ingest + digest). `false` kills every scheduled runner |
+| `SCHEDULED_GENERATION_EVENTS` | `true` | Gates the weekly digest scheduler. The harvest is gated by `INGEST_ON_BOOT`, not by this flag |
 | `DIGEST_ENABLED` | `false` | Weekly Renewal Radar digest email. **Default off** — requires `RESEND_API_KEY` and (in production) `DIGEST_FROM_EMAIL` + `DIGEST_BCC` |
 | `DIGEST_CRON` | `0 9 * * 1` | Weekly digest schedule (`M H * * DOW`, UTC) — default Monday 09:00 UTC |
 | `DIGEST_FROM_EMAIL` | — | Digest sender address (a verified Resend sender domain). Required in production when `DIGEST_ENABLED=true` |
@@ -185,17 +185,20 @@ npm run ingest -- --once --source placsp --max-notices 25   # PLACSP slice (need
 npm run ingest -- --once --source all                       # TED + PLACSP
 ```
 
+Or let the app do it: `INGEST_ON_BOOT=true` arms the daily scheduler, which
+fires the first harvest at the next `INGEST_CRON_HOUR` (04:00 UTC by default)
+and re-harvests every 24h. It does **not** ingest at boot — the first harvest
+is a manual `--once` run (see DEPLOYMENT.md). A host `.env` with
+`INGEST_ON_BOOT=false` overrides the production compose default and leaves
+TED and PLACSP frozen. `SCHEDULED_GENERATION_EVENTS` does not start or stop
+that harvest; it only gates the weekly digest. See DEPLOYMENT.md §4.
+
 ### Data sources
 
 | Source | Status | Notes |
 |---|---|---|
 | TED Search API v3 | **live** (default) | ES award notices, CPV 72*/48*, `INGEST_MONTHS` window |
 | PLACSP sindicación (CODICE 3.2 over ATOM) | **live behind flag** (`PLACSP_ENABLED=true`) | Licitaciones feed (sindicacion_643) + contratos menores feed (sindicacion_1143), paged via RFC 5005 `rel=next`. Award rows only from TenderResults with awarded/formalized result codes; NIFs only from `schemeName="NIF"` — nothing is fabricated. License: datos abiertos, reuse per [datos.gob.es/avisolegal](https://www.datos.gob.es/avisolegal). |
-
-or let the app do it: `INGEST_ON_BOOT=true` arms the daily scheduler, which
-fires the first harvest at the next `INGEST_CRON_HOUR` (04:00 UTC by default)
-and re-harvests every 24h. It does **not** ingest at boot — the first harvest
-is a manual `--once` run (see DEPLOYMENT.md).
 
 Ingestion is idempotent (upserts keyed by `(source_id, source_ref)`) and safe
 to kill/re-run. Verified live run against TED (2026-08-13, CPV 72*/48*, Spain,

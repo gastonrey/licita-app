@@ -119,6 +119,7 @@ describe('customer radar helpers', () => {
         currency: 'EUR',
         source: 'ted',
         windowStart: '2026-11-24',
+        confidence: 'low',
       }],
       total: 1,
       filter: { cpv: '72' },
@@ -130,6 +131,7 @@ describe('customer radar helpers', () => {
     expect(html).toContain('120.000');
     expect(html).toContain('€');
     expect(html).toContain('Fuente: TED');
+    expect(html).toContain('Confianza: Baja · estimación');
     expect(html).toContain('Fecha estimada de renovación');
     expect(html).toContain('https://eutendersai.com/radar');
     expect(html).toContain('https://eutendersai.com/radar/baja?token=abc');

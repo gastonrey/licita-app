@@ -854,7 +854,7 @@ function paths(): Record<string, unknown> {
         parameters: [
           cpvParam,
           qParam('buyer', 'Buyer name fragment (case/accent-insensitive)', { type: 'string', minLength: 2, maxLength: 200 }),
-          qParam('window_months', 'Only signals whose window starts within this many months (default 12, max 36)', {
+          qParam('window_months', 'Open windows only: window_end >= today and window_start <= today plus this many months (default 12, max 36). Ordered by confidence (high, medium, low), then by how close window_start is to today.', {
             type: 'integer', minimum: 1, maximum: 36, default: 12,
           }),
           qParam('min_confidence', 'Minimum confidence', { type: 'string', enum: ['low', 'medium', 'high'], default: 'low' }),
@@ -1036,7 +1036,9 @@ function paths(): Record<string, unknown> {
         summary: 'Free capped sample of IT renewal signals and recent tenders',
         description:
           'Free public sample (price 0.00) of the live index, limited to CPV 48 and 72 and at most 8 renewal rows plus 8 recent tenders. ' +
-          'window_months is 6 or 12. Nulls are explicit. calculation quotes stored basis fields and is not a generated narrative. ' +
+          'window_months is 6 or 12. A row is included only when its window is still open (window_end >= today) and starts by the end of that horizon. ' +
+          'Rows are ordered by confidence (high, medium, low), then by how close window_start is to today. Low confidence is an estimate, not a probability. ' +
+          'Nulls are explicit. calculation quotes stored basis fields and is not a generated narrative. ' +
           'The paid renewal feed remains GET /v1/renewals.',
         parameters: [
           qParam('cpv', 'Optional CPV prefix under 48 or 72', { type: 'string', pattern: '^(48|72)\\d{0,6}$' }),

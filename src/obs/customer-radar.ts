@@ -29,6 +29,7 @@ export interface RadarMailRow {
   currency: string | null;
   source: string | null;
   windowStart: string | null;
+  confidence: string | null;
 }
 
 export interface RadarMailMessage {
@@ -148,6 +149,13 @@ function formatMoney(value: number | null, currency: string | null): string {
   }
 }
 
+function confidenceLabel(value: string | null): string {
+  if (value === 'high') return 'Alta';
+  if (value === 'medium') return 'Media';
+  if (value === 'low') return 'Baja · estimación';
+  return 'No consta';
+}
+
 function formatDay(iso: string | null): string {
   if (!iso) return 'No consta';
   const day = new Date(`${iso.slice(0, 10)}T00:00:00Z`);
@@ -180,6 +188,7 @@ export function renderCustomerRadarEmail(input: {
 Comprador: ${escapeHtml(row.buyer ?? 'No consta')}<br>
 Importe: ${escapeHtml(formatMoney(row.value, row.currency))}<br>
 Fuente: ${escapeHtml(sourceLabel(row.source))}<br>
+Confianza: ${escapeHtml(confidenceLabel(row.confidence))}<br>
 Fecha estimada de renovación: ${escapeHtml(formatDay(row.windowStart))}
 </li>`;
     })
@@ -227,6 +236,7 @@ function mapRow(row: Record<string, unknown>): RadarMailRow {
     currency: contract?.currency ?? null,
     source: (row.source as string | null) ?? null,
     windowStart: (row.window_start as string | null) ?? null,
+    confidence: (row.confidence as string | null) ?? null,
   };
 }
 

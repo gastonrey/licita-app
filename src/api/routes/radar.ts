@@ -12,7 +12,7 @@ import { z } from 'zod';
 import type { Provenance } from '../../domain/types.js';
 import type { Db } from '../../db/client.js';
 import { dateStr, envelope, num, Params, tedUrl, validate, type RouteCtx } from './common.js';
-import { RENEWALS_METHODOLOGY } from './renewals.js';
+import { RENEWALS_METHODOLOGY, openWindowSql, renewalHorizonIso, SIGNAL_ORDER_SQL } from './renewals.js';
 
 export const RADAR_PREVIEW_LIMIT = 8;
 export const RADAR_NOTE =
@@ -44,11 +44,9 @@ export const radarPreviewQuerySchema = z.object({
 export type RadarPreviewQuery = z.infer<typeof radarPreviewQuerySchema>;
 export const radarPreviewValidation = validate(radarPreviewQuerySchema, 'query');
 
-/** ISO date `months` ahead of today (UTC). Compared as a date parameter. */
+/** @deprecated use renewalHorizonIso. Kept as the name the preview filter reports. */
 export function windowCutoffIso(months: number, now = new Date()): string {
-  const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-  d.setUTCMonth(d.getUTCMonth() + months);
-  return d.toISOString().slice(0, 10);
+  return renewalHorizonIso(months, now);
 }
 
 const BASIS_KEYS = [
@@ -90,8 +88,7 @@ export function buildRenewalPreviewQuery(q: RadarPreviewQuery): { text: string; 
   const p = new Params();
   const prefixes = prefixesFor(q.cpv);
   const where = [
-    'fs.window_start IS NOT NULL',
-    `fs.window_start <= CAST(${p.push(windowCutoffIso(q.window_months))} AS date)`,
+    openWindowSql(p.push(renewalHorizonIso(q.window_months))),
     likeClause('fs.cpv', prefixes, p),
     `(${p.push(q.buyer ?? '')} = '' OR lower(coalesce(b.name, '')) LIKE '%' || lower(${p.push(q.buyer ?? '')}) || '%')`,
     `(${p.push(q.region ?? '')} = '' OR coalesce(b.nuts, '') ILIKE ${p.push(q.region ?? '')} || '%')`,
@@ -112,7 +109,7 @@ LEFT JOIN awards a ON a.id = ct.award_id
 LEFT JOIN tenders t ON t.id = a.tender_id
 LEFT JOIN sources s ON s.id = t.source_id
 WHERE ${where.join('\n  AND ')}
-ORDER BY fs.window_start ASC, fs.id ASC
+${SIGNAL_ORDER_SQL}
 LIMIT ${RADAR_PREVIEW_LIMIT}
 `;
   return { text, values: p.values };
@@ -122,8 +119,7 @@ export function buildRenewalCountQuery(q: RadarPreviewQuery): { text: string; va
   const p = new Params();
   const prefixes = prefixesFor(q.cpv);
   const where = [
-    'fs.window_start IS NOT NULL',
-    `fs.window_start <= CAST(${p.push(windowCutoffIso(q.window_months))} AS date)`,
+    openWindowSql(p.push(renewalHorizonIso(q.window_months))),
     likeClause('fs.cpv', prefixes, p),
     `(${p.push(q.buyer ?? '')} = '' OR lower(coalesce(b.name, '')) LIKE '%' || lower(${p.push(q.buyer ?? '')}) || '%')`,
     `(${p.push(q.region ?? '')} = '' OR coalesce(b.nuts, '') ILIKE ${p.push(q.region ?? '')} || '%')`,
