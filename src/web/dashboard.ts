@@ -1680,6 +1680,20 @@ async function load() {
   }
 }
 
+function leadSourceCell(value) {
+  if (value == null || value === '' || value === 'null' || value === 'undefined') return '—';
+  var text = String(value);
+  try {
+    var x = new URL(text);
+    var path = x.pathname;
+    while (path.length > 1 && path.charAt(path.length - 1) === '/') path = path.slice(0, -1);
+    if ((x.protocol === 'http:' || x.protocol === 'https:') && path !== '/null' && path.slice(-5) !== '/null') {
+      return '<a href="' + esc(text.trim()) + '" rel="noreferrer">' + esc(text.trim()) + '</a>';
+    }
+  } catch (e) { /* relative signup paths stay text; they are not notice links */ }
+  if (text === '/null' || text.slice(-5) === '/null') return '—';
+  return esc(text);
+}
 function renderLeads(data) {
    const rows = (data && data.requests) || [];
    const target = $('leads');
@@ -1688,7 +1702,7 @@ function renderLeads(data) {
      .map((status) => '<div class="kpi"><div class="kpi-label">Status: ' + status + '</div><div class="kpi-val">' + esc(counts[status] || 0) + '</div></div>').join('');
    target.innerHTML =
       (rows.length ? '<table><thead><tr><th>Email</th><th>Source / channel</th><th>Source URL</th><th>Status</th><th>Created</th><th>Converted</th></tr></thead><tbody>' +
-         rows.map((r) => '<tr><td>' + esc(r.email) + '</td><td>' + esc(r.channel) + '</td><td>' + esc(r.source_url || '—') + '</td><td>' + esc(r.status) + '</td><td>' + esc(r.created_at ? dateFormat.format(new Date(r.created_at)) : '—') + '</td><td>' + (r.converted ? 'yes' : 'no') + '</td></tr>').join('') +
+         rows.map((r) => '<tr><td>' + esc(r.email) + '</td><td>' + esc(r.channel) + '</td><td>' + leadSourceCell(r.source_url) + '</td><td>' + esc(r.status) + '</td><td>' + esc(r.created_at ? dateFormat.format(new Date(r.created_at)) : '—') + '</td><td>' + (r.converted ? 'yes' : 'no') + '</td></tr>').join('') +
         '</tbody></table>' : '<p class="muted">No demo leads yet.</p>');
 }
 

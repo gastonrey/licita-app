@@ -13,6 +13,7 @@ import {
   dateStr,
   envelope,
   num,
+  publicNoticeUrl,
   tedUrl,
   validate,
   type RouteCtx,
@@ -181,7 +182,7 @@ async function loadTenderFindings(
   return rows.map((r) => {
     const s = srcs.get(r.tender_id ?? r.id);
     const ref = r.source_ref ?? r.tender_source_ref ?? null;
-    const url = tedUrl(ref, (s?.url ?? null) as string | null);
+    const url = publicNoticeUrl(s?.source_code, ref, (s?.url ?? null) as string | null);
     return {
       type: 'tender' as const,
       title: r.title ?? `Tender ${r.id}`,
@@ -273,7 +274,7 @@ async function loadOpportunityFindings(db: Db, query: string, limit: number): Pr
     const r = x.row;
     const s = srcs.get(Number(r.id));
     const ref = (r.source_ref as string) ?? null;
-    const url = tedUrl(ref, (r.url as string | null) ?? null);
+    const url = publicNoticeUrl(s?.source_code, ref, (r.url as string | null) ?? (s?.url ?? null));
     return {
       type: 'opportunity' as const,
       title: (r.title as string) ?? `Opportunity ${r.id}`,

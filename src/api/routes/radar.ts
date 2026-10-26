@@ -11,7 +11,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import type { Provenance } from '../../domain/types.js';
 import type { Db } from '../../db/client.js';
-import { dateStr, envelope, num, Params, tedUrl, validate, type RouteCtx } from './common.js';
+import { dateStr, envelope, num, Params, publicNoticeUrl, validate, type RouteCtx } from './common.js';
 import { RENEWALS_METHODOLOGY, openWindowSql, renewalHorizonIso, SIGNAL_ORDER_SQL } from './renewals.js';
 
 export const RADAR_PREVIEW_LIMIT = 8;
@@ -100,7 +100,7 @@ SELECT
   c.name AS incumbent_name,
   ct.title AS contract_title, ct.value AS contract_value, ct.currency AS contract_currency,
   ct.end_date AS contract_end,
-  s.code AS source_code, t.source_ref AS tender_source_ref
+  s.code AS source_code, t.source_ref AS tender_source_ref, t.url AS tender_url
 FROM forecast_signals fs
 LEFT JOIN buyers b ON b.id = fs.buyer_id
 LEFT JOIN companies c ON c.id = fs.incumbent_company_id
@@ -144,7 +144,7 @@ export function buildOpportunityPreviewQuery(q: RadarPreviewQuery): { text: stri
   const text = `
 SELECT
   t.id, t.title, t.cpv_main, t.estimated_value, t.currency, t.publication_date, t.deadline,
-  t.nuts, t.source_ref,
+  t.nuts, t.source_ref, t.url AS tender_url,
   s.code AS source_code,
   b.name AS buyer_name
 FROM tenders t
@@ -174,9 +174,8 @@ WHERE ${where.join('\n  AND ')}
   return { text, values: p.values };
 }
 
-function sourceUrl(code: string | null, sourceRef: string | null): string | null {
-  if (code === 'ted' && sourceRef) return tedUrl(sourceRef) ?? null;
-  return null;
+function sourceUrl(code: string | null, sourceRef: string | null, stored: string | null): string | null {
+  return publicNoticeUrl(code, sourceRef, stored);
 }
 
 function mapRenewal(row: Record<string, unknown>): Record<string, unknown> {
@@ -203,14 +202,14 @@ function mapRenewal(row: Record<string, unknown>): Record<string, unknown> {
         : null,
     source,
     source_ref: sourceRef,
-    url: sourceUrl(source, sourceRef),
+    url: sourceUrl(source, sourceRef, (row.tender_url as string) ?? null),
     basis: row.basis ?? null,
     calculation: calculationFromBasis(row.basis),
   };
 }
 
 function mapOpportunity(row: Record<string, unknown>): Record<string, unknown> {
-  const source = String(row.source_code);
+  const source = (row.source_code as string) ?? null;
   const sourceRef = (row.source_ref as string) ?? null;
   return {
     sample: true,
@@ -225,7 +224,7 @@ function mapOpportunity(row: Record<string, unknown>): Record<string, unknown> {
     region: (row.nuts as string) ?? null,
     source,
     source_ref: sourceRef,
-    url: sourceUrl(source, sourceRef),
+    url: sourceUrl(source, sourceRef, (row.tender_url as string) ?? null),
   };
 }
 

@@ -17,7 +17,7 @@ import { getPaymentProvider, tryCreditDebit } from '../pay/middleware.js';
 import { hashKeyLog } from '../pay/keys.js';
 import { createLogger, type Logger } from '../obs/log.js';
 import { hashIp, logRequest, strField } from '../obs/requestlog.js';
-import { dateStr, num, provenanceFor, tedUrl } from '../api/routes/common.js';
+import { dateStr, num, provenanceFor, publicNoticeUrl } from '../api/routes/common.js';
 import {
   awardsQuerySchema,
   idParamSchema,
@@ -206,7 +206,7 @@ const TOOLS: Record<string, ToolDef> = {
         estimated_value: num(t.estimated_value),
         currency: (t.currency as string) ?? null,
         nuts: (t.nuts as string) ?? null,
-        url: tedUrl(t.source_ref as string | null, t.url as string | null) ?? null,
+        url: publicNoticeUrl((t.source_code as string) ?? null, (t.source_ref as string) ?? null, (t.url as string) ?? null),
         buyer:
           t.b_id != null
             ? {
@@ -221,7 +221,7 @@ const TOOLS: Record<string, ToolDef> = {
         provenance: provenanceFor(
           t.source_code as string,
           (t.source_ref as string) ?? null,
-          tedUrl(t.source_ref as string | null, t.url as string | null),
+          publicNoticeUrl((t.source_code as string) ?? null, (t.source_ref as string) ?? null, (t.url as string) ?? null),
         ),
       };
     },
@@ -302,7 +302,7 @@ const TOOLS: Record<string, ToolDef> = {
           estimated_value: num(r.estimated_value),
           currency: (r.currency as string) ?? null,
           nuts: (r.nuts as string) ?? null,
-          url: tedUrl(r.source_ref as string | null, r.url as string | null) ?? null,
+          url: publicNoticeUrl((r.source_code as string) ?? null, (r.source_ref as string) ?? null, (r.url as string) ?? null),
           buyer: r.buyer_id != null ? { id: Number(r.buyer_id), name: String(r.buyer_name) } : null,
           score: Number(r.score),
           same_buyer: r.same_buyer === true,

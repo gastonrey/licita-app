@@ -13,6 +13,7 @@ import {
   notFound,
   num,
   provenanceFor,
+  publicNoticeUrl,
   tedUrl,
   validate,
   type RouteCtx,
@@ -208,12 +209,14 @@ WITH hist AS (
 scored AS (
   SELECT t.id, t.source_ref, t.title, t.publication_date, t.deadline,
          t.cpv_main, t.estimated_value, t.currency, t.nuts, t.url,
+         s.code AS source_code,
          t.buyer_id, b.name AS buyer_name,
          ((t.buyer_id IN (SELECT buyer_id FROM hist))::int * 2
           + (left(t.cpv_main, 2) IN (SELECT div FROM hist))::int) AS score,
          (t.buyer_id IN (SELECT buyer_id FROM hist)) AS same_buyer,
          (t.cpv_main IN (SELECT cpv_main FROM hist)) AS same_cpv
   FROM tenders t
+  JOIN sources s ON s.id = t.source_id
   LEFT JOIN buyers b ON b.id = t.buyer_id
   WHERE (t.publication_date >= CURRENT_DATE - INTERVAL '90 days' OR t.deadline > now())
     AND (t.buyer_id IN (SELECT buyer_id FROM hist) OR t.cpv_main IN (SELECT cpv_main FROM hist))
@@ -242,7 +245,7 @@ export function opportunitiesHandler(ctx: RouteCtx) {
       estimated_value: num(r.estimated_value),
       currency: (r.currency as string) ?? null,
       nuts: (r.nuts as string) ?? null,
-      url: tedUrl(r.source_ref as string | null, r.url as string | null) ?? null,
+      url: publicNoticeUrl((r.source_code as string) ?? null, (r.source_ref as string) ?? null, (r.url as string) ?? null),
       buyer: r.buyer_id != null ? { id: Number(r.buyer_id), name: String(r.buyer_name) } : null,
       score: Number(r.score),
       same_buyer: r.same_buyer === true,
