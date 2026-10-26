@@ -111,7 +111,7 @@ export const es: Locale = {
     },
     ctaDemo: {
       title: 'Empieza gratis',
-      body: 'Un resumen semanal de 5 renovaciones de tu CPV y tu zona. Sin tarjeta. Los emails se conservan mientras la solicitud es nueva; cuando un lead pasa a contactado, usado, pagado o perdido, se purga a los 180 días.',
+      body: 'Un resumen semanal de 5 renovaciones de tu CPV y tu zona. Sin tarjeta. Si no pasas a cliente, el email de alta se borra a los 12 meses.',
       emailLabel: 'Email de trabajo',
       emailPlaceholder: 'nombre@empresa.com',
       submit: 'Empieza gratis',
@@ -209,7 +209,7 @@ export const es: Locale = {
         demoRetention: {
           question: '¿Cuánto tiempo conserváis los emails de demo?',
           answer:
-            'Los emails de demo se conservan mientras la solicitud es nueva; cuando un lead pasa a contactado, usado, pagado o perdido, se purga a los <strong>180 días</strong>.',
+            'Si no pasas a cliente, el email de alta se borra a los <strong>12 meses</strong>. Si la alta queda marcada como pagada, esa fila no entra en esa purga.',
         },
       },
     },
@@ -352,39 +352,81 @@ export const es: Locale = {
     privacy: {
       title: 'Política de privacidad',
       body: `
-<h2>Qué datos conserva Relicita</h2>
-<p>Relicita es un servicio de inteligencia de contratación pública nativo de agentes. Indexa datos públicos de TED y PLACSP y los expone vía REST y MCP. Los datos personales que tratamos se limitan a lo necesario para operar el servicio:</p>
+<h2>Responsable</h2>
+<p>Gastón Leonardo Rey Fernández, persona física (autónomo). NIF 02769985A. Domicilio: C/ Pobla de Segur 15, 3C, 28033 Madrid, España. Contacto: <a href="mailto:{email}">{email}</a>. Más datos de identificación en el <a href="/legal">aviso legal</a>.</p>
+<h2>Qué tratamos y con qué base</h2>
 <ul>
-  <li><strong>Solicitudes de demo</strong> — cuando solicitas una demo, almacenamos solo el email que nos facilitas, además del canal, la URL de origen y las marcas de tiempo del ciclo de vida.</li>
-  <li><strong>Emails de suscripción</strong> — cuando te suscribes con el checkout de Creem, almacenamos el email del checkout para crear tu clave de API y tu cuenta de facturación.</li>
-  <li><strong>Claves de API</strong> — generamos tu clave de cliente en el checkout y te la enviamos por email. Solo se almacena un hash criptográfico de la clave en el servidor; la clave en claro nunca se persiste tras su entrega.</li>
-  <li><strong>Comprobantes de pago</strong> — los pagos por llamada (x402) y las compras de créditos se registran como filas de comprobante con importe, endpoint, proveedor y estado. Los pagos con tarjeta los gestiona Creem de principio a fin (Merchant of Record); nunca vemos ni almacenamos números de tarjeta.</li>
+  <li><strong>Alta gratuita.</strong> Email, canal, URL de origen, estado (nueva, contactada, usada, pagada o perdida) y fechas, incluida la de baja del radar. Base: consentimiento, al enviar el formulario.</li>
+  <li><strong>Acuse de alta.</strong> Si hay clave de Resend, enviamos un correo con el asunto «Alta recibida en Relicita». El envío automático se puede apagar con DEMO_AUTOREPLY_ENABLED. Base: el mismo consentimiento.</li>
+  <li><strong>Radar semanal.</strong> Cuando el envío está activado (DIGEST_ENABLED), cada email de alta que no se ha dado de baja recibe como mucho un correo en castellano por semana UTC, con hasta 5 renovaciones. También puede lanzarlo el operador. Base: consentimiento. La baja es un clic en el enlace del correo (<a href="/radar/baja">/radar/baja</a>). No hay un proceso que interprete la palabra «baja» en una respuesta.</li>
+  <li><strong>Suscripción.</strong> Tras un checkout de Creem completado guardamos el email, un hash de la clave de API, el tipo de cuenta y el fin del periodo. La clave en claro se envía una sola vez por email y no se guarda. Base: contrato.</li>
+  <li><strong>Pagos x402 y créditos.</strong> Importe, endpoint, proveedor y estado. En x402, también la dirección del pagador, el identificador de la transacción y la red. La tarjeta no pasa por nosotros: la cobra Creem. Base: contrato.</li>
+  <li><strong>Registros técnicos.</strong> Ruta, estado, agente de usuario, referer y, si no hay clave de cliente, un hash de la IP. La IP en claro y la clave de API en claro no se guardan. Base: interés legítimo de seguridad y operación. Estos registros no tienen borrado automático.</li>
 </ul>
-<h2>Cuánto tiempo conservamos los datos</h2>
-<p>Los emails de demo se conservan mientras la solicitud es nueva; cuando un lead pasa a contactado, usado, pagado o perdido, se purga a los 180 días. Los leads nuevos nunca se eliminan automáticamente. Los registros de suscripción y pago se conservan mientras la cuenta esté activa y durante el periodo exigido por las normas aplicables de pago y conciliación.</p>
-<h2>Quién puede acceder a los datos</h2>
-<p>El acceso se limita a los operadores mediante una clave de operador del lado del servidor. No vendemos, alquilamos ni compartimos datos personales con terceros con fines de marketing. Dependemos de encargados de tratamiento acotados: Creem (pagos), Resend (email transaccional) y el facilitador de x402 (verificación de comprobantes).</p>
-<h2>Tus derechos</h2>
-<p>Solicita la eliminación o plantea una pregunta sobre privacidad por email en <a href="mailto:{email}">{email}</a>.</p>`,
+<h2>Conservación</h2>
+<p>Una alta que no es de cliente se borra a los 12 meses desde su creación. Cliente, a estos efectos, es la fila marcada como pagada: esa fila no entra en la purga. La purga corre al registrar una alta nueva; no hay un barrido diario. La cuenta de suscriptor y los pagos no los borra esa purga: se conservan mientras la cuenta sigue y el tiempo que exijan la contabilidad y la conciliación. El acuse de envío semanal (email y semana) se borra cuando la alta ya no existe.</p>
+<h2>Encargados</h2>
+<p>No vendemos datos. Acceden quienes operan el servicio, con clave de operador. Encargados:</p>
+<ul>
+  <li><strong>Hetzner</strong> — alojamiento, en la Unión Europea.</li>
+  <li><strong>Cloudflare</strong> — DNS y proxy.</li>
+  <li><strong>Resend</strong> — envío de email, con la cuenta en región UE.</li>
+  <li><strong>Creem</strong> — pagos con tarjeta, como Merchant of Record. El cargo puede implicar una transferencia fuera del Espacio Económico Europeo; cuando ocurre, se ampara en las cláusulas contractuales tipo del encargado.</li>
+  <li><strong>Facilitador x402</strong> — verificación y liquidación del comprobante USDC (por defecto el de x402.org; la URL es configurable). Puede estar fuera del EEE; cuando la transferencia sale del EEE, se ampara en cláusulas contractuales tipo si el encargado las ofrece.</li>
+</ul>
+<h2>Comunicaciones comerciales</h2>
+<p>El producto no envía correo a direcciones genéricas tomadas de la web de una empresa. Los correos descritos arriba salen del email que la persona escribió al darse de alta o al pagar. Si el titular escribe, fuera de esta aplicación, a un email genérico de empresa publicado en su web, la base es el interés legítimo en una comunicación B2B, el origen del dato es esa web pública, y la baja es un correo a <a href="mailto:{email}">{email}</a> con la palabra «baja». Esa respuesta se atiende a mano: el código no la automatiza.</p>
+<h2>Cookies</h2>
+<p>El código del sitio no instala cookies ni de seguimiento ni de analítica. No hay píxel ni herramienta de medición de terceros. El panel de operador guarda su clave en sessionStorage del navegador: no es una cookie y no se envía a terceros. Si Cloudflare actúa como proxy, puede fijar cookies técnicas propias; no las usamos para publicidad.</p>
+<h2>Derechos</h2>
+<p>Puedes pedir acceso, rectificación, supresión, oposición, limitación y portabilidad en <a href="mailto:{email}">{email}</a>. Respondemos en el plazo de un mes. También puedes reclamar ante la Agencia Española de Protección de Datos (<a href="https://www.aepd.es">www.aepd.es</a>).</p>
+<p><em>Última actualización: octubre de 2026.</em></p>`,
     },
     terms: {
       title: 'Términos del servicio',
       body: `
+<h2>Prestador</h2>
+<p>Gastón Leonardo Rey Fernández, persona física (autónomo). NIF 02769985A. Domicilio: C/ Pobla de Segur 15, 3C, 28033 Madrid, España. Email: <a href="mailto:{email}">{email}</a>. Identificación completa en el <a href="/legal">aviso legal</a>.</p>
+<h2>A quién se dirige</h2>
+<p>El servicio es solo para empresas y profesionales (B2B), para valorar contratación pública e integrarlo en herramientas propias. No está dirigido a consumidores.</p>
 <h2>Servicio</h2>
-<p>Relicita ofrece inteligencia de contratación pública con evidencia: licitaciones de la UE (TED) y de España (PLACSP), compradores, proveedores y señales deterministas de renovación, consultables vía REST y MCP. Todos los valores proceden de fuentes públicas o de heurísticas deterministas sobre ellas; Relicita nunca inventa datos.</p>
+<p>Relicita ofrece inteligencia de contratación pública con evidencia: licitaciones de la UE (TED) y de España (PLACSP, cuando está activado), compradores, proveedores y señales deterministas de renovación, por la web, REST y MCP. Los valores salen de fuentes públicas o de heurísticas sobre ellas. No se inventan datos.</p>
 <h2>Uso</h2>
-<p>Puedes usar el servicio para la evaluación profesional de oportunidades de contratación pública y para integrarlo en tus propias herramientas y agentes, con sujeción a estos términos y a los términos aplicables de las fuentes de origen (TED, PLACSP). No debes usar el servicio para infringir la ley, abusar o saturar la API, revender el índice en bruto como producto competidor ni eludir el pago.</p>
-<h2>Precios y pago</h2>
-<p>Los endpoints tienen precio por llamada; los precios completos se publican en <a href="/v1/pricing">/v1/pricing</a>. Pagas con comprobantes x402, con paquetes de créditos prepagados (<code>x-client-key</code>) o con una suscripción mensual vía checkout de Creem (<code>POST /v1/creem/checkout</code>). Los comprobantes son de un solo uso y caducan a los 5 minutos. Los pagos con tarjeta los procesa Creem como Merchant of Record; nunca vemos los datos de la tarjeta.</p>
-<h2>Claves de API y créditos</h2>
-<p>Tu clave de API se emite una sola vez y se te envía por email tras el checkout; solo se almacena un hash. Guárdala bien: es el único identificador de tu saldo de créditos, y un saldo perdido no se puede recuperar actualmente. Los créditos prepagados no caducan nunca.</p>
-<h2>Calidad de los datos</h2>
-<p>Los valores indexados proceden de fuentes públicas con evidencia. Las señales de renovación y de oportunidad son heurísticas deterministas; la confianza refleja la fuerza de la evidencia, no una probabilidad. Relicita no declara una certificación, un SLA de disponibilidad ni idoneidad para una decisión concreta. Verifica antes de basar una decisión material en los datos.</p>
+<p>Sujeto a estos términos y a los de TED y PLACSP. No uses el servicio para infringir la ley, saturar la API, revender el índice en bruto como producto competidor ni eludir el pago.</p>
+<h2>Precio y pago</h2>
+<p>Los precios por llamada están en <a href="/v1/pricing">/v1/pricing</a>. Se paga con comprobantes x402, con créditos prepagados (<code>x-client-key</code>) o con suscripción vía checkout de Creem. Los comprobantes son de un solo uso y caducan a los 5 minutos. Creem es el Merchant of Record de la suscripción con tarjeta: Relicita no ve ni guarda el número de tarjeta. La aplicación no tiene un endpoint propio de reembolso ni de cancelación de la suscripción.</p>
+<h2>Cancelación y reembolso</h2>
+<p>Puedes cancelar la suscripción en cualquier momento, con efecto al final del periodo ya pagado. El primer mes se reembolsa si lo pides en los 14 días siguientes al primer cargo. La petición se hace por email a <a href="mailto:{email}">{email}</a>; la ejecuta Creem. Este reembolso no cubre créditos prepagados ni un pago x402 ya liquidado. Los créditos prepagados no caducan y no se reembolsan por este cauce.</p>
+<h2>Claves de API</h2>
+<p>La clave se envía una sola vez por email tras el checkout y solo se guarda un hash. Es el identificador del saldo. Si se pierde, el saldo no se puede recuperar con el código actual.</p>
+<h2>Responsabilidad</h2>
+<p>Las señales son heurísticas: la confianza mide la evidencia, no una probabilidad. No hay certificación ni SLA de disponibilidad. No respondemos de una decisión de licitación tomada solo con estos datos, ni de cortes de TED, PLACSP, Creem o el facilitador x402, en la medida en que la ley española lo permite. Nada de esta cláusula limita la responsabilidad por dolo ni lo que la ley impide excluir.</p>
+<h2>Ley y fuero</h2>
+<p>Ley española. Juzgados y tribunales de Madrid.</p>
 <h2>Propiedad intelectual</h2>
-<p>La aplicación Relicita es de código abierto bajo licencia MIT (<a href="https://github.com/gastonrey/licita-app">github.com/gastonrey/licita-app</a>). Los datos indexados siguen sujetos a los términos de sus fuentes de origen.</p>
-<h2>Cambios y contacto</h2>
-<p>Podemos actualizar estos términos; el uso continuado tras publicar un cambio constituye aceptación. ¿Preguntas? Email a <a href="mailto:{email}">{email}</a>.</p>
-<p><em>Última actualización: septiembre de 2026.</em></p>`,
+<p>El código es MIT (<a href="https://github.com/gastonrey/licita-app">github.com/gastonrey/licita-app</a>). Los datos indexados siguen las condiciones de su fuente.</p>
+<h2>Cambios</h2>
+<p>Estos términos pueden actualizarse. El uso posterior a la publicación del cambio implica aceptarlo.</p>
+<p><em>Última actualización: octubre de 2026.</em></p>`,
+    },
+    legal: {
+      title: 'Aviso legal',
+      body: `
+<h2>Titular</h2>
+<p>Información del artículo 10 de la Ley 34/2002 (LSSI):</p>
+<ul>
+  <li><strong>Titular:</strong> Gastón Leonardo Rey Fernández, persona física que actúa como autónomo. No hay una sociedad detrás de este sitio.</li>
+  <li><strong>NIF:</strong> 02769985A</li>
+  <li><strong>Domicilio:</strong> C/ Pobla de Segur 15, 3C, 28033 Madrid, España</li>
+  <li><strong>Email:</strong> <a href="mailto:{email}">{email}</a></li>
+  <li><strong>Sitio y marca:</strong> eutendersai.com, marca Relicita</li>
+  <li><strong>Actividad:</strong> servicio de inteligencia de contratación pública. Indexa anuncios públicos de TED y, cuando está activado, de PLACSP, y se consultan por la web, por REST y por MCP.</li>
+</ul>
+<h2>Propiedad intelectual</h2>
+<p>El código de la aplicación se publica bajo licencia MIT (<a href="https://github.com/gastonrey/licita-app">github.com/gastonrey/licita-app</a>). Los datos indexados proceden de fuentes públicas (TED y PLACSP) y siguen sujetos a las condiciones de esas fuentes. Los textos de este sitio y la marca Relicita corresponden al titular.</p>
+<h2>Ley aplicable</h2>
+<p>Legislación española. Para una controversia, los juzgados y tribunales de Madrid, sin perjuicio de las normas imperativas que no quepa excluir. El servicio se dirige a empresas y profesionales. Privacidad: <a href="/privacy">/privacy</a>. Condiciones: <a href="/terms">/terms</a>.</p>
+<p><em>Última actualización: octubre de 2026.</em></p>`,
     },
     status: {
       title: 'Estado',
@@ -406,6 +448,7 @@ export const es: Locale = {
     security: 'Seguridad',
     privacy: 'Privacidad',
     terms: 'Términos',
+    legal: 'Aviso legal',
     status: 'Estado',
     github: 'GitHub (MIT)',
     tenderIntelligence: 'Inteligencia de licitaciones',

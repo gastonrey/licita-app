@@ -1098,7 +1098,7 @@ function paths(): Record<string, unknown> {
       patch: {
         operationId: 'patchDemoRequestStatus', summary: 'Advance a demo lead status (operator only)',
         description:
-          'Operator-only. Requires header x-operator-key. Sets the lifecycle status of one demo request; returns the updated row in the standard envelope. Leads are purged 180 days after reaching contacted, used, paid or lost; "new" leads are never auto-deleted.',
+          'Operator-only. Requires header x-operator-key. Sets the lifecycle status of one demo request; returns the updated row in the standard envelope. A signup that is not marked paid is deleted 12 months after created_at, on the next capture. Rows marked paid are kept.',
         parameters: [
           { name: 'x-operator-key', in: 'header', required: true, schema: { type: 'string' } },
           { name: 'id', in: 'path', required: true, schema: { type: 'integer', minimum: 1 } },

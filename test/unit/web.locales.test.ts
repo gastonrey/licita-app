@@ -72,10 +72,10 @@ describe('web.locales — dictionary parity es <-> en', () => {
     expect(t('en', 'footer.provenance')).toContain(
       'Provenance: every data row exposes <code>meta.provenance</code>',
     );
-    // Retention copy: exactly 180 days, never "for 30 days".
-    expect(t('en', 'home.ctaDemo.body')).toContain('180 days');
-    expect(t('en', 'home.faq.items.demoRetention.answer')).toContain('<strong>180 days</strong>');
-    expect(t('en', 'trust.privacy.body', { email: 'eutendersai@gmail.com' })).toContain('180 days');
+    // Retention copy: 12 months for a signup that does not become a customer.
+    expect(t('en', 'home.ctaDemo.body')).toContain('12 months');
+    expect(t('en', 'home.faq.items.demoRetention.answer')).toContain('<strong>12 months</strong>');
+    expect(t('en', 'trust.privacy.body', { email: 'hola@eutendersai.com' })).toContain('12 months');
     // Creem needle set lives in the dictionary (monthly card + FAQ answers).
     expect(t('en', 'home.pricing.cards.monthly.desc')).toContain('30 days');
     expect(t('en', 'home.faq.items.accountSubscription.answerCreem')).toContain('kind=creem');

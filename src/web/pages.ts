@@ -236,7 +236,7 @@ const MCP_TOOLS = [
 ];
 
 // Demand-capture CTA: lightweight mailto, no signup/DB/RGPD.
-const CONTACT_EMAIL = 'eutendersai@gmail.com';
+const CONTACT_EMAIL = 'hola@eutendersai.com';
 
 /** Footer Alfa (paper) — shared across every public page. */
 function footer(locale: LocaleCode): string {
@@ -266,6 +266,7 @@ function footer(locale: LocaleCode): string {
     <ul>
       <li><a href="${href(l, '/methodology')}">${t(l, 'footer.methodology')}</a></li>
       <li><a href="${href(l, '/security')}">${t(l, 'footer.security')}</a></li>
+      <li><a href="${href(l, '/legal')}">${t(l, 'footer.legal')}</a></li>
       <li><a href="${href(l, '/privacy')}">${t(l, 'footer.privacy')}</a></li>
       <li><a href="${href(l, '/terms')}">${t(l, 'footer.terms')}</a></li>
       <li><a href="${href(l, '/status')}">${t(l, 'footer.status')}</a></li>
@@ -878,6 +879,7 @@ ${lines}
 - Rate limit: 60 requests/min per client; over limit → 429 with retry-after.
 - ToS / attribution: reuse the data per the upstream sources' terms (TED and PLACSP) and attribute
   the source when republishing. See /docs.
+- Legal: /legal (provider identity, LSSI art. 10), /privacy, /terms. English: /en/legal, /en/privacy, /en/terms.
 `;
 }
 
@@ -1189,7 +1191,7 @@ ${tail}`,
   );
 }
 
-const TRUST_SLUGS: TrustPageSlug[] = ['methodology', 'security', 'privacy', 'terms', 'status'];
+const TRUST_SLUGS: TrustPageSlug[] = ['methodology', 'security', 'privacy', 'terms', 'legal', 'status'];
 
 function trustPage(config: AppConfig, locale: LocaleCode, slug: TrustPageSlug): string {
   const l = locale;

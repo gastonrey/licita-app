@@ -29,7 +29,7 @@ describe('GET /sitemap.xml (DR3)', () => {
     expect(res.body).toContain('</urlset>');
     for (const path of [
       '/', '/pricing', '/docs', '/use-cases', '/use-cases/tender-intelligence',
-      '/data', '/data/spain', '/data/eu', '/methodology', '/security', '/privacy', '/terms', '/status',
+      '/data', '/data/spain', '/data/eu', '/methodology', '/security', '/privacy', '/terms', '/legal', '/status',
     ]) {
       expect(res.body, `loc for ${path}`).toContain(`<loc>${BASE}${path}</loc>`);
     }

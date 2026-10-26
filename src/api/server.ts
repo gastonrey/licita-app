@@ -80,6 +80,7 @@ const PUBLIC_WEB_EXACT = new Set([
   '/security',
   '/privacy',
   '/terms',
+  '/legal',
   '/status',
 ]);
 const PUBLIC_WEB_PREFIX = ['/use-cases/', '/data/', '/en/'];

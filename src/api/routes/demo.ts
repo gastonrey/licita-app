@@ -33,6 +33,14 @@ export const demoListQueryValidation = validate(demoListQuerySchema, 'query');
 
 const LEAD_ROW_SQL = 'id, email, channel, source_url, status, created_at';
 
+/** Free signups older than 12 months, except rows the operator marked paid. */
+export const DEMO_RETENTION_SQL =
+  "DELETE FROM demo_requests WHERE status <> 'paid' AND created_at < now() - interval '12 months'";
+
+/** Drop weekly-send rows for signups this capture is about to purge. */
+export const DIGEST_SEND_RETENTION_SQL =
+  "DELETE FROM radar_digest_sends WHERE lower(email) IN (SELECT lower(email) FROM demo_requests WHERE status <> 'paid' AND created_at < now() - interval '12 months')";
+
 export function channelFor(query: Record<string, unknown>, referer?: string): string {
   const source = typeof query.source === 'string' ? query.source.trim() : '';
   if (source.length > 0 && source.length <= 64) return source;
@@ -45,13 +53,20 @@ export function demoRequestHandler(ctx: RouteCtx) {
     const query = (req.query ?? {}) as Record<string, unknown>;
     const referer = typeof req.headers.referer === 'string' ? req.headers.referer : undefined;
     const sourceUrl = req.url.includes('?') ? req.url : referer ?? null;
-    // Retention sweep (008 rule): purge only terminal leads older than 180
-    // days. 'new' leads are NEVER auto-deleted. Best-effort: a sweep failure
-    // must not block the capture (same spirit as the old unconditional DELETE).
+    // Retention: a free signup that never becomes a customer (status paid)
+    // is deleted 12 months after created_at. Paid rows stay. The sweep runs
+    // on the next capture, not on a daily cron. A failure must not block
+    // the insert. Weekly-send rows for those addresses go first, in their
+    // own try, so a missing radar_digest_sends table cannot skip the lead purge.
     try {
-      await ctx.db.query(
-        "DELETE FROM demo_requests WHERE status IN ('contacted', 'used', 'paid', 'lost') AND created_at < now() - interval '180 days'",
-      );
+      await ctx.db.query(DIGEST_SEND_RETENTION_SQL);
+    } catch (err: unknown) {
+      ctx.log.warn('digest send retention sweep failed', {
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+    try {
+      await ctx.db.query(DEMO_RETENTION_SQL);
     } catch (err: unknown) {
       ctx.log.warn('demo retention sweep failed', {
         error: err instanceof Error ? err.message : String(err),
