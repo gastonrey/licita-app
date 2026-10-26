@@ -333,9 +333,9 @@ export const es: Locale = {
   },
   pricing: {
     title: 'Precios',
-    metaTitle: 'Radar de renovaciones desde 39 € al mes',
+    metaTitle: 'Radar de renovaciones desde 39 € + IVA al mes',
     metaDescription:
-      'Planes Gratis, Radar (39 €/mes), Pro (99 €) y Team (199 €) para anticipar qué contratos públicos de software y ciberseguridad se vuelven a licitar.',
+      'Planes Gratis, Radar (39 € + IVA/mes), Pro (99 € + IVA) y Team (199 € + IVA) para anticipar qué contratos públicos de software y ciberseguridad se vuelven a licitar.',
     intro:
       'Precios por llamada en USD. Versión legible por máquina: <a href="/v1/pricing">/v1/pricing</a>. Modo de pago: <code>{paymentsMode}</code>. <code>POST /v1/research</code> cuesta <code>${researchPrice}</code> por llamada (configurable).',
     priceTable: { endpointHeader: 'Endpoint', priceHeader: 'Precio (USD / llamada)', freeTag: 'gratis' },
@@ -351,7 +351,7 @@ export const es: Locale = {
       'Dos vías de pago, según cómo compres: la suscripción mensual se paga en <strong>EUR</strong> con tarjeta a través de Creem (sin cartera cripto); el pago por llamada y los créditos prepagados se facturan en <strong>USD</strong> y se pagan con pruebas USDC vía x402.',
     monthlyTitle: 'Suscripción mensual',
     monthlyBody:
-      '<strong>Radar</strong>: el plan mensual público es <code>{radarMonthly}/mes</code> (390 € al año). El alta de pago usa <code>POST /v1/creem/checkout</code>. Tras el pago, Creem llama a <code>POST /v1/creem/webhook</code> (con firma verificada) y la cuenta queda marcada <code>kind=creem</code> durante 30 días. Las llamadas de suscriptor descuentan créditos de un solo uso: agotarlos devuelve <code>402</code> hasta que recargues.',
+      '<strong>Radar</strong>: el plan mensual público es <code>{radarMonthly}/mes + IVA</code> (390 € + IVA al año). El alta de pago usa <code>POST /v1/creem/checkout</code>. Tras el pago, Creem llama a <code>POST /v1/creem/webhook</code> (con firma verificada) y la cuenta queda marcada <code>kind=creem</code> durante 30 días. Las llamadas de suscriptor descuentan créditos de un solo uso: agotarlos devuelve <code>402</code> hasta que recargues.',
     buyLine:
       'Compra: <code>POST /v1/billing/credits/5</code> (o <code>/10</code> <code>/25</code>) con el flujo de pago máquina a máquina normal (402 → reintento <code>PAYMENT-SIGNATURE</code>). Consulta el saldo: <code>GET /v1/billing</code> con la cabecera <code>x-client-key: &lt;tu clave&gt;</code>. MCP: <code>billing_purchase_credits</code> / <code>billing_get_balance</code>.',
     howPaymentTitle: 'Cómo funciona el pago',
@@ -408,6 +408,7 @@ export const es: Locale = {
 <p>Puedes usar el servicio para la evaluación profesional de oportunidades de contratación pública y para integrarlo en tus propias herramientas y agentes, con sujeción a estos términos y a los términos aplicables de las fuentes de origen (TED, PLACSP). No debes usar el servicio para infringir la ley, abusar o saturar la API, revender el índice en bruto como producto competidor ni eludir el pago.</p>
 <h2>Precios y pago</h2>
 <p>Los endpoints tienen precio por llamada; los precios completos se publican en <a href="/v1/pricing">/v1/pricing</a>. Pagas con comprobantes x402, con paquetes de créditos prepagados (<code>x-client-key</code>) o con una suscripción mensual vía checkout de Creem (<code>POST /v1/creem/checkout</code>). Los comprobantes son de un solo uso y caducan a los 5 minutos. Los pagos con tarjeta los procesa Creem como Merchant of Record; nunca vemos los datos de la tarjeta.</p>
+<p>Los precios de los planes de pago con tarjeta no incluyen IVA. Creem suma el 21 % en el checkout (39 € + IVA = 47,19 €).</p>
 <h2>Claves de API y créditos</h2>
 <p>Tu clave de API se emite una sola vez y se te envía por email tras el checkout; solo se almacena un hash. Guárdala bien: es el único identificador de tu saldo de créditos, y un saldo perdido no se puede recuperar actualmente. Los créditos prepagados no caducan nunca.</p>
 <h2>Calidad de los datos</h2>
@@ -454,7 +455,8 @@ export const es: Locale = {
       'Relicita indica a las pymes de software y ciberseguridad qué contratos públicos se van a volver a licitar, quién los tiene hoy y cuándo moverte. Evidencia de TED y PLACSP.',
   },
   plans: {
-    vat: 'Precios sin IVA.',
+    vat: 'Precios sin IVA. Creem suma el 21 % en el checkout (39 € + IVA = 47,19 €).',
+    vatSuffix: '+ IVA',
     free: {
       name: 'Gratis',
       price: '0 €',
@@ -466,14 +468,14 @@ export const es: Locale = {
       name: 'Radar',
       price: '39 €',
       period: 'al mes',
-      desc: 'El listado de renovaciones de tu mercado, cada semana. 390 € al año si se factura anualmente.',
+      desc: 'El listado de renovaciones de tu mercado, cada semana. 390 € + IVA al año si se factura anualmente.',
       cta: 'Quiero Radar',
     },
     pro: {
       name: 'Pro',
       price: '99 €',
       period: 'al mes',
-      desc: 'Radar más el contexto del órgano de contratación y del adjudicatario, para una lista corta de trabajo. 990 € al año si se factura anualmente.',
+      desc: 'Radar más el contexto del órgano de contratación y del adjudicatario, para una lista corta de trabajo. 990 € + IVA al año si se factura anualmente.',
       cta: 'Quiero Pro',
     },
     team: {
@@ -486,19 +488,19 @@ export const es: Locale = {
     interestCta: 'Guardar mi interés',
     payCta: 'Continuar al pago',
     intervalLabel: 'Periodicidad',
-    monthlyRadar: 'Mensual, 39 €',
-    annualRadar: 'Anual, 390 €',
-    monthlyPro: 'Mensual, 99 €',
-    annualPro: 'Anual, 990 €',
+    monthlyRadar: 'Mensual, 39 € + IVA',
+    annualRadar: 'Anual, 390 € + IVA',
+    monthlyPro: 'Mensual, 99 € + IVA',
+    annualPro: 'Anual, 990 € + IVA',
     chosenFree: 'Has elegido el plan Gratis. El alta no pide tarjeta.',
-    chosenRadar: 'Has elegido Radar (39 € al mes o 390 € al año). Deja tu email y guardamos el interés. No se pide la tarjeta.',
-    chosenPro: 'Has elegido Pro (99 € al mes o 990 € al año). Deja tu email y guardamos el interés. No se pide la tarjeta.',
-    chosenTeam: 'Has elegido Team (199 € al mes, 5 usuarios y API de lectura). Deja tu email y guardamos el interés. No se pide la tarjeta.',
-    payRadarMonthly: 'Has elegido Radar, 39 € al mes. El pago continúa en Creem. No vemos los datos de la tarjeta.',
-    payRadarAnnual: 'Has elegido Radar, 390 € al año. El pago continúa en Creem. No vemos los datos de la tarjeta.',
-    payProMonthly: 'Has elegido Pro, 99 € al mes. El pago continúa en Creem. No vemos los datos de la tarjeta.',
-    payProAnnual: 'Has elegido Pro, 990 € al año. El pago continúa en Creem. No vemos los datos de la tarjeta.',
-    payTeamMonthly: 'Has elegido Team, 199 € al mes. El pago continúa en Creem. No vemos los datos de la tarjeta.',
+    chosenRadar: 'Has elegido Radar (39 € + IVA al mes o 390 € + IVA al año). Deja tu email y guardamos el interés. No se pide la tarjeta.',
+    chosenPro: 'Has elegido Pro (99 € + IVA al mes o 990 € + IVA al año). Deja tu email y guardamos el interés. No se pide la tarjeta.',
+    chosenTeam: 'Has elegido Team (199 € + IVA al mes, 5 usuarios y API de lectura). Deja tu email y guardamos el interés. No se pide la tarjeta.',
+    payRadarMonthly: 'Has elegido Radar, 39 € + IVA al mes. El pago continúa en Creem. No vemos los datos de la tarjeta.',
+    payRadarAnnual: 'Has elegido Radar, 390 € + IVA al año. El pago continúa en Creem. No vemos los datos de la tarjeta.',
+    payProMonthly: 'Has elegido Pro, 99 € + IVA al mes. El pago continúa en Creem. No vemos los datos de la tarjeta.',
+    payProAnnual: 'Has elegido Pro, 990 € + IVA al año. El pago continúa en Creem. No vemos los datos de la tarjeta.',
+    payTeamMonthly: 'Has elegido Team, 199 € + IVA al mes. El pago continúa en Creem. No vemos los datos de la tarjeta.',
     checkoutNoscript: 'Sin JavaScript guardamos el email como interés y no se abre el pago.',
   },
   radarPage: {
@@ -540,7 +542,7 @@ export const es: Locale = {
       'Llamadas REST y herramientas MCP al índice de Relicita, con pago por llamada en USDC. Los planes para personas están en la página de precios.',
     h1: 'API y MCP para integraciones',
     intro:
-      'Si quieres que una persona lea el radar, empieza en Precios. Esta página es la interfaz para máquinas: llamadas REST de pago y herramientas MCP. No hace falta nada de aquí para recibir el email semanal.',
+      'Si quieres que una persona lea el radar, empieza en Precios. Los planes de pago de esa página no incluyen IVA (+ IVA); Creem suma el 21 % en el checkout (39 € + IVA = 47,19 €). Esta página es la interfaz para máquinas: llamadas REST de pago y herramientas MCP. No hace falta nada de aquí para recibir el email semanal.',
     docsCta: 'Leer la documentación',
     mcpCta: 'Servidor MCP',
     ladderTitle: 'Pago por llamada',

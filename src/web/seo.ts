@@ -85,14 +85,27 @@ export function pricingProductLd(config: AppConfig, locale: LocaleCode): Record<
     name: 'Relicita',
     description: t(locale, 'pricing.metaDescription'),
     brand: { '@type': 'Brand', name: 'Relicita' },
-    offers: offers.map((offer) => ({
-      '@type': 'Offer',
-      name: offer.name,
-      price: String(offer.price),
-      priceCurrency: 'EUR',
-      url,
-      availability: 'https://schema.org/InStock',
-      description: stripHtml(offer.description),
-    })),
+    offers: offers.map((offer) => {
+      const price = String(offer.price);
+      const listed = {
+        '@type': 'Offer',
+        name: offer.name,
+        price,
+        priceCurrency: 'EUR',
+        url,
+        availability: 'https://schema.org/InStock',
+        description: stripHtml(offer.description),
+      };
+      if (offer.price === 0) return listed;
+      return {
+        ...listed,
+        priceSpecification: {
+          '@type': 'UnitPriceSpecification',
+          price,
+          priceCurrency: 'EUR',
+          valueAddedTaxIncluded: false,
+        },
+      };
+    }),
   };
 }

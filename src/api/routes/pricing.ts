@@ -10,6 +10,10 @@ export interface PricingEntry {
   free: boolean;
 }
 
+/** Net subscription prices. Creem adds 21% VAT at checkout. */
+const SUBSCRIPTION_VAT_NOTE =
+  'Subscription prices exclude VAT (+ VAT). Creem adds 21% VAT at checkout.';
+
 /** Pure builder (unit-tested). @param creem creem deploy state (B2.6):
  *  pricing is honest — the subscription arm reflects the actual deployment:
  *  disabled → available:false; enabled → the CONFIGURED monthly price. */
@@ -44,6 +48,8 @@ export function buildPricing(
     // B2.6 pricing honesty: never invent a subscription that is not deployed.
     // The monthly price is ALWAYS derived from config (CREEM_PRICE_CENTS), never
     // hardcoded, so the published number matches the Creem line item.
+    // vat_note qualifies that net amount. price_monthly_cents is unchanged:
+    // Creem adds 21% VAT at checkout.
     subscription:
       creem?.enabled === true
         ? {
@@ -52,6 +58,7 @@ export function buildPricing(
             currency: 'EUR',
             price_monthly_cents: creem.priceCents,
             price_monthly: (creem.priceCents / 100).toFixed(2),
+            vat_note: SUBSCRIPTION_VAT_NOTE,
             checkout_endpoint: 'POST /v1/creem/checkout',
             mechanics:
               'Subscribers get one-time credits per payment: calls debit the credit account (X-PAYMENT: <lct key>), never a per-call fee. The preserved 25 trial calls remain usable.',
@@ -59,6 +66,7 @@ export function buildPricing(
         : {
             available: false,
             provider: 'creem',
+            vat_note: SUBSCRIPTION_VAT_NOTE,
             reason: 'Creem billing is not enabled on this deployment (CREEM_ENABLED=false).',
           },
     payment_flow: {

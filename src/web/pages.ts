@@ -397,9 +397,10 @@ ${keys
     const interval = billingIntervalFor(key, current?.plan === key ? current.interval : 'monthly');
     const target = key === 'free' ? href(l, '/#alta') : escapeAttr(`${href(l, '/pricing')}?plan=${key}&interval=${interval}#alta`);
     const chooser = key === 'radar' || key === 'pro' ? intervalChooser(l, key, current) : '';
+    const vat = key === 'free' ? '' : `<span class="u">${t(l, 'plans.vatSuffix')}</span>`;
     return `<article class="price-card${featured}">
 <h3 class="plan">${t(l, `plans.${key}.name`)}</h3>
-<div class="amount"><span class="n">${t(l, `plans.${key}.price`)}</span><span class="u">${t(l, `plans.${key}.period`)}</span></div>
+<div class="amount"><span class="n">${t(l, `plans.${key}.price`)}</span>${vat}<span class="u">${t(l, `plans.${key}.period`)}</span></div>
 <p class="desc">${t(l, `plans.${key}.desc`)}</p>
 ${chooser}
 <a class="btn${key === 'free' || key === 'radar' ? '' : ' btn-secondary'}" href="${target}">${t(l, `plans.${key}.cta`)}</a>
@@ -571,6 +572,8 @@ curl -s 'http://localhost:3000/v1/search?q=software&type=award' \\
   -H "X-PAYMENT: <token>"`;
 
 function docsPage(config: AppConfig): string {
+  const radarNet = PUBLIC_PLAN_EUR.radarMonthly;
+  const radarGross = (Math.round(radarNet * 121) / 100).toFixed(2);
   return page(
     'en',
     'Tender API docs: x402, credits, MCP',
@@ -636,11 +639,12 @@ content; proofs are single-use.</li>
 <code>x-client-key</code> on every priced request and calls debit the balance
 (<code>GET /v1/billing</code> reads it). Credits never expire and never touch the x402
 proof path.</p>
+<p>Public plan prices (Radar, Pro and Team) exclude VAT. Creem adds 21% at checkout (Radar €${radarNet} + VAT = €${radarGross}).</p>
 ${
   config.creem.enabled
     ? `<p><strong>Monthly subscription (Creem)</strong>: <code>POST /v1/creem/checkout</code>
-with an email opens a Creem Checkout session for <code>€${(config.creem.priceCents / 100).toFixed(2)}/month</code>.
-The public plans (Radar at €${PUBLIC_PLAN_EUR.radarMonthly}/month) are on <a href="/pricing">/pricing</a>. After payment,
+with an email opens a Creem Checkout session for <code>€${(config.creem.priceCents / 100).toFixed(2)}/month + VAT</code>.
+The public plans (Radar at €${radarNet}/month + VAT) are on <a href="/pricing">/pricing</a>. After payment,
 Creem calls <code>POST /v1/creem/webhook</code> (signature-verified) and the account is marked
 <code>kind=creem</code> for 30 days. The subscriber's API key (<code>lct_...</code>) is generated
 and emailed to the checkout email right after payment — send it as <code>x-client-key</code> to buy

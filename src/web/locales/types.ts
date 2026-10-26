@@ -231,6 +231,7 @@ export interface Locale {
   jsonLd: { description: string };
   plans: {
     vat: string;
+    vatSuffix: string;
     free: PlanCopy;
     radar: PlanCopy;
     pro: PlanCopy;
