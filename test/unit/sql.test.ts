@@ -49,13 +49,21 @@ describe('buildSearchQuery', () => {
     expect(values[0]).toBe('telefonica');
   });
 
-  it('contract type joins through awards to tenders', () => {
+  it('contract type joins through awards to tenders and hides duplicate contracts', () => {
     const q = searchQuerySchema.parse({ type: 'contract', q: 'cloud' });
     const { text } = buildSearchQuery(q);
     expect(text).toContain('FROM contracts ct');
     expect(text).toContain('JOIN awards a ON a.id = ct.award_id');
     expect(text).toContain('ct.cpv AS cpv');
     expect(text).toContain('ct.start_date AS row_date');
+    expect(text).toContain('ct.dup_of IS NULL');
+  });
+
+  it('award and tender searches keep every notice, including ones with a duplicate contract', () => {
+    const award = buildSearchQuery(searchQuerySchema.parse({ type: 'award', q: 'cloud' })).text;
+    const tender = buildSearchQuery(searchQuerySchema.parse({ type: 'tender', q: 'cloud' })).text;
+    expect(award).not.toContain('dup_of');
+    expect(tender).not.toContain('dup_of');
   });
 
   it('mapSearchRow maps compact rows with nullable company and tender link', () => {
